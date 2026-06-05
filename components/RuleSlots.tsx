@@ -122,11 +122,13 @@ function BagArea({
   bag,
   placing,
   draggable,
+  emphasize,
   onPlace,
 }: {
   bag: Rule[];
   placing: boolean;
   draggable: boolean;
+  emphasize: boolean;
   onPlace: () => void;
 }) {
   // Drop target representing "append to end of bag".
@@ -148,15 +150,29 @@ function BagArea({
       className={`min-h-20 rounded-xl border p-3 transition ${
         placing
           ? "cursor-pointer border-amber-400/80 bg-amber-500/10 ring-1 ring-amber-400/40 hover:bg-amber-500/20"
-          : "border-zinc-800 bg-zinc-900/40"
+          : emphasize
+            ? "border-amber-500/40 bg-amber-950/20"
+            : "border-zinc-800 bg-zinc-900/40"
       } ${overRing}`}
     >
+      {emphasize && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2">
+          <span aria-hidden className="text-base leading-none">
+            ⚠
+          </span>
+          <span className="text-sm font-black uppercase tracking-wide text-amber-300">
+            비활성 — 적용되지 않음
+          </span>
+        </div>
+      )}
       {bag.length === 0 ? (
         <p className="py-4 text-center text-sm text-zinc-600">
           가방이 비어 있습니다 (비활성 규칙 보관)
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div
+          className={`flex flex-col gap-2 ${emphasize ? "opacity-60" : ""}`}
+        >
           {bag.map((rule, i) => (
             <BagItem
               key={rule.id}
@@ -217,6 +233,11 @@ export default function RuleSlots() {
   const placing = status === "placing";
   // Free arranging via DnD allowed during ready-to-spin AND placing.
   const arranging = status === "ready-to-spin" || status === "placing";
+  // Emphasize bag-is-inactive while the player is choosing/placing/arranging.
+  const emphasizeBag =
+    status === "placing" ||
+    status === "ready-to-spin" ||
+    status === "choosing-rule";
 
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
 
@@ -293,13 +314,25 @@ export default function RuleSlots() {
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Bag (비활성)
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Bag
+            </h3>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                emphasizeBag
+                  ? "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/50"
+                  : "text-zinc-600"
+              }`}
+            >
+              비활성
+            </span>
+          </div>
           <BagArea
             bag={bag}
             placing={placing}
             draggable={arranging}
+            emphasize={emphasizeBag}
             onPlace={() => placePending({ type: "bag" })}
           />
         </div>

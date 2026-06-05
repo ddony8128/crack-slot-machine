@@ -11,7 +11,7 @@ export default function StatusBar() {
   const totalScore = useGameStore((s) => s.totalScore);
   const nextMultiplier = useGameStore((s) => s.nextMultiplier);
 
-  const [showRef, setShowRef] = useState(false);
+  const [refView, setRefView] = useState<"rules" | "scores" | null>(null);
 
   const currentSpin = Math.min(spinIndex + 1, maxSpins);
 
@@ -49,16 +49,29 @@ export default function StatusBar() {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowRef(true)}
-          className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-800"
-        >
-          규칙/족보
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRefView("rules")}
+            className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+          >
+            규칙
+          </button>
+          <button
+            type="button"
+            onClick={() => setRefView("scores")}
+            className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+          >
+            점수표
+          </button>
+        </div>
       </div>
 
-      <ReferenceModal open={showRef} onClose={() => setShowRef(false)} />
+      <ReferenceModal
+        open={refView !== null}
+        view={refView ?? "rules"}
+        onClose={() => setRefView(null)}
+      />
     </>
   );
 }

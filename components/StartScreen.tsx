@@ -13,7 +13,7 @@ export default function StartScreen() {
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
   const startGame = useGameStore((s) => s.startGame);
-  const [showRef, setShowRef] = useState(false);
+  const [refView, setRefView] = useState<"rules" | "scores" | null>(null);
   const [rankings, setRankings] = useState<RankingRecord[]>([]);
 
   const refreshRankings = () => {
@@ -80,25 +80,35 @@ export default function StartScreen() {
         />
       </section>
 
-      <section className="w-full max-w-sm space-y-3">
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
-          {[...FRUITS, ...GEMS].map((s) => (
-            <SymbolView key={s} symbol={s} size="sm" />
-          ))}
-          {(["seven", "zero", "four"] as const).map((s) => (
-            <SymbolView key={s} symbol={s} size="sm" />
+      <section className="w-full max-w-md space-y-3">
+        <div className="grid grid-cols-9 place-items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-3 sm:gap-2 sm:px-4">
+          {[...FRUITS, ...GEMS, "seven", "zero", "four"].map((s) => (
+            <SymbolView key={s} symbol={s as never} size="sm" />
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowRef(true)}
-          className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800/60"
-        >
-          규칙 &amp; 점수표 보기
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setRefView("rules")}
+            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            규칙 보기
+          </button>
+          <button
+            type="button"
+            onClick={() => setRefView("scores")}
+            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            점수표 보기
+          </button>
+        </div>
       </section>
 
-      <ReferenceModal open={showRef} onClose={() => setShowRef(false)} />
+      <ReferenceModal
+        open={refView !== null}
+        view={refView ?? "rules"}
+        onClose={() => setRefView(null)}
+      />
     </main>
   );
 }

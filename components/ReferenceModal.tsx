@@ -96,9 +96,11 @@ function ScoreCard({
 export default function ReferenceModal({
   open,
   onClose,
+  view = "rules",
 }: {
   open: boolean;
   onClose: () => void;
+  view?: "rules" | "scores";
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -122,13 +124,14 @@ export default function ReferenceModal({
   if (!open) return null;
 
   const groups = groupByBuild();
+  const isRules = view === "rules";
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label="규칙 및 점수표"
+      aria-label={isRules ? "규칙" : "점수표"}
     >
       {/* Backdrop */}
       <button
@@ -138,12 +141,14 @@ export default function ReferenceModal({
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
       />
 
-      <div className="panel-pop relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl">
+      <div className="panel-pop relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl">
         <header className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
           <h2 className="text-lg font-black tracking-tight">
-            <span className="text-emerald-400">규칙</span>{" "}
-            <span className="text-zinc-500">&amp;</span>{" "}
-            <span className="text-amber-300">점수표</span>
+            {isRules ? (
+              <span className="text-emerald-400">규칙</span>
+            ) : (
+              <span className="text-amber-300">점수표</span>
+            )}
           </h2>
           <button
             ref={closeRef}
@@ -155,8 +160,9 @@ export default function ReferenceModal({
           </button>
         </header>
 
-        <div className="grid flex-1 gap-6 overflow-y-auto px-5 py-5 lg:grid-cols-2">
+        <div className="flex-1 overflow-y-auto px-5 py-5">
           {/* Rules grouped by build */}
+          {isRules && (
           <section className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-400">
               규칙 ({RULES.length})
@@ -184,8 +190,10 @@ export default function ReferenceModal({
               </div>
             ))}
           </section>
+          )}
 
           {/* Score table */}
+          {!isRules && (
           <section className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wide text-amber-300">
               점수표
@@ -237,6 +245,7 @@ export default function ReferenceModal({
               </li>
             </ScoreCard>
           </section>
+          )}
         </div>
       </div>
     </div>
