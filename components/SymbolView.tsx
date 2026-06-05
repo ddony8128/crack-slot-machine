@@ -21,13 +21,18 @@ const SIZE_BOX: Record<Size, string> = {
  * Renders a single slot symbol. Emoji symbols render directly; number
  * symbols (7/0/4) render as styled monospace badges so they read as
  * intentional slot faces.
+ *
+ * Optional `className` lets callers attach motion classes (e.g. reel-land,
+ * reel-flash, reel-rolling) without changing the visual base.
  */
 export default function SymbolView({
   symbol,
   size = "md",
+  className = "",
 }: {
   symbol: SymbolType;
   size?: Size;
+  className?: string;
 }) {
   const isNumber = NUMBER_SYMBOLS.has(symbol);
   const glyph = SYMBOL_EMOJI[symbol];
@@ -40,7 +45,7 @@ export default function SymbolView({
         isNumber
           ? `font-mono font-bold ${NUMBER_STYLE[symbol]}`
           : "border-zinc-700/60 bg-zinc-800/40"
-      }`}
+      } ${className}`}
     >
       {glyph}
     </span>

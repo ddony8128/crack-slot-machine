@@ -43,7 +43,7 @@ export default function StartScreen() {
   const canStart = nickname.trim().length > 0;
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
+    <main className="fade-rise mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
       <header className="text-center">
         <h1 className="text-5xl font-black tracking-tight sm:text-6xl">
           <span className="text-emerald-400">RULE</span>{" "}

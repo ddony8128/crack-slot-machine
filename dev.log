@@ -1,0 +1,24 @@
+
+> crack-slot-machine@0.1.0 dev
+> next dev
+
+⚠ Port 3000 is in use by process 16952, using available port 3001 instead.
+▲ Next.js 16.2.7 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://10.151.185.241:3001
+✓ Ready in 663ms
+
+○ Compiling / ...
+ GET / 200 in 4.0s (next.js: 3.6s, application-code: 450ms)
+ GET / 200 in 99ms (next.js: 10ms, application-code: 88ms)
+ GET / 200 in 41ms (next.js: 3ms, application-code: 39ms)
+ GET / 200 in 104ms (next.js: 8ms, application-code: 96ms)
+ GET / 200 in 124ms (next.js: 9ms, application-code: 115ms)
+ GET / 200 in 97ms (next.js: 6ms, application-code: 91ms)
+ GET / 200 in 482ms (next.js: 301ms, application-code: 180ms)
+ GET / 200 in 106ms (next.js: 7ms, application-code: 98ms)
+ GET / 200 in 102ms (next.js: 10ms, application-code: 92ms)
+ GET / 200 in 103ms (next.js: 8ms, application-code: 95ms)
+ GET / 200 in 160ms (next.js: 19ms, application-code: 141ms)
+ GET / 200 in 106ms (next.js: 7ms, application-code: 98ms)
+ GET / 200 in 71ms (next.js: 6ms, application-code: 66ms)

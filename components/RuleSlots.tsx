@@ -36,9 +36,9 @@ export default function RuleSlots() {
               type="button"
               disabled={!selectable}
               onClick={() => selectable && equipToSlot(slotIndex)}
-              className={`flex h-full flex-col rounded-xl border p-3 text-left transition ${
+              className={`flex h-full flex-col rounded-xl border p-3 text-left transition duration-150 ${
                 selectable
-                  ? "cursor-pointer border-amber-400/70 bg-amber-500/10 ring-1 ring-amber-400/40 hover:bg-amber-500/20"
+                  ? "cursor-pointer border-amber-400/70 bg-amber-500/10 ring-1 ring-amber-400/40 hover:-translate-y-0.5 hover:bg-amber-500/20 hover:shadow-lg hover:shadow-amber-500/10 active:translate-y-0 active:scale-[0.99]"
                   : "cursor-default border-zinc-800 bg-zinc-900/50"
               }`}
             >

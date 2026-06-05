@@ -5,6 +5,7 @@ import { useGameStore } from "@/store/gameStore";
 import RankingPanel from "@/components/RankingPanel";
 import { addRankingFromGame, bestSpinScore, getRank } from "@/lib/ranking";
 import type { RankingRecord } from "@/types";
+import { useCountUp } from "@/hooks/useCountUp";
 
 function tierMessage(score: number): string {
   if (score < 0) return "규칙이 당신을 버렸습니다";
@@ -51,14 +52,15 @@ export default function ResultScreen() {
   }, []);
 
   const rank = recordId ? getRank(rankings, recordId) : -1;
+  const animatedScore = useCountUp(totalScore, 900, 0);
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
-      <h1 className="text-3xl font-black tracking-tight text-amber-300 sm:text-4xl">
+    <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
+      <h1 className="celebrate-pop text-3xl font-black tracking-tight text-amber-300 sm:text-4xl">
         GAME RESULT
       </h1>
 
-      <div className="w-full space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+      <div className="panel-pop w-full space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
         <div>
           <p className="text-xs uppercase tracking-wide text-zinc-500">Player</p>
           <p className="text-xl font-bold text-emerald-400">{nickname}</p>
@@ -69,7 +71,7 @@ export default function ResultScreen() {
             Final Score
           </p>
           <p className="font-mono text-5xl font-black text-amber-300">
-            {totalScore}
+            {animatedScore}
           </p>
         </div>
 
@@ -78,7 +80,9 @@ export default function ResultScreen() {
         </p>
 
         {rank > 0 && (
-          <p className="text-2xl font-black text-emerald-300">랭킹 {rank}위!</p>
+          <p className="celebrate-pop text-2xl font-black text-emerald-300">
+            랭킹 {rank}위!
+          </p>
         )}
       </div>
 

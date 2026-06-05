@@ -8,7 +8,7 @@ export default function RulePicker() {
   const extraRulePickCount = useGameStore((s) => s.extraRulePickCount);
 
   return (
-    <section className="space-y-3">
+    <section className="fade-rise space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">
           이번 스핀에 장착할 규칙을 선택하세요
@@ -26,7 +26,7 @@ export default function RulePicker() {
             key={rule.id}
             type="button"
             onClick={() => selectRule(rule)}
-            className="flex flex-col rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-left transition hover:border-emerald-400 hover:bg-zinc-800/60"
+            className="flex flex-col rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-left transition duration-150 hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-zinc-800/60 hover:shadow-lg hover:shadow-emerald-500/10 active:translate-y-0 active:scale-[0.99]"
           >
             <span className="text-base font-bold text-emerald-300">
               {rule.name}

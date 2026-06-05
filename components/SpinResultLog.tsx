@@ -38,7 +38,7 @@ export default function SpinResultLog({ log }: { log: SpinLog }) {
   const hasSteps = log.steps.length > 0;
 
   return (
-    <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+    <div className="fade-in space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
       <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-500">
         규칙 적용 과정
       </h3>

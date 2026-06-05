@@ -2,6 +2,7 @@
 
 import type { SpinLog } from "@/types";
 import { useGameStore } from "@/store/gameStore";
+import { useCountUp } from "@/hooks/useCountUp";
 
 export default function ScorePanel({ log }: { log: SpinLog }) {
   const totalScore = useGameStore((s) => s.totalScore);
@@ -11,6 +12,7 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
   const next = useGameStore((s) => s.next);
 
   const isLastSpin = spinIndex === maxSpins - 1;
+  const animatedTotal = useCountUp(totalScore, 700);
 
   let nextLabel = "다음 스핀";
   if (extraRulePickCount > 0) {
@@ -19,8 +21,16 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
     nextLabel = "결과 보기";
   }
 
+  const negative = log.roundScore < 0;
+  // Pop for a notably positive spin; shake for a negative one.
+  const roundMotion = negative
+    ? "score-shake"
+    : log.roundScore >= 100
+      ? "value-pop"
+      : "";
+
   return (
-    <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+    <section className="panel-pop space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
           Spin Result
@@ -44,8 +54,8 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
         <div className="flex justify-between border-t border-zinc-800 pt-1.5">
           <dt className="font-semibold text-zinc-200">이번 스핀 점수</dt>
           <dd
-            className={`font-mono font-bold ${
-              log.roundScore < 0 ? "text-rose-400" : "text-amber-300"
+            className={`inline-block font-mono font-bold ${roundMotion} ${
+              negative ? "text-rose-400" : "text-amber-300"
             }`}
           >
             {log.roundScore >= 0 ? `+${log.roundScore}` : log.roundScore}
@@ -53,7 +63,9 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
         </div>
         <div className="flex justify-between">
           <dt className="text-zinc-400">누적 점수</dt>
-          <dd className="font-mono font-bold text-amber-300">{totalScore}</dd>
+          <dd className="font-mono font-bold text-amber-300">
+            {animatedTotal}
+          </dd>
         </div>
       </dl>
 
@@ -67,7 +79,7 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
       <button
         type="button"
         onClick={next}
-        className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-base font-bold text-zinc-950 transition hover:bg-emerald-400"
+        className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-base font-bold text-zinc-950 transition hover:bg-emerald-400 active:scale-[0.98]"
       >
         {nextLabel}
       </button>
