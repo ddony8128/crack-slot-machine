@@ -80,16 +80,15 @@ export function applyRules(
 
     if (rule.id === 'copy-above') {
       const above = slotIndex > 0 ? rules[slotIndex - 1] : null;
-      if (
-        !above ||
-        above.type === 'weight' ||
-        above.type === 'score' ||
-        above.type === 'lock' ||
-        above.id === 'copy-above'
-      ) {
+      if (!above || above.type === 'lock' || above.id === 'copy-above') {
+        // lock is pre-roll (already held); nothing to duplicate on the board.
         steps.push({ label: 'COPY ABOVE → (none)', result: [...working], locked: [...locked] });
       } else {
-        applyOne(above, working, claimed, locked, ctx);
+        // weight/score rules are duplicated in computeWeights / scoreResult (no
+        // board change here); only board-changing types apply a post-roll effect.
+        if (above.type !== 'weight' && above.type !== 'score') {
+          applyOne(above, working, claimed, locked, ctx);
+        }
         steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
       }
       continue;

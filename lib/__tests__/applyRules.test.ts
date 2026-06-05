@@ -239,14 +239,15 @@ describe('applyRules — copy-above', () => {
     expect(steps[0].label).toBe('COPY ABOVE → (none)');
   });
 
-  it('copy-above with a weight rule above is a no-op', () => {
+  it('copy-above above a weight rule changes no cells but is labeled with the copied rule', () => {
+    // The weight duplication happens in computeWeights, not on the board, so the
+    // board is unchanged — but the step is labeled with the copied rule's name.
     const base: SymbolType[] = ['cherry', 'zero', 'lemon', 'diamond', 'four'];
     const rules: Rule[] = [RULES_BY_ID['fruit-surge'], RULES_BY_ID['copy-above']];
     const { finalResult, steps } = applyRules(base, rules, noCtx);
     expect(finalResult).toEqual(base);
-    // weight rule produced no step; copy-above is the only step.
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toBe('COPY ABOVE → (none)');
+    expect(steps[0].label).toBe('COPY ABOVE → FRUIT SURGE');
   });
 });
 

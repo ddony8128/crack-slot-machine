@@ -138,12 +138,19 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `center-lock` (lock): PRE-ROLL HOLD — cell[2] held at previousResult[2]; locked[2]=true. Resolved
   before the spin; the cell does not spin and is absolute (cannot be changed by any other rule).
 - `last-lock` (lock): PRE-ROLL HOLD — cell[4] held at previousResult[4]; locked[4]=true. Same as above.
-- `copy-above` (meta): let `above = slotRules[thisSlotIndex - 1]`. If `above` exists (active,
-  non-null) AND is a post-roll cascade type (reroll/transform/meta), re-apply its effect once
-  (same semantics as above) and push a step `label: "COPY ABOVE → {above.name}"`. If the slot
-  above is empty/null, or is a weight/score/**lock** type (locks are pre-roll, not cascade rules),
-  COPY ABOVE is a no-op (still push a "COPY ABOVE → (none)" step). COPY ABOVE does NOT recurse into
-  another copy-above.
+- `copy-above` (meta): duplicates the EFFECT of the rule directly above (`slotRules[i-1]`), for
+  ALL rule types:
+  - post-roll cascade types (reroll/transform): the effect is re-applied once on the board in
+    applyRules, pushing a step `label: "COPY ABOVE → {above.name}"`.
+  - `weight` rules: the multiplier is applied an extra time in `computeWeights` (via
+    `expandRules`). No board change; the step is still labeled with the copied rule's name.
+  - `score` rules (seven-double / bonus-77 / clean-bonus): counted an extra time in `scoreResult`
+    (via `expandRules`) — seven-double doubles again (×2 per occurrence), bonus-77/clean-bonus add
+    their value again. No board change; step labeled with the copied rule's name.
+  If the slot above is empty/null, a `copy-above`, or a `lock` (locks are pre-roll, nothing to
+  duplicate on the board), COPY ABOVE is a no-op ("COPY ABOVE → (none)"). It never recurses into
+  another copy-above. `expandRules(slots)` (lib/expandRules.ts) produces the effect-expanded list
+  used by computeWeights and scoreResult.
 - `weight` and `score` types: no post-roll effect (handled in roll / scoring).
 
 `applyRules` returns `{ finalResult, steps, locked, baseResult }`, all fresh copies. `baseResult`

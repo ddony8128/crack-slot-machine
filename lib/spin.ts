@@ -1,6 +1,7 @@
 import type { Rule, SymbolType } from '@/types';
 import { FRUITS, GEMS } from '@/data/symbols';
 import { rollSymbol, rollSymbolFrom, type Rng } from '@/lib/rng';
+import { expandRules } from '@/lib/expandRules';
 
 const NUMBERS: SymbolType[] = ['seven', 'zero', 'four'];
 
@@ -10,7 +11,8 @@ export function computeWeights(
 ): Record<SymbolType, number> {
   const weights = { ...base };
 
-  for (const rule of rules) {
+  // copy-above duplicates the rule above (including weight rules), so expand first.
+  for (const rule of expandRules(rules)) {
     if (!rule) continue;
 
     // four-shield is a reroll rule, but it ALSO affects the pre-roll weights

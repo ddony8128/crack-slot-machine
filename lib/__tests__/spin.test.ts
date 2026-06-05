@@ -67,6 +67,14 @@ describe('computeWeights', () => {
     expect(w.seven).toBe(BASE_WEIGHTS.seven * 3 * 3);
   });
 
+  it('copy-above above a weight rule duplicates its effect (fruit ×2 twice = ×4)', () => {
+    const w = computeWeights(
+      [RULES_BY_ID['fruit-surge'], RULES_BY_ID['copy-above']],
+      BASE_WEIGHTS,
+    );
+    for (const f of FRUITS) expect(w[f]).toBe(BASE_WEIGHTS[f] * 4);
+  });
+
   it('does not mutate the base weights', () => {
     const before = BASE_WEIGHTS.cherry;
     computeWeights([RULES_BY_ID['fruit-surge']], BASE_WEIGHTS);

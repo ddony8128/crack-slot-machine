@@ -198,3 +198,25 @@ describe('scoreResult', () => {
     expect(s.baseRoundScore).toBe(-100);
   });
 });
+
+describe('copy-above duplicates score rules', () => {
+  it('copy-above above bonus-77 applies +77 twice', () => {
+    const r: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'zero'];
+    const base = scoreResult(r, []);
+    const dup = scoreResult(r, [RULES_BY_ID['bonus-77'], RULES_BY_ID['copy-above']]);
+    expect(dup.bonusScore).toBe(base.bonusScore + 77 * 2);
+  });
+
+  it('copy-above above clean-bonus applies +100 twice (no fours)', () => {
+    const r: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'zero'];
+    const dup = scoreResult(r, [RULES_BY_ID['clean-bonus'], RULES_BY_ID['copy-above']]);
+    // all-fruit-types 50 + clean 100*2
+    expect(dup.bonusScore).toBe(50 + 200);
+  });
+
+  it('copy-above above seven-double quadruples the seven portion', () => {
+    const r: SymbolType[] = ['seven', 'seven', 'seven', 'cherry', 'cherry'];
+    const dup = scoreResult(r, [RULES_BY_ID['seven-double'], RULES_BY_ID['copy-above']]);
+    expect(dup.sevenScore).toBe(150 * 4); // 150 -> x2 -> x2
+  });
+});

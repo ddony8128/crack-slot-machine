@@ -66,10 +66,9 @@ export default function GameScreen() {
     return () => clearTimeout(t);
   }, [celebration]);
 
-  const showSlot =
-    status === "ready-to-spin" ||
-    status === "spinning" ||
-    status === "spin-result";
+  // Reels are always visible in-game (incl. while choosing/placing a rule) so the
+  // player can see the current board. The SPIN button itself only shows when ready.
+  const showSlot = status !== "start" && status !== "finished";
 
   // Score panel waits for the on-reel reveal to finish.
   const showScore =
@@ -79,8 +78,6 @@ export default function GameScreen() {
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-6">
       <StatusBar />
       <RuleSlots />
-
-      {status === "choosing-rule" && <RulePicker />}
 
       {showSlot && (
         <SlotMachine
@@ -93,6 +90,8 @@ export default function GameScreen() {
           revealing={reveal.revealing}
         />
       )}
+
+      {status === "choosing-rule" && <RulePicker />}
 
       {showScore && (
         <>

@@ -1,5 +1,6 @@
 import type { Rule, SymbolType } from '@/types';
 import { FRUITS, GEMS, RED_SET, BLUE_SET } from '@/data/symbols';
+import { expandRules, countRule } from '@/lib/expandRules';
 import {
   SEVEN_SCORE,
   HAND_PAIR,
@@ -83,10 +84,6 @@ export function colorBonuses(result: SymbolType[]): number {
   return bonus;
 }
 
-function hasActiveRule(rules: (Rule | null)[], id: string): boolean {
-  return rules.some((r) => r != null && r.id === id);
-}
-
 export function scoreResult(
   result: SymbolType[],
   activeSlotRules: (Rule | null)[] = [],
@@ -98,14 +95,20 @@ export function scoreResult(
   penalty: number;
   baseRoundScore: number;
 } {
-  const sevenDouble = hasActiveRule(activeSlotRules, 'seven-double');
+  // copy-above duplicates the rule above (including score rules), so expand and
+  // COUNT occurrences — each application of a score rule stacks.
+  const expanded = expandRules(activeSlotRules);
   const { hand, handScore } = computeHand(result);
-  const sevenPts = sevenScore(result, { sevenDouble });
+
+  // seven-double: each application doubles the seven portion (×2 per occurrence).
+  let sevenPts = SEVEN_SCORE[countSevens(result)] ?? 0;
+  const sevenDoubleCount = countRule(expanded, 'seven-double');
+  for (let k = 0; k < sevenDoubleCount; k++) sevenPts *= 2;
 
   let bonusScore = colorBonuses(result);
-  if (hasActiveRule(activeSlotRules, 'bonus-77')) bonusScore += BONUS_77;
-  if (hasActiveRule(activeSlotRules, 'clean-bonus') && countFours(result) === 0) {
-    bonusScore += CLEAN_BONUS;
+  bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
+  if (countFours(result) === 0) {
+    bonusScore += CLEAN_BONUS * countRule(expanded, 'clean-bonus');
   }
 
   const penalty = countFours(result) * FOUR_PENALTY_PER;
