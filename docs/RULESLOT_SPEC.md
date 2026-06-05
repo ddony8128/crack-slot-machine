@@ -54,7 +54,7 @@ Let cells = finalResult (5). counts of each symbol. sevens, fours, zeros = respe
    - all red (all 5 cells ∈ {ruby, cherry}): **+250**
 4. **Score-rule bonuses** (from active slot rules):
    - `bonus-77` active: **+77**
-   - `clean-bonus` active and fours == 0: **+100** (`CLEAN_BONUS = 100`)
+   - `clean-bonus` active and fours == 0: **+120** (`CLEAN_BONUS = 120`)
 5. **Four penalty**: `penalty = fours * 20` (subtracted).
 6. `baseRoundScore = sevenScore + handScore + colorBonuses + scoreRuleBonuses - penalty`.
 
@@ -74,7 +74,9 @@ Evaluated after the round resolves:
 ## 5. Rule application (`applyRules`)
 Three phases:
 - **Weight phase (pre-roll)**: `computeWeights(slotRules, BASE_WEIGHTS)` multiplies weights for
-  every active `weight`-type rule, then the board is rolled by `rollBoard(slotRules, weights,
+  every active `weight`-type rule (in `computeWeights`: `seven-fever` seven ×3, `fruit-surge` each
+  fruit ×3, `gem-surge` each gem ×3, `no-zero` zero → 0), then the board is rolled by
+  `rollBoard(slotRules, weights,
   previousResult, rng)` (5 cells). `rollBoard` honors the `number-spin` PRE-ROLL roll-restriction:
   if `number-spin` is active, every cell `i` whose `previousResult[i]` was a number (seven/zero/four)
   is rolled restricted to {seven, zero, four} (via `rollSymbolFrom`) so it lands on a number; all
@@ -114,7 +116,9 @@ reroll/transform/lock below targets only UNclaimed cells.
 Per-rule post-roll behavior (cell indices 0-based):
 - `four-shield` (reroll): every cell == four (and not locked) rerolled once. (Also applies a
   zero ×2 weight in the pre-roll weight phase — see above.)
-- `four-parry` (reroll): the leftmost non-locked cell == four rerolled once (one only).
+- `four-parry` (reroll, loop-until): the leftmost non-claimed cell == four is rerolled REPEATEDLY
+  (`rollSymbol`, full weights) until it is NOT a four, capped at **30** iterations, then the cell is
+  claimed. No-op if no such cell. (Mirrors the fruit-fish/gem-fish loop pattern.)
 - `gem-shuffle` (reroll, loop-until): the leftmost non-claimed GEM cell is rerolled REPEATEDLY
   (`rollSymbol`, full weights) until it is NOT a gem, capped at **30** iterations, then the cell is
   claimed. No-op if no such cell. [anti-gem]
@@ -129,7 +133,8 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `center-echo` (transform): cell[3] = cell[1].
 - `third-mirror` (transform): cell[2] = cell[4].
 - `first-cherry` (transform): cell[0] = 'cherry'.
-- `safe-convert` (transform): leftmost four → ruby (one only; no-op if none).
+- `safe-convert` (transform): ALL non-claimed four → ruby (loops over every cell, respecting
+  `claimed`; no-op if none).
 - `zero-to-seven` (transform): ALL zero → seven.
 - `diamond-to-lemon` (transform): ALL diamond → lemon.
 - `grape-to-sapphire` (transform): ALL grape → sapphire.
@@ -166,10 +171,10 @@ All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, n
 | seven-double | SEVEN DOUBLE | 7 | score | 7-based score ×2 this spin |
 | zero-to-seven | ZERO ASCEND | 7 | transform | all 0 → 7 |
 | number-spin | NUMBER SPIN | 7 | weight | PRE-ROLL: cells that started as a number land on a number (7/0/4) |
-| fruit-surge | FRUIT SURGE | fruit | weight | fruit weight ×2 |
+| fruit-surge | FRUIT SURGE | fruit | weight | fruit weight ×3 |
 | diamond-to-lemon | DIAMOND CUT | fruit | transform | all 💎 → 🍋 |
 | fruit-fish | FRUIT FISH | fruit | reroll | leftmost non-fruit cell reroll until fruit (cap 30) |
-| gem-surge | GEM SURGE | gem | weight | gem weight ×2 |
+| gem-surge | GEM SURGE | gem | weight | gem weight ×3 |
 | grape-to-sapphire | GRAPE FREEZE | gem | transform | all 🍇 → 🔵 |
 | gem-fish | GEM FISH | gem | reroll | leftmost non-gem cell reroll until gem (cap 30) |
 | first-cherry | FIRST CHERRY | color | transform | cell1 → 🍒 |
@@ -183,11 +188,11 @@ All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, n
 | copy-above | COPY ABOVE | order | meta | re-apply the active rule directly above |
 | no-zero | NO ZERO | safe | weight | zero weight → 0 (no zeros) |
 | four-shield | FOUR SHIELD | safe | reroll | all 4s reroll once; this spin zero weight ×2 |
-| four-parry | FOUR PARRY | safe | reroll | leftmost 4 reroll once |
-| safe-convert | SAFE CONVERT | safe | transform | leftmost 4 → 🔴 |
+| four-parry | FOUR PARRY | safe | reroll | leftmost 4 reroll until not a 4 (cap 30) |
+| safe-convert | SAFE CONVERT | safe | transform | all 4 → 🔴 |
 | gem-shuffle | GEM SHUFFLE | safe | reroll | leftmost gem cell reroll until non-gem (cap 30) [anti-gem] |
 | bonus-77 | LUCKY SEVEN-SEVEN | score | score | +77 points |
-| clean-bonus | CLEAN SWEEP | score | score | +100 if no 4s on board |
+| clean-bonus | CLEAN SWEEP | score | score | +120 if no 4s on board |
 
 (Removed in v2.1: lucky-convert, edge-mirror, fourth-lock, zero-fog, zero-break.)
 (Removed in v2.2: unique-second. Pool is now **26 rules**.)

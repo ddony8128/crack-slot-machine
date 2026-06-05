@@ -130,8 +130,16 @@ function applyOne(
       }
       break;
     case 'four-parry': {
+      // leftmost non-claimed cell == four -> reroll until it is NOT a four (cap 30), then claim.
       const idx = working.findIndex((s, i) => s === 'four' && !claimed[i]);
-      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
+      if (idx !== -1) {
+        let iter = 0;
+        while (iter < REROLL_CAP && working[idx] === 'four') {
+          working[idx] = rollSymbol(weights, rng);
+          iter += 1;
+        }
+        claimed[idx] = true;
+      }
       break;
     }
     case 'gem-shuffle': {
@@ -187,11 +195,11 @@ function applyOne(
     case 'first-cherry':
       write(working, claimed, 0, 'cherry');
       break;
-    case 'safe-convert': {
-      const idx = working.findIndex((s, i) => s === 'four' && !claimed[i]);
-      if (idx !== -1) write(working, claimed, idx, 'ruby');
+    case 'safe-convert':
+      for (let i = 0; i < working.length; i++) {
+        if (working[i] === 'four' && !claimed[i]) write(working, claimed, i, 'ruby');
+      }
       break;
-    }
     case 'zero-to-seven':
       for (let i = 0; i < working.length; i++) {
         if (working[i] === 'zero' && !claimed[i]) write(working, claimed, i, 'seven');

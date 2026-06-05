@@ -29,10 +29,10 @@ export function computeWeights(
         weights.seven *= 3;
         break;
       case 'fruit-surge':
-        for (const f of FRUITS) weights[f] *= 2;
+        for (const f of FRUITS) weights[f] *= 3;
         break;
       case 'gem-surge':
-        for (const g of GEMS) weights[g] *= 2;
+        for (const g of GEMS) weights[g] *= 3;
         break;
       case 'no-zero':
         weights.zero = 0;

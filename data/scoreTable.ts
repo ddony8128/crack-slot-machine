@@ -30,7 +30,7 @@ export const FOUR_PENALTY_PER = 20;
 
 // Score-rule bonuses.
 export const BONUS_77 = 77;
-export const CLEAN_BONUS = 100;
+export const CLEAN_BONUS = 120;
 
 // Multiplier triggers.
 export const ZERO_DRAW_MIN = 3; // zeros >= 3 grants an extra rule pick

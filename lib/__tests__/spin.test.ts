@@ -17,20 +17,20 @@ function queuedRng(values: number[]): Rng {
 }
 
 describe('computeWeights', () => {
-  it('fruit-surge doubles fruit weights', () => {
+  it('fruit-surge triples fruit weights', () => {
     const w = computeWeights([RULES_BY_ID['fruit-surge']], BASE_WEIGHTS);
     for (const f of FRUITS) {
-      expect(w[f]).toBe(BASE_WEIGHTS[f] * 2);
+      expect(w[f]).toBe(BASE_WEIGHTS[f] * 3);
     }
     expect(w.seven).toBe(BASE_WEIGHTS.seven);
     expect(w.zero).toBe(BASE_WEIGHTS.zero);
   });
 
-  it('gem-surge doubles gem weights', () => {
+  it('gem-surge triples gem weights', () => {
     const w = computeWeights([RULES_BY_ID['gem-surge']], BASE_WEIGHTS);
-    expect(w.diamond).toBe(BASE_WEIGHTS.diamond * 2);
-    expect(w.ruby).toBe(BASE_WEIGHTS.ruby * 2);
-    expect(w.sapphire).toBe(BASE_WEIGHTS.sapphire * 2);
+    expect(w.diamond).toBe(BASE_WEIGHTS.diamond * 3);
+    expect(w.ruby).toBe(BASE_WEIGHTS.ruby * 3);
+    expect(w.sapphire).toBe(BASE_WEIGHTS.sapphire * 3);
   });
 
   it('seven-fever triples seven', () => {
@@ -67,12 +67,12 @@ describe('computeWeights', () => {
     expect(w.seven).toBe(BASE_WEIGHTS.seven * 3 * 3);
   });
 
-  it('copy-above above a weight rule duplicates its effect (fruit ×2 twice = ×4)', () => {
+  it('copy-above above a weight rule duplicates its effect (fruit ×3 twice = ×9)', () => {
     const w = computeWeights(
       [RULES_BY_ID['fruit-surge'], RULES_BY_ID['copy-above']],
       BASE_WEIGHTS,
     );
-    for (const f of FRUITS) expect(w[f]).toBe(BASE_WEIGHTS[f] * 4);
+    for (const f of FRUITS) expect(w[f]).toBe(BASE_WEIGHTS[f] * 9);
   });
 
   it('does not mutate the base weights', () => {

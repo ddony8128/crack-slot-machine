@@ -83,10 +83,10 @@ describe('applyRules — transforms', () => {
     expect(finalResult).toEqual(['sapphire', 'cherry', 'sapphire', 'zero', 'four']);
   });
 
-  it('safe-convert: leftmost 4 => 🔴 (ruby), only one', () => {
+  it('safe-convert: ALL 4 => 🔴 (ruby)', () => {
     const base: SymbolType[] = ['cherry', 'four', 'zero', 'four', 'lemon'];
     const { finalResult } = applyRules(base, [RULES_BY_ID['safe-convert']], noCtx);
-    expect(finalResult).toEqual(['cherry', 'ruby', 'zero', 'four', 'lemon']);
+    expect(finalResult).toEqual(['cherry', 'ruby', 'zero', 'ruby', 'lemon']);
   });
 
   it('weight & score rules are skipped (no steps)', () => {
@@ -166,15 +166,19 @@ describe('applyRules — locks & rerolls', () => {
     expect(finalResult[0]).toBe('lemon'); // looped past sapphire, landed on a non-gem
   });
 
-  it('four-parry rerolls only the leftmost four', () => {
+  it('four-parry loops the leftmost four until it is not a four', () => {
+    // cell1 is the leftmost four. Feed a four first to force another iteration,
+    // then a non-four (lemon). cell2 (second four) is untouched.
     const base: SymbolType[] = ['cherry', 'four', 'four', 'diamond', 'zero'];
+    const rng = queuedRng([rngPoint('four'), rngPoint('lemon')]);
     const { finalResult } = applyRules(base, [RULES_BY_ID['four-parry']], {
       previousResult: noCtx.previousResult,
       weights: BASE_WEIGHTS,
-      rng: rngForSymbol('lemon'),
+      rng,
     });
-    expect(finalResult[1]).toBe('lemon');
-    expect(finalResult[2]).toBe('four'); // second four untouched
+    expect(finalResult[1]).toBe('lemon'); // looped past a four, landed on non-four
+    expect(finalResult[1]).not.toBe('four');
+    expect(finalResult[2]).toBe('four'); // second four untouched (only leftmost targeted)
   });
 });
 

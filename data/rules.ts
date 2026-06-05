@@ -37,7 +37,7 @@ export const RULES: Rule[] = [
     name: 'FRUIT SURGE',
     type: 'weight',
     build: 'fruit',
-    description: '과일이 나올 확률이 두 배가 된다.',
+    description: '과일이 나올 확률이 세 배가 된다.',
   },
   {
     id: 'diamond-to-lemon',
@@ -60,7 +60,7 @@ export const RULES: Rule[] = [
     name: 'GEM SURGE',
     type: 'weight',
     build: 'gem',
-    description: '보석이 나올 확률이 두 배가 된다.',
+    description: '보석이 나올 확률이 세 배가 된다.',
   },
   {
     id: 'grape-to-sapphire',
@@ -164,14 +164,14 @@ export const RULES: Rule[] = [
     name: 'FOUR PARRY',
     type: 'reroll',
     build: 'safe',
-    description: '가장 왼쪽의 4 하나를 다시 굴린다.',
+    description: '가장 왼쪽의 4를 4가 아닌 것이 나올 때까지 다시 굴린다.',
   },
   {
     id: 'safe-convert',
     name: 'SAFE CONVERT',
     type: 'transform',
     build: 'safe',
-    description: '가장 왼쪽의 4가 루비로 바뀐다.',
+    description: '모든 4가 루비로 바뀐다.',
   },
   {
     id: 'gem-shuffle',
@@ -194,7 +194,7 @@ export const RULES: Rule[] = [
     name: 'CLEAN SWEEP',
     type: 'score',
     build: 'score',
-    description: '보드에 4가 하나도 없으면 100점을 더 얻는다.',
+    description: '보드에 4가 하나도 없으면 120점을 더 얻는다.',
   },
 ];
 

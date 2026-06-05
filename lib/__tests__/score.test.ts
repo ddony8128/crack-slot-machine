@@ -165,12 +165,12 @@ describe('scoreResult', () => {
     expect(bonus.bonusScore).toBe(base.bonusScore + 77);
   });
 
-  it('clean-bonus adds +100 only when no fours', () => {
+  it('clean-bonus adds +120 only when no fours', () => {
     const clean: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'zero'];
     const dirty: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'four'];
     const c = scoreResult(clean, [RULES_BY_ID['clean-bonus']]);
     const d = scoreResult(dirty, [RULES_BY_ID['clean-bonus']]);
-    expect(c.bonusScore).toBe(50 + 100); // all fruit types + clean
+    expect(c.bonusScore).toBe(50 + 120); // all fruit types + clean
     expect(d.bonusScore).toBe(50);       // all fruit types only, no clean (has a four)
   });
 
@@ -207,11 +207,11 @@ describe('copy-above duplicates score rules', () => {
     expect(dup.bonusScore).toBe(base.bonusScore + 77 * 2);
   });
 
-  it('copy-above above clean-bonus applies +100 twice (no fours)', () => {
+  it('copy-above above clean-bonus applies +120 twice (no fours)', () => {
     const r: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'zero'];
     const dup = scoreResult(r, [RULES_BY_ID['clean-bonus'], RULES_BY_ID['copy-above']]);
-    // all-fruit-types 50 + clean 100*2
-    expect(dup.bonusScore).toBe(50 + 200);
+    // all-fruit-types 50 + clean 120*2
+    expect(dup.bonusScore).toBe(50 + 240);
   });
 
   it('copy-above above seven-double quadruples the seven portion', () => {
