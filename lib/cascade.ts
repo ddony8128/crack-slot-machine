@@ -219,23 +219,33 @@ export function beginCascade(
   const locked: boolean[] = [false, false, false, false, false];
 
   // --- PRE-ROLL HOLD pass: freeze locked cells to the previous spin value. ---
-  for (const rule of rules) {
-    if (!rule || rule.type !== 'lock') continue;
-    if (rule.id === 'center-lock') {
-      working[2] = ctx.previousResult[2];
-      locked[2] = true;
-    } else if (rule.id === 'last-lock') {
-      working[4] = ctx.previousResult[4];
-      locked[4] = true;
-    } else if (rule.id === 'fruit-freeze') {
+  // A `copy-above` whose slot above is a lock re-applies that lock here too
+  // (idempotent for center/last-lock; fruit-freeze then holds the NEXT 2 fruits).
+  const prev = ctx.previousResult;
+  const applyLock = (lockRule: Rule) => {
+    if (lockRule.id === 'center-lock') {
+      if (!locked[2]) { working[2] = prev[2]; locked[2] = true; }
+    } else if (lockRule.id === 'last-lock') {
+      if (!locked[4]) { working[4] = prev[4]; locked[4] = true; }
+    } else if (lockRule.id === 'fruit-freeze') {
       let held = 0;
-      for (let i = 0; i < ctx.previousResult.length && held < 2; i++) {
-        if (FRUIT_SET.has(ctx.previousResult[i])) {
-          working[i] = ctx.previousResult[i];
+      for (let i = 0; i < prev.length && held < 2; i++) {
+        if (FRUIT_SET.has(prev[i]) && !locked[i]) {
+          working[i] = prev[i];
           locked[i] = true;
           held += 1;
         }
       }
+    }
+  };
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    if (!rule) continue;
+    if (rule.type === 'lock') {
+      applyLock(rule);
+    } else if (rule.id === 'copy-above') {
+      const above = i > 0 ? rules[i - 1] : null;
+      if (above && above.type === 'lock') applyLock(above);
     }
   }
 
@@ -300,16 +310,34 @@ export function advanceCascade(
 
     if (rule.id === 'copy-above') {
       const above = slotIndex > 0 ? rules[slotIndex - 1] : null;
-      if (!above || above.type === 'lock' || above.id === 'copy-above') {
+      if (!above || above.id === 'copy-above') {
         steps.push({ label: 'COPY ABOVE → (none)', result: [...working], locked: [...locked] });
-      } else {
-        // weight/score/select rules are not board-changing here; only
-        // reroll/transform re-apply a post-roll board effect.
-        if (above.type === 'reroll' || above.type === 'transform') {
-          applyOne(above, working, locked, ctx);
-        }
-        steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
+        continue;
       }
+      if (above.type === 'lock') {
+        // The lock (and this copy of it) were already applied in the pre-roll
+        // HOLD pass; just acknowledge it here (board already reflects the hold).
+        steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
+        continue;
+      }
+      if (above.type === 'select') {
+        // Re-run the above SELECT rule: another interactive pick (or auto-skip).
+        const kind = SELECT_KIND[above.id];
+        const selectable = selectableFor(kind, locked);
+        if (opts.autoSkipSelect || !isApplicable(kind, selectable)) {
+          steps.push({ label: `COPY ABOVE → ${above.name} (건너뜀)`, result: [...working], locked: [...locked] });
+          continue;
+        }
+        // Pause here (slotIndex stays on the copy-above slot) for the player.
+        frame.pending = { kind, ruleName: `COPY ABOVE → ${above.name}`, selectable };
+        return frame;
+      }
+      // weight/score rules are not board-changing here; only reroll/transform
+      // re-apply a post-roll board effect.
+      if (above.type === 'reroll' || above.type === 'transform') {
+        applyOne(above, working, locked, ctx);
+      }
+      steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
       continue;
     }
 
@@ -338,8 +366,9 @@ export function resolveSelection(
   if (!pending) return frame;
 
   const { working, locked, steps } = frame;
-  const rule = rules[frame.slotIndex];
-  const ruleName = rule?.name ?? pending.ruleName;
+  // Use the pending's own label so COPY ABOVE → SELECT shows correctly (the slot
+  // rule may be `copy-above`, not the select rule itself).
+  const ruleName = pending.ruleName;
 
   switch (pending.kind) {
     case 'copy': {

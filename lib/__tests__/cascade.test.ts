@@ -432,3 +432,38 @@ describe('regression — rules no longer no-op after another rule touched a cell
     expect(finalResult[3]).toBe('grape');
   });
 });
+
+describe('COPY ABOVE covers every rule type', () => {
+  it('above a SELECT rule → pauses AGAIN for another pick (labeled COPY ABOVE → ...)', () => {
+    const base: SymbolType[] = ['lemon', 'grape', 'diamond', 'ruby', 'sapphire'];
+    const rules: Rule[] = [RULES_BY_ID['select-copy'], RULES_BY_ID['copy-above']];
+    let frame = beginCascade(base, rules, ctxNoRng);
+    expect(frame.pending?.kind).toBe('copy');
+    frame = resolveSelection(frame, rules, ctxNoRng, [3]); // cell3 = cell2 (diamond)
+    expect(frame.done).toBe(false);
+    expect(frame.pending?.kind).toBe('copy');
+    expect(frame.pending?.ruleName).toBe('COPY ABOVE → SELECT COPY');
+    frame = resolveSelection(frame, rules, ctxNoRng, [4]); // cell4 = cell3 (diamond)
+    expect(frame.done).toBe(true);
+    expect(frame.working[3]).toBe('diamond');
+    expect(frame.working[4]).toBe('diamond');
+  });
+
+  it('above FRUIT FREEZE → holds the NEXT 2 fruits (4 held total)', () => {
+    const base: SymbolType[] = ['seven', 'seven', 'seven', 'seven', 'seven'];
+    const prev: SymbolType[] = ['cherry', 'lemon', 'grape', 'grape', 'ruby'];
+    const rules: Rule[] = [RULES_BY_ID['fruit-freeze'], RULES_BY_ID['copy-above']];
+    const frame = beginCascade(base, rules, { previousResult: prev, weights: BASE_WEIGHTS, rng: queuedRng([]) });
+    expect(frame.locked).toEqual([true, true, true, true, false]);
+    expect(frame.working.slice(0, 4)).toEqual(['cherry', 'lemon', 'grape', 'grape']);
+  });
+
+  it('above a single-cell lock (center-lock) is idempotent (still locked, no error)', () => {
+    const base: SymbolType[] = ['seven', 'seven', 'seven', 'seven', 'seven'];
+    const prev: SymbolType[] = ['a', 'a', 'ruby', 'a', 'a'] as SymbolType[];
+    const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['copy-above']];
+    const frame = beginCascade(base, rules, { previousResult: prev, weights: BASE_WEIGHTS, rng: queuedRng([]) });
+    expect(frame.locked[2]).toBe(true);
+    expect(frame.working[2]).toBe('ruby');
+  });
+});
