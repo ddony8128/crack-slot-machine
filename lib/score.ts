@@ -1,4 +1,4 @@
-import type { Rule, SymbolType } from '@/types';
+import type { Rule, ScoreItem, SymbolType } from '@/types';
 import { FRUITS, GEMS, RED_SET, BLUE_SET } from '@/data/symbols';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
@@ -82,6 +82,70 @@ export function colorBonuses(result: SymbolType[]): number {
   if (result.length === 5 && result.every((s) => RED_SET.has(s))) bonus += BONUS_ALL_RED;
 
   return bonus;
+}
+
+const HAND_KO: Record<string, string> = {
+  Pair: '페어',
+  'Two Pair': '투페어',
+  Triple: '트리플',
+  'Full House': '풀하우스',
+  'Four of a Kind': '포카드',
+  'Five of a Kind': '파이브카드',
+};
+
+// Color/type bonuses as labeled line items (parallel to colorBonuses' sum).
+export function colorBonusItems(result: SymbolType[]): ScoreItem[] {
+  const items: ScoreItem[] = [];
+  const has = (s: SymbolType) => result.includes(s);
+  const all = (set: Set<SymbolType>) =>
+    result.length === 5 && result.every((s) => set.has(s));
+
+  if (has('cherry') && has('lemon') && has('grape'))
+    items.push({ label: '과일 3종', points: BONUS_ALL_FRUIT_TYPES });
+  if (has('diamond') && has('ruby') && has('sapphire'))
+    items.push({ label: '보석 3종', points: BONUS_ALL_GEM_TYPES });
+  if (all(FRUIT_SET)) items.push({ label: '올 과일', points: BONUS_ONLY_FRUITS });
+  if (all(GEM_SET)) items.push({ label: '올 보석', points: BONUS_ONLY_GEMS });
+  if (all(new Set(BLUE_SET))) items.push({ label: '올 블루', points: BONUS_ALL_BLUE });
+  if (all(new Set(RED_SET))) items.push({ label: '올 레드', points: BONUS_ALL_RED });
+  return items;
+}
+
+/**
+ * Itemized score breakdown ("why these points"). Sum of points == baseRoundScore
+ * (pre-multiplier). Mirrors scoreResult exactly so they never disagree.
+ */
+export function scoreItems(
+  result: SymbolType[],
+  activeSlotRules: (Rule | null)[] = [],
+): ScoreItem[] {
+  const expanded = expandRules(activeSlotRules);
+  const items: ScoreItem[] = [];
+
+  const sevens = countSevens(result);
+  if (sevens >= 1) {
+    let pts = SEVEN_SCORE[sevens] ?? 0;
+    const dbl = countRule(expanded, 'seven-double');
+    for (let k = 0; k < dbl; k++) pts *= 2;
+    items.push({ label: dbl > 0 ? `7 ${sevens}개 (×${2 ** dbl})` : `7 ${sevens}개`, points: pts });
+  }
+
+  const { hand, handScore } = computeHand(result);
+  if (handScore > 0) items.push({ label: `족보: ${HAND_KO[hand] ?? hand}`, points: handScore });
+
+  items.push(...colorBonusItems(result));
+
+  const b77 = countRule(expanded, 'bonus-77');
+  if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
+
+  const clean = countRule(expanded, 'clean-bonus');
+  if (clean > 0 && countFours(result) === 0)
+    items.push({ label: clean > 1 ? `CLEAN SWEEP ×${clean}` : 'CLEAN SWEEP', points: CLEAN_BONUS * clean });
+
+  const fours = countFours(result);
+  if (fours > 0) items.push({ label: `4 페널티 (${fours}개)`, points: -(fours * FOUR_PENALTY_PER) });
+
+  return items;
 }
 
 export function scoreResult(

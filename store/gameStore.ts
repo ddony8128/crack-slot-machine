@@ -4,7 +4,7 @@ import type { GameState, Rule, SpinLog, SymbolType } from '@/types';
 import { defaultRng, type Rng } from '@/lib/rng';
 import { rollBoard, computeWeights } from '@/lib/spin';
 import { applyRules } from '@/lib/applyRules';
-import { scoreResult } from '@/lib/score';
+import { scoreResult, scoreItems } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
 import { RULES } from '@/data/rules';
 import { BASE_WEIGHTS } from '@/data/symbols';
@@ -241,6 +241,7 @@ function buildInitializer(rng: Rng): Initializer {
         zeroDraw: specials.zeroDraw,
         multiplierSet: specials.nextMultiplier,
         lockedCells: locked,
+        scoreItems: scoreItems(finalResult, ruleSlots),
       };
 
       set({

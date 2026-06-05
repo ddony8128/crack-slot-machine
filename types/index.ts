@@ -19,6 +19,9 @@ export type SpinLogStep = {
   locked: boolean[];      // cells frozen by a lock rule so far (for the greyed-out reveal)
 };
 
+// One line of the score breakdown ("why you got these points"). points can be negative.
+export type ScoreItem = { label: string; points: number };
+
 export type SpinLog = {
   spinIndex: number;        // 0-based
   baseResult: SymbolType[]; // raw roll before post-roll rules
@@ -35,6 +38,7 @@ export type SpinLog = {
   zeroDraw: boolean;        // zeros>=3 triggered extra rule pick
   multiplierSet: number;    // multiplier granted to next spin (1 if none)
   lockedCells: boolean[];   // final cells frozen by lock rules (greyed in UI)
+  scoreItems: ScoreItem[];  // itemized "why these points" breakdown (pre-multiplier)
 };
 
 export type GameStatus =

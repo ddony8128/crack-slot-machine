@@ -8,6 +8,7 @@ import {
   sevenScore,
   colorBonuses,
   scoreResult,
+  scoreItems,
 } from '@/lib/score';
 import { RULES_BY_ID } from '@/data/rules';
 
@@ -196,6 +197,37 @@ describe('scoreResult', () => {
     expect(s.hand).toBe('No Hand');
     expect(s.penalty).toBe(100);
     expect(s.baseRoundScore).toBe(-100);
+  });
+});
+
+describe('scoreItems (breakdown)', () => {
+  const sum = (items: { points: number }[]) =>
+    items.reduce((a, it) => a + it.points, 0);
+
+  it('item points always sum to baseRoundScore', () => {
+    const cases: SymbolType[][] = [
+      ['cherry', 'cherry', 'zero', 'zero', 'four'],
+      ['seven', 'seven', 'seven', 'cherry', 'cherry'],
+      ['cherry', 'lemon', 'grape', 'grape', 'grape'],
+      ['ruby', 'cherry', 'ruby', 'cherry', 'ruby'],
+      ['four', 'four', 'four', 'four', 'four'],
+    ];
+    for (const r of cases) {
+      expect(sum(scoreItems(r, []))).toBe(scoreResult(r, []).baseRoundScore);
+    }
+  });
+
+  it('itemizes hand, color bonus, seven and penalty separately', () => {
+    // 🍒🍒 0 0 4 -> Pair + 4 penalty
+    const items = scoreItems(['cherry', 'cherry', 'zero', 'zero', 'four'], []);
+    expect(items).toContainEqual({ label: '족보: 페어', points: 10 });
+    expect(items).toContainEqual({ label: '4 페널티 (1개)', points: -20 });
+  });
+
+  it('reflects active score rules incl copy-above duplication in the sum', () => {
+    const r: SymbolType[] = ['seven', 'seven', 'seven', 'cherry', 'cherry'];
+    const rules = [RULES_BY_ID['seven-double'], RULES_BY_ID['copy-above']];
+    expect(sum(scoreItems(r, rules))).toBe(scoreResult(r, rules).baseRoundScore);
   });
 });
 
