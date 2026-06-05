@@ -19,6 +19,14 @@ type SlotMachineProps = {
   lockedIndices?: number[];
   /** True while the reveal sequence runs — hides the SPIN button. */
   revealing?: boolean;
+  /** True during 'awaiting-selection' — cells become clickable for the player. */
+  picking?: boolean;
+  /** Cells the player may pick (highlight ring + cursor-pointer). */
+  selectable?: number[];
+  /** Cells the player has already picked (stronger accent). */
+  chosen?: number[];
+  /** Click handler for a selectable cell. */
+  onPick?: (i: number) => void;
 };
 
 export default function SlotMachine({
@@ -29,6 +37,10 @@ export default function SlotMachine({
   stepLabel = null,
   lockedIndices = [],
   revealing = false,
+  picking = false,
+  selectable = [],
+  chosen = [],
+  onPick,
 }: SlotMachineProps) {
   const currentResult = useGameStore((s) => s.currentResult);
   const status = useGameStore((s) => s.status);
@@ -41,6 +53,8 @@ export default function SlotMachine({
   const flashSet = new Set(flashIndices);
   const landSet = new Set(landIndices);
   const lockedSet = new Set(lockedIndices);
+  const selectableSet = new Set(selectable);
+  const chosenSet = new Set(chosen);
 
   return (
     <section className="space-y-4 fade-rise">
@@ -79,8 +93,37 @@ export default function SlotMachine({
             ]
               .filter(Boolean)
               .join(" ");
+            const isSelectable = picking && selectableSet.has(i);
+            const isChosen = picking && chosenSet.has(i);
+            // While picking: selectable cells get a highlight ring + pointer;
+            // chosen cells get a stronger accent; the rest are dimmed/inert.
+            const pickClass = picking
+              ? isChosen
+                ? "cursor-pointer rounded-xl ring-4 ring-amber-400 ring-offset-2 ring-offset-zinc-950 scale-105"
+                : isSelectable
+                  ? "cursor-pointer rounded-xl ring-2 ring-emerald-400/80 ring-offset-2 ring-offset-zinc-950 hover:ring-emerald-300 hover:scale-105 transition"
+                  : "opacity-40"
+              : "";
             return (
-              <div key={i} data-reel-index={i} className="relative">
+              <div
+                key={i}
+                data-reel-index={i}
+                className={`relative ${pickClass}`}
+                role={isSelectable ? "button" : undefined}
+                tabIndex={isSelectable ? 0 : undefined}
+                aria-pressed={isSelectable ? isChosen : undefined}
+                onClick={isSelectable ? () => onPick?.(i) : undefined}
+                onKeyDown={
+                  isSelectable
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onPick?.(i);
+                        }
+                      }
+                    : undefined
+                }
+              >
                 <SymbolView symbol={symbol} size="lg" className={motion} />
                 {isLocked && (
                   <span

@@ -71,6 +71,42 @@ Evaluated after the round resolves:
 - **fours == 5** → `nextMultiplier = 4` (1 use).
   (If both somehow apply, fours==5 wins. fours==4/5 also incur the normal -20/four penalty this spin.)
 
+## 4b. Interactive SELECT rules (resumable cascade)
+Three `select`-type rules (build `order`) PAUSE the cascade for player input,
+then RESUME. Selectable cells = currently UNCLAIMED cells (pre-roll holds + cells
+written by earlier first-claim rules are claimed and thus not selectable).
+- `select-copy` (SELECT COPY): player picks ONE unclaimed cell at index i≥1;
+  `cell[i] = cell[i-1]`; claim i. Eligible cells = unclaimed AND index ≥ 1.
+  If none eligible → AUTO-SKIP (no pause; step "SELECT COPY (건너뜀)").
+- `select-swap` (SELECT SWAP): player picks TWO unclaimed cells a,b; swap their
+  symbols; claim both. Needs ≥ 2 unclaimed cells; fewer → AUTO-SKIP.
+- `select-reroll` (SELECT REROLL): player picks ONE unclaimed cell i; reroll via
+  `rollSymbol(weights, rng)`; claim i. Needs ≥ 1 unclaimed cell; none → AUTO-SKIP.
+When a select rule resolves (player picked, or it auto-skips) it pushes a
+`SpinLogStep` (label = rule name, or "{name} (건너뜀)" when skipped) like other
+cascade rules.
+
+### Resumable cascade engine (`lib/cascade.ts`)
+A single engine backs both the pure path and the interactive store path:
+- `beginCascade(base, rules, ctx, opts?)`: runs the PRE-ROLL HOLD pass, captures
+  `baseResult`, returns a frame
+  `{ working, claimed, locked, steps, baseResult, slotIndex, pending, done, interactive }`
+  and immediately advances.
+- `advanceCascade(frame, rules, ctx, opts?)`: processes non-lock/weight/score
+  rules from `frame.slotIndex` (existing first-claim semantics). On a `select`
+  rule that needs input it sets `frame.pending = { kind, ruleName, selectable }`
+  and RETURNS (paused; slotIndex stays on that rule). Auto-skipped select rules
+  push their step and continue. When all slots are processed `frame.done = true`.
+  With `opts.autoSkipSelect`, select rules ALWAYS auto-skip (the pure path).
+- `resolveSelection(frame, rules, ctx, indices)`: applies the pending select rule
+  with the chosen indices (copy/swap/reroll), claims written cells, pushes a step,
+  sets `frame.interactive = true`, clears `pending`, advances past the rule, then
+  continues advancing to the next pause or completion.
+
+`applyRules` (lib/applyRules.ts) is a thin wrapper that runs
+`beginCascade(..., { autoSkipSelect: true })` to completion, so it stays pure &
+total — a `select` rule encountered there always AUTO-SKIPS.
+
 ## 5. Rule application (`applyRules`)
 Three phases:
 - **Weight phase (pre-roll)**: `computeWeights(slotRules, BASE_WEIGHTS)` multiplies weights for
@@ -170,8 +206,8 @@ Per-rule post-roll behavior (cell indices 0-based):
 `applyRules` returns `{ finalResult, steps, locked, baseResult }`, all fresh copies. `baseResult`
 already has held cells = previous value (and all other cells = the rolled base).
 
-## 6. Rule pool (26)
-Type ∈ `weight | reroll | transform | lock | score | meta`. Grouped by `build`.
+## 6. Rule pool (29)
+Type ∈ `weight | reroll | transform | lock | score | meta | select`. Grouped by `build`.
 All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, no parentheses.
 
 | id | name | build | type | effect |
@@ -195,6 +231,9 @@ All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, n
 | center-echo | CENTER ECHO | order | transform | cell4 = cell2 |
 | third-mirror | THIRD MIRROR | order | transform | cell3 = cell5 |
 | copy-above | COPY ABOVE | order | meta | re-apply the active rule directly above |
+| select-copy | SELECT COPY | order | select | player picks one cell (i≥1); cell[i] = cell[i-1] |
+| select-swap | SELECT SWAP | order | select | player picks two cells; swap their symbols |
+| select-reroll | SELECT REROLL | order | select | player picks one cell; reroll it |
 | no-zero | NO ZERO | safe | weight | zero weight → 0 (no zeros) |
 | four-shield | FOUR SHIELD | safe | reroll | all 4s reroll once; this spin zero weight ×2 |
 | four-parry | FOUR PARRY | safe | reroll | leftmost 4 reroll until not a 4 (cap 30) |
@@ -204,12 +243,20 @@ All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, n
 | clean-bonus | CLEAN SWEEP | score | score | +120 if no 4s on board |
 
 (Removed in v2.1: lucky-convert, edge-mirror, fourth-lock, zero-fog, zero-break.)
-(Removed in v2.2: unique-second. Pool is now **26 rules**.)
+(Removed in v2.2: unique-second.)
+(Added in v2.3: select-copy, select-swap, select-reroll. Pool is now **29 rules**.)
 
 ## 7. Types
 ```ts
-type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta';
+type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta' | 'select';
 type Rule = { id: string; name: string; description: string; type: RuleType; build?: string };
+
+type SelectKind = 'copy' | 'swap' | 'reroll';
+type PendingSelection = {
+  kind: SelectKind; ruleName: string;
+  count: number;          // cells to pick: copy/reroll=1, swap=2
+  selectable: boolean[];  // which cells the player may pick (length 5)
+};
 
 type GameState = {
   nickname: string;
@@ -226,11 +273,13 @@ type GameState = {
   extraRulePickCount: number;
   spinLogs: SpinLog[];
   status: GameStatus;
+  pendingSelection: PendingSelection | null; // set while status === 'awaiting-selection'
 };
 
 type GameStatus =
   | 'start' | 'choosing-rule' | 'placing'
-  | 'ready-to-spin' | 'spinning' | 'spin-result' | 'finished';
+  | 'ready-to-spin' | 'spinning' | 'spin-result' | 'finished'
+  | 'awaiting-selection';   // paused mid-cascade for a `select` rule's input
 
 type SpinLog = {
   spinIndex: number; baseResult: SymbolType[]; steps: {label:string; result:SymbolType[]}[];
@@ -239,11 +288,17 @@ type SpinLog = {
   roundScore: number;       // baseRoundScore * multiplier
   zeroDraw: boolean;        // zeros>=3 triggered extra pick
   multiplierSet: number;    // multiplier granted to next spin (1 if none)
+  interactive: boolean;     // true if a `select` rule actually resolved this spin
 };
 ```
 
 ## 8. Store status flow & actions
 `start → choosing-rule (offer 3) → placing → ready-to-spin → spinning → spin-result → (choosing-rule | finished)`
+
+When the cascade hits a `select` rule the spin PAUSES:
+`ready-to-spin → spin() → awaiting-selection → selectCells(...) → (awaiting-selection | spin-result)`.
+The in-progress `CascadeFrame` is held in a closure variable inside
+`buildInitializer` (NOT in GameState).
 
 - `setNickname(name)`
 - `startGame()` — requires nickname; init slots [null×5], bag [], nextMultiplier 1, spinIndex 0,
@@ -256,13 +311,35 @@ type SpinLog = {
   for free arranging). Locations: `{zone:'slot', index}` or `{zone:'bag', index}`.
   - slot↔slot: swap. slot→bag: clear slot, insert into bag at index. bag→slot: place; if slot
     occupied, occupant goes to bag. bag↔bag: reorder.
-- `spin()` — from 'ready-to-spin'. Run weight→roll→applyRules(slot rules)→scoreResult(slot rules)→
-  apply nextMultiplier→detect specials (set extraRulePickCount / nextMultiplier for next)→push log→
-  status 'spin-result'.
+- `spin()` — from 'ready-to-spin'. weights = computeWeights; base = rollBoard;
+  frame = beginCascade(base, ruleSlots, {previousResult, weights, rng}). If
+  `frame.pending` → set `currentResult = frame.working`, `pendingSelection`
+  (kind/ruleName/count/selectable), status 'awaiting-selection' (frame stashed in
+  the closure). Else `finalize(frame)`.
+- `selectCells(indices)` — from 'awaiting-selection'. Validate (right count, all
+  distinct, all selectable), then `resolveSelection(frame, ...)`. If pending again
+  → update currentResult/pendingSelection, stay 'awaiting-selection'. Else
+  `finalize(frame)`.
+- `finalize(frame)` — score/items/specials on `frame.working`; build the SpinLog
+  (baseResult = frame.baseResult, steps = frame.steps, finalResult = frame.working,
+  lockedCells = frame.locked, `interactive = frame.interactive`, plus the usual
+  fields); apply nextMultiplier; push log; advance currentResult/previousResult/
+  nextMultiplier/extraRulePickCount; status 'spin-result'; pendingSelection = null;
+  clear the stashed frame. (This is the shared tail of spin/selectCells.)
 - `next()` — from 'spin-result'. If extraRulePickCount>0: decrement, offer 3, status 'choosing-rule'
   (do NOT advance spinIndex). Else spinIndex++; if >= maxSpins → 'finished' else offer 3,
   status 'choosing-rule'.
-- `reset()` — fresh 'start', keep nickname.
+- `reset()` — fresh 'start', keep nickname; clears pendingSelection and the
+  stashed cascade frame.
+
+### Reveal behavior for interactive spins
+`useSpinReveal`: if `latestLog.interactive` is true, the reveal jumps straight to
+the final board + scoreReady (NO roll/step playback), same as the reduced-motion
+path — the player already watched the cascade resolve interactively. During
+'awaiting-selection' there is no new log yet, so the reveal hook stays idle and
+`SlotMachine` shows the store's `currentResult` (the partial board), with
+selectable cells rendered clickable. Non-interactive spins keep the animated
+reveal.
 
 Offering excludes any rule currently in a slot OR the bag (compare by id). With 26 rules this never
 starves a 3-card offer.

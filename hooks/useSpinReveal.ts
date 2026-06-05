@@ -126,7 +126,10 @@ export function useSpinReveal(
     // at their held value (baseResult[i] == previousResult[i]) for the whole reveal.
     const lockedSet = new Set(trueIndices(latestLog.lockedCells));
 
-    if (reduced) {
+    // Interactive spins (a `select` rule resolved with player clicks) were
+    // already watched live during 'awaiting-selection', so skip playback and
+    // jump straight to the final board + score, same as reduced-motion.
+    if (reduced || latestLog.interactive) {
       // Instant: jump straight to the final result + score.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRolling(false);

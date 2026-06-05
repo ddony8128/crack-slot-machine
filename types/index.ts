@@ -3,7 +3,7 @@ export type SymbolType =
   | 'diamond' | 'ruby' | 'sapphire'   // gems
   | 'seven' | 'zero' | 'four';
 
-export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta';
+export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta' | 'select';
 
 export type Rule = {
   id: string;
@@ -39,11 +39,23 @@ export type SpinLog = {
   multiplierSet: number;    // multiplier granted to next spin (1 if none)
   lockedCells: boolean[];   // final cells frozen by lock rules (greyed in UI)
   scoreItems: ScoreItem[];  // itemized "why these points" breakdown (pre-multiplier)
+  interactive: boolean;     // true if a `select` rule actually resolved this spin
+};
+
+export type SelectKind = 'copy' | 'swap' | 'reroll';
+
+// A `select` rule that paused the cascade for player input.
+export type PendingSelection = {
+  kind: SelectKind;
+  ruleName: string;
+  count: number;           // cells the player must pick: copy/reroll=1, swap=2
+  selectable: boolean[];   // which cells the player may pick (length 5)
 };
 
 export type GameStatus =
   | 'start' | 'choosing-rule' | 'placing'
-  | 'ready-to-spin' | 'spinning' | 'spin-result' | 'finished';
+  | 'ready-to-spin' | 'spinning' | 'spin-result' | 'finished'
+  | 'awaiting-selection';
 
 export type GameState = {
   nickname: string;
@@ -60,6 +72,7 @@ export type GameState = {
   extraRulePickCount: number;
   spinLogs: SpinLog[];
   status: GameStatus;
+  pendingSelection: PendingSelection | null; // set while status === 'awaiting-selection'
 };
 
 export type RankingRecord = {

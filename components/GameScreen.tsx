@@ -29,10 +29,59 @@ export default function GameScreen() {
   const status = useGameStore((s) => s.status);
   const spinLogs = useGameStore((s) => s.spinLogs);
   const currentResult = useGameStore((s) => s.currentResult);
+  const pendingSelection = useGameStore((s) => s.pendingSelection);
+  const selectCells = useGameStore((s) => s.selectCells);
 
   const latestLog = spinLogs[spinLogs.length - 1] ?? null;
 
   const reveal = useSpinReveal(latestLog, currentResult);
+
+  // Local picking state: indices the player has clicked so far during a
+  // 'select' rule. Cleared whenever we leave 'awaiting-selection'.
+  const [chosen, setChosen] = useState<number[]>([]);
+
+  const picking = status === "awaiting-selection" && pendingSelection != null;
+
+  // Reset local picks when leaving the selection status (or when a new
+  // pendingSelection arrives, e.g. a second select rule in the same spin).
+  useEffect(() => {
+    if (!picking) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setChosen([]);
+    }
+  }, [picking, pendingSelection]);
+
+  const selectableArr = pendingSelection
+    ? pendingSelection.selectable.flatMap((ok, i) => (ok ? [i] : []))
+    : [];
+
+  function handlePick(i: number) {
+    if (!pendingSelection) return;
+    const count = pendingSelection.count;
+    if (count === 1) {
+      selectCells([i]);
+      return;
+    }
+    // count === 2 (swap): collect two distinct picks; clicking the first again
+    // deselects it.
+    setChosen((prev) => {
+      if (prev.includes(i)) return prev.filter((x) => x !== i);
+      const next = [...prev, i];
+      if (next.length === 2) {
+        selectCells(next);
+        return [];
+      }
+      return next;
+    });
+  }
+
+  const promptText = pendingSelection
+    ? pendingSelection.kind === "copy"
+      ? "복사할 칸을 선택하세요 (바로 왼쪽 칸이 복사됩니다)"
+      : pendingSelection.kind === "swap"
+        ? `교체할 두 칸을 선택하세요 (${chosen.length}/2)`
+        : "다시 굴릴 칸을 선택하세요"
+    : "";
 
   // Celebrations fire once the reveal completes for the latest log.
   const [celebration, setCelebration] = useState<Celebration>(null);
@@ -81,15 +130,28 @@ export default function GameScreen() {
       <StatusBar />
       <RuleSlots />
 
+      {picking && (
+        <div className="rule-label-float rounded-xl border border-amber-500/40 bg-amber-400/10 px-4 py-3 text-center text-sm font-bold text-amber-200">
+          <span className="mr-2 rounded-full bg-amber-400/90 px-2 py-0.5 text-xs font-black uppercase tracking-wide text-zinc-950">
+            {pendingSelection?.ruleName}
+          </span>
+          {promptText}
+        </div>
+      )}
+
       {showSlot && (
         <SlotMachine
-          symbols={reveal.symbols}
+          symbols={picking ? currentResult : reveal.symbols}
           reelRolling={reveal.reelRolling}
           flashIndices={reveal.flashIndices}
           landIndices={reveal.landIndices}
           stepLabel={reveal.stepLabel}
           lockedIndices={reveal.lockedIndices}
           revealing={reveal.revealing}
+          picking={picking}
+          selectable={selectableArr}
+          chosen={chosen}
+          onPick={handlePick}
         />
       )}
 

@@ -270,6 +270,100 @@ describe('multiplier carry-over', () => {
   });
 });
 
+describe('interactive select rules', () => {
+  function readyWithRule(ruleId: string, rng: Rng) {
+    const store = createGameStore(rng);
+    store.getState().setNickname('select');
+    store.getState().startGame();
+    store.getState().selectRule(RULES_BY_ID[ruleId]);
+    store.getState().placePending({ type: 'slot', index: 0 });
+    return store;
+  }
+
+  it('spin() pauses at a select rule with the right pendingSelection', () => {
+    const store = readyWithRule('select-swap', loopingRng([RNG_CHERRY]));
+    store.getState().spin();
+    const s = store.getState();
+    expect(s.status).toBe('awaiting-selection');
+    expect(s.pendingSelection?.kind).toBe('swap');
+    expect(s.pendingSelection?.count).toBe(2);
+    // all cells unclaimed -> all selectable.
+    expect(s.pendingSelection?.selectable).toEqual([true, true, true, true, true]);
+    // partial board shown.
+    expect(s.currentResult).toHaveLength(5);
+    // no log yet.
+    expect(s.spinLogs).toHaveLength(0);
+  });
+
+  it('select-copy: count 1, cell0 not selectable, selectCells resolves to spin-result', () => {
+    // seed previous so we can verify; all rolls cherry except we want distinct.
+    const store = readyWithRule('select-copy', loopingRng([RNG_CHERRY]));
+    store.getState().spin();
+    let s = store.getState();
+    expect(s.status).toBe('awaiting-selection');
+    expect(s.pendingSelection?.kind).toBe('copy');
+    expect(s.pendingSelection?.count).toBe(1);
+    expect(s.pendingSelection?.selectable[0]).toBe(false);
+
+    store.getState().selectCells([3]);
+    s = store.getState();
+    expect(s.status).toBe('spin-result');
+    expect(s.spinLogs).toHaveLength(1);
+    // all cherries -> cell3 = cell2 = cherry (still cherry).
+    expect(s.spinLogs[0].finalResult[3]).toBe('cherry');
+    expect(s.spinLogs[0].interactive).toBe(true);
+  });
+
+  it('select-swap swaps the two chosen cells and finalizes', () => {
+    // Distinct, deterministic board via per-reel bands. The exact symbols depend
+    // on rng phase (offer shuffle + roll both draw), so we assert the SWAP
+    // RELATION against the pre-swap board rather than hard-coded symbols.
+    const TOT = TOTAL;
+    const band = (k: number) => (k + 0.5) / TOT;
+    const rng: Rng = loopingRng([band(0), band(1), band(2), band(3), band(4)]);
+    const store = readyWithRule('select-swap', rng);
+    store.getState().spin();
+    expect(store.getState().status).toBe('awaiting-selection');
+    const before = [...store.getState().currentResult];
+
+    store.getState().selectCells([0, 4]);
+    const s = store.getState();
+    expect(s.status).toBe('spin-result');
+    const fr = s.spinLogs[0].finalResult;
+    // cells 0 and 4 swapped; the middle three unchanged.
+    expect(fr[0]).toBe(before[4]);
+    expect(fr[4]).toBe(before[0]);
+    expect(fr.slice(1, 4)).toEqual(before.slice(1, 4));
+    expect(s.spinLogs[0].interactive).toBe(true);
+  });
+
+  it('rejects invalid selectCells (wrong count / non-selectable)', () => {
+    const store = readyWithRule('select-copy', loopingRng([RNG_CHERRY]));
+    store.getState().spin();
+    // wrong count
+    store.getState().selectCells([1, 2]);
+    expect(store.getState().status).toBe('awaiting-selection');
+    // non-selectable (cell0 not allowed for copy)
+    store.getState().selectCells([0]);
+    expect(store.getState().status).toBe('awaiting-selection');
+    // valid
+    store.getState().selectCells([2]);
+    expect(store.getState().status).toBe('spin-result');
+  });
+
+  it('a normal spin (no select rule) sets log.interactive === false', () => {
+    const store = createGameStore(loopingRng([RNG_CHERRY]));
+    store.getState().setNickname('plain');
+    store.getState().startGame();
+    store.getState().selectRule(store.getState().offeredRules[0]);
+    store.getState().placePending({ type: 'bag' });
+    store.getState().spin();
+    const s = store.getState();
+    expect(s.status).toBe('spin-result');
+    expect(s.spinLogs[0].interactive).toBe(false);
+  });
+});
+
 describe('reset', () => {
   it('preserves nickname and clears state', () => {
     const store = createGameStore(loopingRng([RNG_CHERRY]));

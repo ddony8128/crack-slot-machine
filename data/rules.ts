@@ -143,6 +143,27 @@ export const RULES: Rule[] = [
     build: 'order',
     description: '바로 위 칸의 규칙을 한 번 더 적용한다.',
   },
+  {
+    id: 'select-copy',
+    name: 'SELECT COPY',
+    type: 'select',
+    build: 'order',
+    description: '직접 고른 칸이 바로 왼쪽 칸과 같아진다.',
+  },
+  {
+    id: 'select-swap',
+    name: 'SELECT SWAP',
+    type: 'select',
+    build: 'order',
+    description: '직접 고른 두 칸이 서로 교체된다.',
+  },
+  {
+    id: 'select-reroll',
+    name: 'SELECT REROLL',
+    type: 'select',
+    build: 'order',
+    description: '직접 고른 한 칸을 다시 굴린다.',
+  },
 
   // ---- safe ----
   {

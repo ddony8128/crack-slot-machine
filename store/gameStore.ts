@@ -3,7 +3,12 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { GameState, Rule, SpinLog, SymbolType } from '@/types';
 import { defaultRng, type Rng } from '@/lib/rng';
 import { rollBoard, computeWeights } from '@/lib/spin';
-import { applyRules } from '@/lib/applyRules';
+import {
+  beginCascade,
+  resolveSelection,
+  type ApplyCtx,
+  type CascadeFrame,
+} from '@/lib/cascade';
 import { scoreResult, scoreItems } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
 import { RULES } from '@/data/rules';
@@ -25,6 +30,7 @@ export type GameActions = {
   placePending: (target: PlaceTarget) => void;
   moveRule: (from: RuleLocation, to: RuleLocation) => void;
   spin: () => void;
+  selectCells: (indices: number[]) => void;
   next: () => void;
   reset: () => void;
 };
@@ -78,6 +84,7 @@ function freshState(nickname: string): GameState {
     extraRulePickCount: 0,
     spinLogs: [],
     status: 'start',
+    pendingSelection: null,
   };
 }
 
@@ -87,7 +94,65 @@ type Initializer = (
 ) => GameStore;
 
 function buildInitializer(rng: Rng): Initializer {
-  return (set, get) => ({
+  // The in-progress cascade frame is kept OUT of GameState (it carries the live
+  // working/claimed/locked arrays threaded across the pause). It only ever
+  // matters between spin() and selectCells()/finalize().
+  let activeFrame: CascadeFrame | null = null;
+  let activeCtx: ApplyCtx | null = null;
+
+  return (set, get) => {
+    /**
+     * Resolve a completed cascade frame into a SpinLog + score and finish the
+     * spin (status 'spin-result'). Shared by spin() (when no select rule pauses)
+     * and selectCells() (when the last select rule resolves).
+     */
+    const finalize = (frame: CascadeFrame) => {
+      const state = get();
+      const { ruleSlots, spinIndex } = state;
+      const finalResult = [...frame.working];
+
+      const score = scoreResult(finalResult, ruleSlots);
+      const items = scoreItems(finalResult, ruleSlots);
+      const specials = detectSpecials(finalResult);
+      const multiplier = state.nextMultiplier;
+      const roundScore = score.baseRoundScore * multiplier;
+
+      const log: SpinLog = {
+        spinIndex,
+        baseResult: frame.baseResult,
+        steps: frame.steps,
+        finalResult,
+        hand: score.hand,
+        handScore: score.handScore,
+        sevenScore: score.sevenScore,
+        bonusScore: score.bonusScore,
+        penalty: score.penalty,
+        baseRoundScore: score.baseRoundScore,
+        multiplier,
+        roundScore,
+        zeroDraw: specials.zeroDraw,
+        multiplierSet: specials.nextMultiplier,
+        lockedCells: frame.locked,
+        scoreItems: items,
+        interactive: frame.interactive,
+      };
+
+      activeFrame = null;
+      activeCtx = null;
+
+      set({
+        totalScore: state.totalScore + roundScore,
+        spinLogs: [...state.spinLogs, log],
+        currentResult: finalResult,
+        previousResult: finalResult,
+        nextMultiplier: specials.nextMultiplier,
+        extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
+        status: 'spin-result',
+        pendingSelection: null,
+      });
+    };
+
+    return {
     ...freshState(''),
 
     setNickname: (name: string) => set({ nickname: name }),
@@ -211,48 +276,75 @@ function buildInitializer(rng: Rng): Initializer {
       const state = get();
       if (state.status !== 'ready-to-spin') return;
 
-      const { ruleSlots, previousResult, spinIndex } = state;
+      const { ruleSlots, previousResult } = state;
 
       const weights = computeWeights(ruleSlots, BASE_WEIGHTS);
       const base = rollBoard(ruleSlots, weights, previousResult, rng);
-      const { finalResult, steps, locked, baseResult } = applyRules(base, ruleSlots, {
-        previousResult,
-        weights,
-        rng,
-      });
-      const score = scoreResult(finalResult, ruleSlots);
-      const multiplier = state.nextMultiplier;
-      const roundScore = score.baseRoundScore * multiplier;
-      const specials = detectSpecials(finalResult);
+      const ctx: ApplyCtx = { previousResult, weights, rng };
+      const frame = beginCascade(base, ruleSlots, ctx);
 
-      const log: SpinLog = {
-        spinIndex,
-        baseResult,
-        steps,
-        finalResult,
-        hand: score.hand,
-        handScore: score.handScore,
-        sevenScore: score.sevenScore,
-        bonusScore: score.bonusScore,
-        penalty: score.penalty,
-        baseRoundScore: score.baseRoundScore,
-        multiplier,
-        roundScore,
-        zeroDraw: specials.zeroDraw,
-        multiplierSet: specials.nextMultiplier,
-        lockedCells: locked,
-        scoreItems: scoreItems(finalResult, ruleSlots),
-      };
+      activeFrame = frame;
+      activeCtx = ctx;
 
-      set({
-        totalScore: state.totalScore + roundScore,
-        spinLogs: [...state.spinLogs, log],
-        currentResult: finalResult,
-        previousResult: finalResult,
-        nextMultiplier: specials.nextMultiplier,
-        extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
-        status: 'spin-result',
-      });
+      if (frame.pending) {
+        // Cascade reached a `select` rule that needs player input. PAUSE: show
+        // the partial board and wait for selectCells().
+        const p = frame.pending;
+        set({
+          currentResult: [...frame.working],
+          pendingSelection: {
+            kind: p.kind,
+            ruleName: p.ruleName,
+            count: p.kind === 'swap' ? 2 : 1,
+            selectable: [...p.selectable],
+          },
+          status: 'awaiting-selection',
+        });
+        return;
+      }
+
+      finalize(frame);
+    },
+
+    selectCells: (indices: number[]) => {
+      const state = get();
+      if (state.status !== 'awaiting-selection') return;
+      if (!activeFrame || !activeFrame.pending || !activeCtx) return;
+
+      const { ruleSlots } = state;
+      const pending = activeFrame.pending;
+      const expectedCount = pending.kind === 'swap' ? 2 : 1;
+
+      // Validate: right count, all distinct, all selectable.
+      if (indices.length !== expectedCount) return;
+      const seen = new Set<number>();
+      for (const i of indices) {
+        if (i < 0 || i >= pending.selectable.length) return;
+        if (!pending.selectable[i]) return;
+        if (seen.has(i)) return;
+        seen.add(i);
+      }
+
+      const frame = resolveSelection(activeFrame, ruleSlots, activeCtx, indices);
+      activeFrame = frame;
+
+      if (frame.pending) {
+        // Another select rule paused: keep awaiting input on the new board.
+        const p = frame.pending;
+        set({
+          currentResult: [...frame.working],
+          pendingSelection: {
+            kind: p.kind,
+            ruleName: p.ruleName,
+            count: p.kind === 'swap' ? 2 : 1,
+            selectable: [...p.selectable],
+          },
+          status: 'awaiting-selection',
+        });
+        return;
+      }
+
+      finalize(frame);
     },
 
     next: () => {
@@ -285,9 +377,12 @@ function buildInitializer(rng: Rng): Initializer {
 
     reset: () => {
       const { nickname } = get();
+      activeFrame = null;
+      activeCtx = null;
       set({ ...freshState(nickname) });
     },
-  });
+    };
+  };
 }
 
 /**
