@@ -41,10 +41,10 @@ describe('applyRules — transforms', () => {
     expect(finalResult).toEqual(['seven', 'seven', 'cherry', 'diamond', 'four']);
   });
 
-  it('third-first: 🍒 0 🍋 💎 4 => 🍒 0 🍒 💎 4', () => {
+  it('third-mirror: 🍒 0 🍋 💎 4 => cell2 = cell4 => 🍒 0 4 💎 4', () => {
     const base: SymbolType[] = ['cherry', 'zero', 'lemon', 'diamond', 'four'];
-    const { finalResult } = applyRules(base, [RULES_BY_ID['third-first']], noCtx);
-    expect(finalResult).toEqual(['cherry', 'zero', 'cherry', 'diamond', 'four']);
+    const { finalResult } = applyRules(base, [RULES_BY_ID['third-mirror']], noCtx);
+    expect(finalResult).toEqual(['cherry', 'zero', 'four', 'diamond', 'four']);
   });
 
   it('first-cherry: 0 0 0 0 0 => 🍒 0 0 0 0', () => {
@@ -77,6 +77,18 @@ describe('applyRules — transforms', () => {
     expect(finalResult).toEqual(['cherry', 'cherry', 'cherry', 'zero', 'four']);
   });
 
+  it('blue-dye: all 💎 => 🔵', () => {
+    const base: SymbolType[] = ['diamond', 'cherry', 'diamond', 'zero', 'four'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['blue-dye']], noCtx);
+    expect(finalResult).toEqual(['sapphire', 'cherry', 'sapphire', 'zero', 'four']);
+  });
+
+  it('safe-convert: leftmost 4 => 🔴 (ruby), only one', () => {
+    const base: SymbolType[] = ['cherry', 'four', 'zero', 'four', 'lemon'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['safe-convert']], noCtx);
+    expect(finalResult).toEqual(['cherry', 'ruby', 'zero', 'four', 'lemon']);
+  });
+
   it('weight & score rules are skipped (no steps)', () => {
     const base: SymbolType[] = ['cherry', 'zero', 'four', 'diamond', 'zero'];
     const { finalResult, steps } = applyRules(
@@ -101,28 +113,31 @@ describe('applyRules — locks & rerolls', () => {
     expect(finalResult[4]).toBe('lemon');
   });
 
-  it('fourth-lock carries previousResult cell3', () => {
-    const base: SymbolType[] = ['cherry', 'zero', 'four', 'diamond', 'zero'];
-    const { finalResult } = applyRules(base, [RULES_BY_ID['fourth-lock']], {
-      previousResult: ['x', 'x', 'x', 'grape', 'x'] as SymbolType[],
-      weights: BASE_WEIGHTS,
-      rng: queuedRng([]),
-    });
-    expect(finalResult[3]).toBe('grape');
-  });
-
-  it('reroll (zero-break) skips a locked cell', () => {
-    // last-lock locks cell4 = previous[4] = 'zero'; zero-break must NOT reroll it.
-    const base: SymbolType[] = ['zero', 'cherry', 'cherry', 'cherry', 'cherry'];
-    const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['zero-break']];
+  it('reroll (four-shield) skips a locked cell', () => {
+    // last-lock locks cell4 = previous[4] = 'four'; four-shield must NOT reroll it.
+    const base: SymbolType[] = ['four', 'cherry', 'cherry', 'cherry', 'cherry'];
+    const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['four-shield']];
     const { finalResult } = applyRules(base, rules, {
-      previousResult: ['a', 'a', 'a', 'a', 'zero'] as SymbolType[],
+      previousResult: ['a', 'a', 'a', 'a', 'four'] as SymbolType[],
       weights: BASE_WEIGHTS,
       rng: rngForSymbol('lemon'), // any reroll -> lemon
     });
-    // cell0 zero -> rerolled to lemon; cell4 locked as zero (not rerolled)
+    // cell0 four -> rerolled to lemon; cell4 locked as four (not rerolled)
     expect(finalResult[0]).toBe('lemon');
-    expect(finalResult[4]).toBe('zero');
+    expect(finalResult[4]).toBe('four');
+  });
+
+  it('gem-fish rerolls the leftmost non-gem cell (one only)', () => {
+    const base: SymbolType[] = ['diamond', 'seven', 'cherry', 'ruby', 'zero'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['gem-fish']], {
+      previousResult: noCtx.previousResult,
+      weights: BASE_WEIGHTS,
+      rng: rngForSymbol('lemon'),
+    });
+    // cell0 is a gem -> skipped; cell1 (seven) is the leftmost non-gem -> rerolled
+    expect(finalResult[0]).toBe('diamond');
+    expect(finalResult[1]).toBe('lemon');
+    expect(finalResult[2]).toBe('cherry'); // later non-gems untouched
   });
 
   it('number-spin keeps numbers: a 4 becomes a 7 (restricted reroll)', () => {
@@ -242,16 +257,16 @@ describe('applyRules — copy-above', () => {
 
 describe('applyRules — upper-wins ordering (lock must be ABOVE to win)', () => {
   it('lock ABOVE reroll: lock wins and the cell is reported locked', () => {
-    // center-lock (slot0) freezes cell2; zero-break (slot1) cannot touch it.
-    const base: SymbolType[] = ['zero', 'cherry', 'zero', 'cherry', 'cherry'];
-    const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['zero-break']];
+    // center-lock (slot0) freezes cell2; four-shield (slot1) cannot touch it.
+    const base: SymbolType[] = ['four', 'cherry', 'four', 'cherry', 'cherry'];
+    const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['four-shield']];
     const { finalResult, locked, steps } = applyRules(base, rules, {
-      previousResult: ['a', 'a', 'zero', 'a', 'a'] as SymbolType[],
+      previousResult: ['a', 'a', 'four', 'a', 'a'] as SymbolType[],
       weights: BASE_WEIGHTS,
       rng: rngForSymbol('lemon'),
     });
-    expect(finalResult[2]).toBe('zero'); // locked, not rerolled
-    expect(finalResult[0]).toBe('lemon'); // other zero still rerolled
+    expect(finalResult[2]).toBe('four'); // locked, not rerolled
+    expect(finalResult[0]).toBe('lemon'); // other four still rerolled
     expect(locked[2]).toBe(true);
     // per-step locked snapshot is present for the reveal
     expect(steps[0].locked[2]).toBe(true);

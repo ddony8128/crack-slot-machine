@@ -54,7 +54,7 @@ Let cells = finalResult (5). counts of each symbol. sevens, fours, zeros = respe
    - all red (all 5 cells ∈ {ruby, cherry}): **+250**
 4. **Score-rule bonuses** (from active slot rules):
    - `bonus-77` active: **+77**
-   - `clean-bonus` active and fours == 0: **+60**
+   - `clean-bonus` active and fours == 0: **+100** (`CLEAN_BONUS = 100`)
 5. **Four penalty**: `penalty = fours * 20` (subtracted).
 6. `baseRoundScore = sevenScore + handScore + colorBonuses + scoreRuleBonuses - penalty`.
 
@@ -74,7 +74,9 @@ Evaluated after the round resolves:
 ## 5. Rule application (`applyRules`)
 Two phases:
 - **Weight phase (pre-roll)**: `computeWeights(slotRules, BASE_WEIGHTS)` multiplies weights for
-  every active `weight`-type rule, then `baseSpin` rolls 5 cells.
+  every active `weight`-type rule, then `baseSpin` rolls 5 cells. **Exception by id:**
+  `four-shield` is a `reroll` rule but ALSO multiplies the `zero` weight by **×2** in this phase
+  (checked by id, like the weight rules; stacks multiplicatively with other weight rules).
 - **Post-roll phase**: iterate slot rules **top → bottom** (index 0→4). For each active rule that is
   NOT `weight` and NOT `score` type, apply its effect to the working array and push a
   `SpinLogStep { label: rule.name, result: <copy> }`.
@@ -97,28 +99,30 @@ Also maintain `locked: boolean[5]` set true ONLY when a `lock` rule successfully
 reroll/transform/lock below targets only UNclaimed cells.
 
 Per-rule post-roll behavior (cell indices 0-based):
-- `four-shield` (reroll): every cell == four (and not locked) rerolled once.
-- `zero-break` (reroll): every cell == zero (not locked) rerolled once.
+- `four-shield` (reroll): every cell == four (and not locked) rerolled once. (Also applies a
+  zero ×2 weight in the pre-roll weight phase — see above.)
 - `four-parry` (reroll): the leftmost non-locked cell == four rerolled once (one only).
 - `gem-shuffle` (reroll): the leftmost non-locked GEM cell rerolled once (one only). [anti-gem]
-- `fruit-fish` (reroll): the leftmost non-locked NON-fruit cell rerolled once (one only).
-- `number-spin` (reroll): every non-locked cell that is a number (seven/zero/four) rerolled using
-  weights RESTRICTED to {seven, zero, four} (renormalized), so it stays a number.
+- `fruit-fish` (reroll): the leftmost non-locked NON-fruit cell (a number or gem) rerolled once
+  (one only).
+- `gem-fish` (reroll): the leftmost non-locked NON-gem cell (a number or fruit) rerolled once
+  (one only). Symmetric to `fruit-fish`.
+- `number-spin` (transform): every non-locked cell that is a number (seven/zero/four) rerolled using
+  weights RESTRICTED to {seven, zero, four} (renormalized), so it stays a number. (Typed
+  `transform` for build grouping, but mechanically uses rng and claims cells like a reroll.)
 - `unique-second` (reroll): while cell[1] equals any other cell's symbol, reroll cell[1]
   (full weights). Cap at 30 iterations to avoid infinite loops. (Skip if cell[1] is locked.)
-- `edge-mirror` (transform): cell[4] = cell[0].
 - `left-pair` (transform): cell[1] = cell[0].
 - `center-echo` (transform): cell[3] = cell[1].
-- `third-first` (transform): cell[2] = cell[0].
+- `third-mirror` (transform): cell[2] = cell[4].
 - `first-cherry` (transform): cell[0] = 'cherry'.
-- `lucky-convert` (transform): leftmost zero → seven (one only; no-op if none — still push a step).
-- `safe-convert` (transform): leftmost four → zero (one only; no-op if none).
+- `safe-convert` (transform): leftmost four → ruby (one only; no-op if none).
 - `zero-to-seven` (transform): ALL zero → seven.
 - `diamond-to-lemon` (transform): ALL diamond → lemon.
 - `grape-to-sapphire` (transform): ALL grape → sapphire.
 - `red-dye` (transform): ALL ruby → cherry.
+- `blue-dye` (transform): ALL diamond → sapphire.
 - `center-lock` (lock): cell[2] = previousResult[2]; locked[2]=true.
-- `fourth-lock` (lock): cell[3] = previousResult[3]; locked[3]=true.
 - `last-lock` (lock): cell[4] = previousResult[4]; locked[4]=true.
 - `copy-above` (meta): let `above = slotRules[thisSlotIndex - 1]`. If `above` exists (active,
   non-null) AND is a post-roll type (reroll/transform/lock/meta), re-apply its effect once
@@ -129,48 +133,40 @@ Per-rule post-roll behavior (cell indices 0-based):
 
 `applyRules` returns `{ finalResult, steps }` with finalResult a fresh copy.
 
-## 6. Rule pool (30 = 10 kept + 20 new)
-Type ∈ `weight | reroll | transform | lock | score | meta`.
+## 6. Rule pool (27)
+Type ∈ `weight | reroll | transform | lock | score | meta`. Grouped by `build`.
 
-### Kept (10)
-| id | name | type | effect |
-|---|---|---|---|
-| seven-fever | SEVEN FEVER | weight | seven weight ×3 |
-| zero-fog | ZERO FOG | weight | zero ×1.8, four ×0.4 |
-| four-shield | FOUR SHIELD | reroll | all 4s reroll once |
-| zero-break | ZERO BREAK | reroll | all 0s reroll once |
-| edge-mirror | EDGE MIRROR | transform | cell5 = cell1 |
-| left-pair | LEFT PAIR | transform | cell2 = cell1 |
-| center-echo | CENTER ECHO | transform | cell4 = cell2 |
-| center-lock | CENTER LOCK | lock | cell3 keeps previous spin value |
-| lucky-convert | LUCKY CONVERT | transform | leftmost 0 → 7 |
-| safe-convert | SAFE CONVERT | transform | leftmost 4 → 0 |
-
-(Removed from v1: FRUIT MODE, GEM MODE — superseded by FRUIT/GEM SURGE.)
-
-### New (20)
 | id | name | build | type | effect |
 |---|---|---|---|---|
+| seven-fever | SEVEN FEVER | 7 | weight | seven weight ×3 |
 | seven-double | SEVEN DOUBLE | 7 | score | 7-based score ×2 this spin |
 | zero-to-seven | ZERO ASCEND | 7 | transform | all 0 → 7 |
-| number-spin | NUMBER SPIN | 7/safe | reroll | reroll number cells among {7,0,4} only |
+| number-spin | NUMBER SPIN | 7 | transform | number cells (7/0/4) re-rolled among {7,0,4} only |
 | fruit-surge | FRUIT SURGE | fruit | weight | fruit weight ×2 |
 | diamond-to-lemon | DIAMOND CUT | fruit | transform | all 💎 → 🍋 |
 | fruit-fish | FRUIT FISH | fruit | reroll | leftmost non-fruit cell reroll once |
 | gem-surge | GEM SURGE | gem | weight | gem weight ×2 |
-| grape-to-sapphire | GRAPE FREEZE | gem/blue | transform | all 🍇 → 🔵 |
-| gem-shuffle | GEM SHUFFLE | anti-gem | reroll | leftmost gem cell reroll once |
-| first-cherry | FIRST CHERRY | red | transform | cell1 → 🍒 |
-| red-dye | RED DYE | red | transform | all 🔴 → 🍒 |
+| grape-to-sapphire | GRAPE FREEZE | gem | transform | all 🍇 → 🔵 |
+| gem-fish | GEM FISH | gem | reroll | leftmost non-gem cell reroll once |
+| first-cherry | FIRST CHERRY | color | transform | cell1 → 🍒 |
+| red-dye | RED DYE | color | transform | all 🔴 → 🍒 |
+| blue-dye | BLUE DYE | color | transform | all 💎 → 🔵 |
+| center-lock | CENTER LOCK | order | lock | cell3 keeps previous spin value |
 | last-lock | LAST LOCK | order | lock | cell5 keeps previous value |
-| fourth-lock | FOURTH LOCK | order | lock | cell4 keeps previous value |
-| third-first | THIRD MIRROR | order | transform | cell3 = cell1 |
+| left-pair | LEFT PAIR | order | transform | cell2 = cell1 |
+| center-echo | CENTER ECHO | order | transform | cell4 = cell2 |
+| third-mirror | THIRD MIRROR | order | transform | cell3 = cell5 |
 | copy-above | COPY ABOVE | order | meta | re-apply the active rule directly above |
 | unique-second | UNIQUE SECOND | order | reroll | reroll cell2 until no other cell matches it |
 | no-zero | NO ZERO | safe | weight | zero weight → 0 (no zeros) |
+| four-shield | FOUR SHIELD | safe | reroll | all 4s reroll once; this spin zero weight ×2 |
 | four-parry | FOUR PARRY | safe | reroll | leftmost 4 reroll once |
+| safe-convert | SAFE CONVERT | safe | transform | leftmost 4 → 🔴 |
+| gem-shuffle | GEM SHUFFLE | safe | reroll | leftmost gem cell reroll once (anti-gem) |
 | bonus-77 | LUCKY SEVEN-SEVEN | score | score | +77 points |
-| clean-bonus | CLEAN SWEEP | score/safe | score | +60 if no 4s on board |
+| clean-bonus | CLEAN SWEEP | score | score | +100 if no 4s on board |
+
+(Removed in v2.1: lucky-convert, edge-mirror, fourth-lock, zero-fog, zero-break.)
 
 ## 7. Types
 ```ts

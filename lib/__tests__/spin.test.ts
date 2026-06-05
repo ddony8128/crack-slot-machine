@@ -31,17 +31,29 @@ describe('computeWeights', () => {
     expect(w.sapphire).toBe(BASE_WEIGHTS.sapphire * 2);
   });
 
-  it('seven-fever triples seven; zero-fog raises zero, lowers four', () => {
+  it('seven-fever triples seven', () => {
     const sf = computeWeights([RULES_BY_ID['seven-fever']], BASE_WEIGHTS);
     expect(sf.seven).toBe(BASE_WEIGHTS.seven * 3);
-
-    const zf = computeWeights([RULES_BY_ID['zero-fog']], BASE_WEIGHTS);
-    expect(zf.zero).toBeCloseTo(BASE_WEIGHTS.zero * 1.8);
-    expect(zf.four).toBeCloseTo(BASE_WEIGHTS.four * 0.4);
   });
 
   it('no-zero sets zero weight to 0', () => {
     const w = computeWeights([RULES_BY_ID['no-zero']], BASE_WEIGHTS);
+    expect(w.zero).toBe(0);
+  });
+
+  it('four-shield multiplies the zero weight by 2 (even though it is a reroll rule)', () => {
+    const w = computeWeights([RULES_BY_ID['four-shield']], BASE_WEIGHTS);
+    expect(w.zero).toBe(BASE_WEIGHTS.zero * 2);
+    // other weights untouched
+    expect(w.four).toBe(BASE_WEIGHTS.four);
+    expect(w.seven).toBe(BASE_WEIGHTS.seven);
+  });
+
+  it('four-shield zero×2 stacks multiplicatively with no-zero (=> 0)', () => {
+    const w = computeWeights(
+      [RULES_BY_ID['four-shield'], RULES_BY_ID['no-zero']],
+      BASE_WEIGHTS,
+    );
     expect(w.zero).toBe(0);
   });
 

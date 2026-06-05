@@ -9,15 +9,20 @@ export function computeWeights(
   const weights = { ...base };
 
   for (const rule of rules) {
-    if (!rule || rule.type !== 'weight') continue;
+    if (!rule) continue;
+
+    // four-shield is a reroll rule, but it ALSO affects the pre-roll weights
+    // (zero ×2 this spin), so it is handled here by id regardless of type.
+    if (rule.id === 'four-shield') {
+      weights.zero *= 2;
+      continue;
+    }
+
+    if (rule.type !== 'weight') continue;
 
     switch (rule.id) {
       case 'seven-fever':
         weights.seven *= 3;
-        break;
-      case 'zero-fog':
-        weights.zero *= 1.8;
-        weights.four *= 0.4;
         break;
       case 'fruit-surge':
         for (const f of FRUITS) weights[f] *= 2;

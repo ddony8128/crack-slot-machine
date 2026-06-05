@@ -90,11 +90,6 @@ function applyOne(
         if (working[i] === 'four' && !claimed[i]) write(working, claimed, i, rollSymbol(weights, rng));
       }
       break;
-    case 'zero-break':
-      for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'zero' && !claimed[i]) write(working, claimed, i, rollSymbol(weights, rng));
-      }
-      break;
     case 'four-parry': {
       const idx = working.findIndex((s, i) => s === 'four' && !claimed[i]);
       if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
@@ -107,6 +102,11 @@ function applyOne(
     }
     case 'fruit-fish': {
       const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !claimed[i]);
+      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
+      break;
+    }
+    case 'gem-fish': {
+      const idx = working.findIndex((s, i) => !GEM_SET.has(s) && !claimed[i]);
       if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
       break;
     }
@@ -129,29 +129,21 @@ function applyOne(
     }
 
     // ---- transform ----
-    case 'edge-mirror':
-      write(working, claimed, 4, working[0]);
-      break;
     case 'left-pair':
       write(working, claimed, 1, working[0]);
       break;
     case 'center-echo':
       write(working, claimed, 3, working[1]);
       break;
-    case 'third-first':
-      write(working, claimed, 2, working[0]);
+    case 'third-mirror':
+      write(working, claimed, 2, working[4]);
       break;
     case 'first-cherry':
       write(working, claimed, 0, 'cherry');
       break;
-    case 'lucky-convert': {
-      const idx = working.findIndex((s, i) => s === 'zero' && !claimed[i]);
-      if (idx !== -1) write(working, claimed, idx, 'seven');
-      break;
-    }
     case 'safe-convert': {
       const idx = working.findIndex((s, i) => s === 'four' && !claimed[i]);
-      if (idx !== -1) write(working, claimed, idx, 'zero');
+      if (idx !== -1) write(working, claimed, idx, 'ruby');
       break;
     }
     case 'zero-to-seven':
@@ -174,13 +166,15 @@ function applyOne(
         if (working[i] === 'ruby' && !claimed[i]) write(working, claimed, i, 'cherry');
       }
       break;
+    case 'blue-dye':
+      for (let i = 0; i < working.length; i++) {
+        if (working[i] === 'diamond' && !claimed[i]) write(working, claimed, i, 'sapphire');
+      }
+      break;
 
     // ---- lock (claims the cell only if not already claimed = must be ABOVE to win) ----
     case 'center-lock':
       if (write(working, claimed, 2, previousResult[2])) locked[2] = true;
-      break;
-    case 'fourth-lock':
-      if (write(working, claimed, 3, previousResult[3])) locked[3] = true;
       break;
     case 'last-lock':
       if (write(working, claimed, 4, previousResult[4])) locked[4] = true;

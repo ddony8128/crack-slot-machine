@@ -165,13 +165,13 @@ describe('scoreResult', () => {
     expect(bonus.bonusScore).toBe(base.bonusScore + 77);
   });
 
-  it('clean-bonus adds +60 only when no fours', () => {
+  it('clean-bonus adds +100 only when no fours', () => {
     const clean: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'zero'];
     const dirty: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'four'];
     const c = scoreResult(clean, [RULES_BY_ID['clean-bonus']]);
     const d = scoreResult(dirty, [RULES_BY_ID['clean-bonus']]);
-    expect(c.bonusScore).toBe(50 + 60); // all fruit types + clean
-    expect(d.bonusScore).toBe(50);      // all fruit types only, no clean (has a four)
+    expect(c.bonusScore).toBe(50 + 100); // all fruit types + clean
+    expect(d.bonusScore).toBe(50);       // all fruit types only, no clean (has a four)
   });
 
   it('all-blue 🔵🍇🔵🍇🔵 => +200 bonus and Two Pair... actually triple-ish hand', () => {
