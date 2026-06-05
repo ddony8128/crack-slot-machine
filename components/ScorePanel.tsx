@@ -4,6 +4,10 @@ import type { SpinLog } from "@/types";
 import { useGameStore } from "@/store/gameStore";
 import { useCountUp } from "@/hooks/useCountUp";
 
+function fmt(n: number): string {
+  return n >= 0 ? `+${n}` : `${n}`;
+}
+
 export default function ScorePanel({ log }: { log: SpinLog }) {
   const totalScore = useGameStore((s) => s.totalScore);
   const spinIndex = useGameStore((s) => s.spinIndex);
@@ -22,12 +26,13 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
   }
 
   const negative = log.roundScore < 0;
-  // Pop for a notably positive spin; shake for a negative one.
   const roundMotion = negative
     ? "score-shake"
     : log.roundScore >= 100
       ? "value-pop"
       : "";
+
+  const multiplied = log.multiplier > 1;
 
   return (
     <section className="panel-pop space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -42,8 +47,16 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
 
       <dl className="space-y-1.5 text-sm">
         <div className="flex justify-between">
-          <dt className="text-zinc-400">족보 점수</dt>
-          <dd className="font-mono text-emerald-300">+{log.handScore}</dd>
+          <dt className="text-zinc-400">족보 {log.hand !== "No Hand" ? `(${log.hand})` : ""}</dt>
+          <dd className="font-mono text-emerald-300">{fmt(log.handScore)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-zinc-400">7 점수</dt>
+          <dd className="font-mono text-amber-300">{fmt(log.sevenScore)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-zinc-400">보너스</dt>
+          <dd className="font-mono text-emerald-300">{fmt(log.bonusScore)}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-zinc-400">페널티</dt>
@@ -51,6 +64,18 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
             {log.penalty > 0 ? `-${log.penalty}` : "0"}
           </dd>
         </div>
+
+        {multiplied && (
+          <div className="flex justify-between border-t border-zinc-800 pt-1.5">
+            <dt className="text-zinc-400">
+              기본 {fmt(log.baseRoundScore)} × 배수
+            </dt>
+            <dd className="font-mono font-bold text-amber-300">
+              ×{log.multiplier}
+            </dd>
+          </div>
+        )}
+
         <div className="flex justify-between border-t border-zinc-800 pt-1.5">
           <dt className="font-semibold text-zinc-200">이번 스핀 점수</dt>
           <dd
@@ -58,21 +83,23 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
               negative ? "text-rose-400" : "text-amber-300"
             }`}
           >
-            {log.roundScore >= 0 ? `+${log.roundScore}` : log.roundScore}
+            {fmt(log.roundScore)}
           </dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-zinc-400">누적 점수</dt>
-          <dd className="font-mono font-bold text-amber-300">
-            {animatedTotal}
-          </dd>
+          <dd className="font-mono font-bold text-amber-300">{animatedTotal}</dd>
         </div>
       </dl>
 
-      {log.ruleDraw && (
+      {log.zeroDraw && (
         <div className="rounded-lg bg-emerald-500/15 px-3 py-2 text-center text-sm font-bold text-emerald-300 ring-1 ring-emerald-400/40">
-          RULE DRAW!{" "}
-          {isLastSpin ? "보너스 점수 획득" : "추가 규칙 선택 기회 획득"}
+          0 3개+! 다음 스핀 전 규칙 1장 추가
+        </div>
+      )}
+      {log.multiplierSet > 1 && (
+        <div className="rounded-lg bg-amber-500/15 px-3 py-2 text-center text-sm font-bold text-amber-300 ring-1 ring-amber-400/40">
+          4 {log.multiplierSet === 4 ? 5 : 4}개! 다음 스핀 점수 ×{log.multiplierSet}
         </div>
       )}
 

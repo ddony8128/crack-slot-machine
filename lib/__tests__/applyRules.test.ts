@@ -15,19 +15,15 @@ function queuedRng(values: number[]): Rng {
   };
 }
 
-// An rng that forces rollSymbol to return a specific symbol.
-// rollSymbol walks Object.entries(weights) accumulating weight until target<0.
-// Returning a tiny value (~0) targets the FIRST positive-weighted symbol.
+// Build an rng that, against the full BASE_WEIGHTS, lands inside `target`'s band.
 function rngForSymbol(target: SymbolType): Rng {
   const entries = Object.entries(BASE_WEIGHTS) as Array<[SymbolType, number]>;
   const total = entries.reduce((s, [, w]) => s + (w > 0 ? w : 0), 0);
-  // accumulate weight up to (but not including) target, then a hair more.
   let acc = 0;
   for (const [sym, w] of entries) {
     if (sym === target) break;
     acc += w;
   }
-  // pick a point inside the target's band
   const point = (acc + 0.5) / total;
   return () => point;
 }
@@ -38,65 +34,201 @@ const noCtx = {
   rng: queuedRng([]),
 };
 
-describe('applyRules', () => {
-  it('edge-mirror then four-shield: 🍒 4 💎 0 🍋 => 🍒 🍋 💎 0 🍒', () => {
-    const base: SymbolType[] = ['cherry', 'four', 'diamond', 'zero', 'lemon'];
-    const rules: Rule[] = [RULES_BY_ID['edge-mirror'], RULES_BY_ID['four-shield']];
-    const { finalResult, steps } = applyRules(base, rules, {
-      previousResult: noCtx.previousResult,
-      weights: BASE_WEIGHTS,
-      rng: rngForSymbol('lemon'), // rerolled four becomes lemon
-    });
-    expect(finalResult).toEqual(['cherry', 'lemon', 'diamond', 'zero', 'cherry']);
-    // edge-mirror first snapshot, then four-shield snapshot
-    expect(steps).toHaveLength(2);
-    expect(steps[0].label).toBe('EDGE MIRROR');
-    expect(steps[0].result).toEqual(['cherry', 'four', 'diamond', 'zero', 'cherry']);
-    expect(steps[1].label).toBe('FOUR SHIELD');
-    expect(steps[1].result).toEqual(['cherry', 'lemon', 'diamond', 'zero', 'cherry']);
-  });
-
+describe('applyRules — transforms', () => {
   it('left-pair: 7 0 🍒 💎 4 => 7 7 🍒 💎 4', () => {
     const base: SymbolType[] = ['seven', 'zero', 'cherry', 'diamond', 'four'];
     const { finalResult } = applyRules(base, [RULES_BY_ID['left-pair']], noCtx);
     expect(finalResult).toEqual(['seven', 'seven', 'cherry', 'diamond', 'four']);
   });
 
-  it('safe-convert then center-echo: 7 🍒 0 4 7 => 7 🍒 0 🍒 7', () => {
-    const base: SymbolType[] = ['seven', 'cherry', 'zero', 'four', 'seven'];
-    const rules: Rule[] = [RULES_BY_ID['safe-convert'], RULES_BY_ID['center-echo']];
-    const { finalResult, steps } = applyRules(base, rules, noCtx);
-    // safe-convert: idx3 four -> zero => 7 🍒 0 0 7
-    expect(steps[0].result).toEqual(['seven', 'cherry', 'zero', 'zero', 'seven']);
-    // center-echo: cell[3] = cell[1] => 7 🍒 0 🍒 7
-    expect(finalResult).toEqual(['seven', 'cherry', 'zero', 'cherry', 'seven']);
+  it('third-first: 🍒 0 🍋 💎 4 => 🍒 0 🍒 💎 4', () => {
+    const base: SymbolType[] = ['cherry', 'zero', 'lemon', 'diamond', 'four'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['third-first']], noCtx);
+    expect(finalResult).toEqual(['cherry', 'zero', 'cherry', 'diamond', 'four']);
   });
 
-  it('lucky-convert: 🍒 0 4 💎 0 => 🍒 7 4 💎 0', () => {
-    const base: SymbolType[] = ['cherry', 'zero', 'four', 'diamond', 'zero'];
-    const { finalResult } = applyRules(base, [RULES_BY_ID['lucky-convert']], noCtx);
-    expect(finalResult).toEqual(['cherry', 'seven', 'four', 'diamond', 'zero']);
+  it('first-cherry: 0 0 0 0 0 => 🍒 0 0 0 0', () => {
+    const base: SymbolType[] = ['zero', 'zero', 'zero', 'zero', 'zero'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['first-cherry']], noCtx);
+    expect(finalResult).toEqual(['cherry', 'zero', 'zero', 'zero', 'zero']);
   });
 
-  it('weight-type rules are skipped (no steps)', () => {
+  it('zero-to-seven: all zeros become sevens', () => {
+    const base: SymbolType[] = ['zero', 'cherry', 'zero', 'four', 'zero'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['zero-to-seven']], noCtx);
+    expect(finalResult).toEqual(['seven', 'cherry', 'seven', 'four', 'seven']);
+  });
+
+  it('diamond-to-lemon: all 💎 => 🍋', () => {
+    const base: SymbolType[] = ['diamond', 'diamond', 'cherry', 'diamond', 'zero'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['diamond-to-lemon']], noCtx);
+    expect(finalResult).toEqual(['lemon', 'lemon', 'cherry', 'lemon', 'zero']);
+  });
+
+  it('grape-to-sapphire: all 🍇 => 🔵', () => {
+    const base: SymbolType[] = ['grape', 'cherry', 'grape', 'zero', 'four'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['grape-to-sapphire']], noCtx);
+    expect(finalResult).toEqual(['sapphire', 'cherry', 'sapphire', 'zero', 'four']);
+  });
+
+  it('red-dye: all 🔴 => 🍒', () => {
+    const base: SymbolType[] = ['ruby', 'cherry', 'ruby', 'zero', 'four'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['red-dye']], noCtx);
+    expect(finalResult).toEqual(['cherry', 'cherry', 'cherry', 'zero', 'four']);
+  });
+
+  it('weight & score rules are skipped (no steps)', () => {
     const base: SymbolType[] = ['cherry', 'zero', 'four', 'diamond', 'zero'];
     const { finalResult, steps } = applyRules(
       base,
-      [RULES_BY_ID['fruit-mode'], RULES_BY_ID['gem-mode']],
+      [RULES_BY_ID['fruit-surge'], RULES_BY_ID['bonus-77']],
       noCtx,
     );
     expect(steps).toHaveLength(0);
     expect(finalResult).toEqual(base);
-    expect(finalResult).not.toBe(base); // fresh copy
+    expect(finalResult).not.toBe(base);
   });
+});
 
-  it('center-lock uses previousResult center cell', () => {
+describe('applyRules — locks & rerolls', () => {
+  it('last-lock carries previousResult cell4', () => {
     const base: SymbolType[] = ['cherry', 'zero', 'four', 'diamond', 'zero'];
-    const { finalResult } = applyRules(base, [RULES_BY_ID['center-lock']], {
-      previousResult: ['seven', 'seven', 'ruby', 'seven', 'seven'],
+    const { finalResult } = applyRules(base, [RULES_BY_ID['last-lock']], {
+      previousResult: ['seven', 'seven', 'ruby', 'seven', 'lemon'],
       weights: BASE_WEIGHTS,
       rng: queuedRng([]),
     });
-    expect(finalResult).toEqual(['cherry', 'zero', 'ruby', 'diamond', 'zero']);
+    expect(finalResult[4]).toBe('lemon');
+  });
+
+  it('fourth-lock carries previousResult cell3', () => {
+    const base: SymbolType[] = ['cherry', 'zero', 'four', 'diamond', 'zero'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['fourth-lock']], {
+      previousResult: ['x', 'x', 'x', 'grape', 'x'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([]),
+    });
+    expect(finalResult[3]).toBe('grape');
+  });
+
+  it('reroll (zero-break) skips a locked cell', () => {
+    // last-lock locks cell4 = previous[4] = 'zero'; zero-break must NOT reroll it.
+    const base: SymbolType[] = ['zero', 'cherry', 'cherry', 'cherry', 'cherry'];
+    const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['zero-break']];
+    const { finalResult } = applyRules(base, rules, {
+      previousResult: ['a', 'a', 'a', 'a', 'zero'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: rngForSymbol('lemon'), // any reroll -> lemon
+    });
+    // cell0 zero -> rerolled to lemon; cell4 locked as zero (not rerolled)
+    expect(finalResult[0]).toBe('lemon');
+    expect(finalResult[4]).toBe('zero');
+  });
+
+  it('number-spin keeps numbers: a 4 becomes a 7 (restricted reroll)', () => {
+    const base: SymbolType[] = ['four', 'cherry', 'four', 'diamond', 'lemon'];
+    // restricted order is [seven, zero, four]; target 'seven' is first band.
+    const { finalResult } = applyRules(base, [RULES_BY_ID['number-spin']], {
+      previousResult: noCtx.previousResult,
+      weights: BASE_WEIGHTS,
+      rng: () => 0.01, // tiny -> first restricted symbol = seven
+    });
+    expect(finalResult[0]).toBe('seven');
+    expect(finalResult[2]).toBe('seven');
+    // non-number cells untouched
+    expect(finalResult[1]).toBe('cherry');
+    expect(finalResult[3]).toBe('diamond');
+    expect(finalResult[4]).toBe('lemon');
+  });
+
+  it('four-parry rerolls only the leftmost four', () => {
+    const base: SymbolType[] = ['cherry', 'four', 'four', 'diamond', 'zero'];
+    const { finalResult } = applyRules(base, [RULES_BY_ID['four-parry']], {
+      previousResult: noCtx.previousResult,
+      weights: BASE_WEIGHTS,
+      rng: rngForSymbol('lemon'),
+    });
+    expect(finalResult[1]).toBe('lemon');
+    expect(finalResult[2]).toBe('four'); // second four untouched
+  });
+
+  it('unique-second loops until cell1 is unique', () => {
+    // base cell1 = cherry, which duplicates cell0. Feed a duplicate (cherry) then a unique (sapphire).
+    const base: SymbolType[] = ['cherry', 'cherry', 'lemon', 'grape', 'diamond'];
+    const rng = queuedRng([
+      rngPoint('cherry'), // still duplicate -> loop again
+      rngPoint('sapphire'), // unique now
+    ]);
+    const { finalResult } = applyRules(base, [RULES_BY_ID['unique-second']], {
+      previousResult: noCtx.previousResult,
+      weights: BASE_WEIGHTS,
+      rng,
+    });
+    expect(finalResult[1]).toBe('sapphire');
+  });
+});
+
+// helper: a single rng draw value landing in `target` band of BASE_WEIGHTS
+function rngPoint(target: SymbolType): number {
+  const entries = Object.entries(BASE_WEIGHTS) as Array<[SymbolType, number]>;
+  const total = entries.reduce((s, [, w]) => s + (w > 0 ? w : 0), 0);
+  let acc = 0;
+  for (const [sym, w] of entries) {
+    if (sym === target) break;
+    acc += w;
+  }
+  return (acc + 0.5) / total;
+}
+
+describe('applyRules — copy-above', () => {
+  it('copy-above re-applies the rule directly above (four-shield triggers a second reroll pass)', () => {
+    // base has two fours. four-shield rerolls both -> we force them to 'four' again
+    // on the first pass, then copy-above re-runs four-shield -> reroll to lemon.
+    const base: SymbolType[] = ['four', 'cherry', 'four', 'diamond', 'lemon'];
+    // four-shield pass 1: cell0,cell2 are four -> reroll. Feed 'four','four' (still fours).
+    // copy-above re-applies four-shield: cell0,cell2 are four -> reroll. Feed 'grape','grape'.
+    const rng = queuedRng([
+      rngPoint('four'),
+      rngPoint('four'),
+      rngPoint('grape'),
+      rngPoint('grape'),
+    ]);
+    const rules: Rule[] = [RULES_BY_ID['four-shield'], RULES_BY_ID['copy-above']];
+    const { finalResult, steps } = applyRules(base, rules, {
+      previousResult: noCtx.previousResult,
+      weights: BASE_WEIGHTS,
+      rng,
+    });
+    expect(steps).toHaveLength(2);
+    expect(steps[0].label).toBe('FOUR SHIELD');
+    expect(steps[1].label).toBe('COPY ABOVE → FOUR SHIELD');
+    expect(finalResult[0]).toBe('grape');
+    expect(finalResult[2]).toBe('grape');
+  });
+
+  it('copy-above with left-pair above is a no-op second application', () => {
+    const base: SymbolType[] = ['cherry', 'zero', 'lemon', 'diamond', 'four'];
+    const rules: Rule[] = [RULES_BY_ID['left-pair'], RULES_BY_ID['copy-above']];
+    const { finalResult, steps } = applyRules(base, rules, noCtx);
+    // left-pair: cell1 = cell0 = cherry; copy-above re-applies => same
+    expect(finalResult).toEqual(['cherry', 'cherry', 'lemon', 'diamond', 'four']);
+    expect(steps[1].label).toBe('COPY ABOVE → LEFT PAIR');
+  });
+
+  it('copy-above with nothing above is a no-op', () => {
+    const base: SymbolType[] = ['cherry', 'zero', 'lemon', 'diamond', 'four'];
+    const { finalResult, steps } = applyRules(base, [RULES_BY_ID['copy-above']], noCtx);
+    expect(finalResult).toEqual(base);
+    expect(steps[0].label).toBe('COPY ABOVE → (none)');
+  });
+
+  it('copy-above with a weight rule above is a no-op', () => {
+    const base: SymbolType[] = ['cherry', 'zero', 'lemon', 'diamond', 'four'];
+    const rules: Rule[] = [RULES_BY_ID['fruit-surge'], RULES_BY_ID['copy-above']];
+    const { finalResult, steps } = applyRules(base, rules, noCtx);
+    expect(finalResult).toEqual(base);
+    // weight rule produced no step; copy-above is the only step.
+    expect(steps).toHaveLength(1);
+    expect(steps[0].label).toBe('COPY ABOVE → (none)');
   });
 });

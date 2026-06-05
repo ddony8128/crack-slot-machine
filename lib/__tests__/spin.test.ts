@@ -15,26 +15,34 @@ function queuedRng(values: number[]): Rng {
 }
 
 describe('computeWeights', () => {
-  it('fruit-mode increases fruit weight vs base', () => {
-    const w = computeWeights([RULES_BY_ID['fruit-mode']], BASE_WEIGHTS);
+  it('fruit-surge doubles fruit weights', () => {
+    const w = computeWeights([RULES_BY_ID['fruit-surge']], BASE_WEIGHTS);
     for (const f of FRUITS) {
-      expect(w[f]).toBeGreaterThan(BASE_WEIGHTS[f]);
+      expect(w[f]).toBe(BASE_WEIGHTS[f] * 2);
     }
-    // non-fruit unchanged
     expect(w.seven).toBe(BASE_WEIGHTS.seven);
     expect(w.zero).toBe(BASE_WEIGHTS.zero);
   });
 
-  it('zero-fog raises zero and lowers four', () => {
-    const w = computeWeights([RULES_BY_ID['zero-fog']], BASE_WEIGHTS);
-    expect(w.zero).toBeGreaterThan(BASE_WEIGHTS.zero);
-    expect(w.four).toBeLessThan(BASE_WEIGHTS.four);
+  it('gem-surge doubles gem weights', () => {
+    const w = computeWeights([RULES_BY_ID['gem-surge']], BASE_WEIGHTS);
+    expect(w.diamond).toBe(BASE_WEIGHTS.diamond * 2);
+    expect(w.ruby).toBe(BASE_WEIGHTS.ruby * 2);
+    expect(w.sapphire).toBe(BASE_WEIGHTS.sapphire * 2);
   });
 
-  it('does not mutate the base weights', () => {
-    const before = BASE_WEIGHTS.cherry;
-    computeWeights([RULES_BY_ID['fruit-mode']], BASE_WEIGHTS);
-    expect(BASE_WEIGHTS.cherry).toBe(before);
+  it('seven-fever triples seven; zero-fog raises zero, lowers four', () => {
+    const sf = computeWeights([RULES_BY_ID['seven-fever']], BASE_WEIGHTS);
+    expect(sf.seven).toBe(BASE_WEIGHTS.seven * 3);
+
+    const zf = computeWeights([RULES_BY_ID['zero-fog']], BASE_WEIGHTS);
+    expect(zf.zero).toBeCloseTo(BASE_WEIGHTS.zero * 1.8);
+    expect(zf.four).toBeCloseTo(BASE_WEIGHTS.four * 0.4);
+  });
+
+  it('no-zero sets zero weight to 0', () => {
+    const w = computeWeights([RULES_BY_ID['no-zero']], BASE_WEIGHTS);
+    expect(w.zero).toBe(0);
   });
 
   it('stacking weight rules multiplies', () => {
@@ -44,24 +52,27 @@ describe('computeWeights', () => {
     );
     expect(w.seven).toBe(BASE_WEIGHTS.seven * 3 * 3);
   });
+
+  it('does not mutate the base weights', () => {
+    const before = BASE_WEIGHTS.cherry;
+    computeWeights([RULES_BY_ID['fruit-surge']], BASE_WEIGHTS);
+    expect(BASE_WEIGHTS.cherry).toBe(before);
+  });
 });
 
 describe('baseSpin', () => {
   it('returns n deterministic symbols with a fixed rng', () => {
-    // first symbol in BASE_WEIGHTS entries order is 'cherry' (weight 10).
-    // rng -> 0 always targets the first positive-weighted symbol.
+    // first entry in BASE_WEIGHTS is 'cherry'; rng -> 0 targets first symbol.
     const rng = queuedRng([0, 0, 0, 0, 0]);
     const result = baseSpin(BASE_WEIGHTS, rng, 5);
     expect(result).toHaveLength(5);
     expect(result.every((s) => s === 'cherry')).toBe(true);
   });
 
-  it('rollSymbol respects weighted boundaries', () => {
-    // cumulative weight before 'seven':
-    // cherry(10)+lemon(10)+grape(10)+diamond(8)+ruby(8)+sapphire(8) = 54
-    // total = 54+4(seven)+18(zero)+14(four) = 90; 'seven' band is [54, 58)
-    const total = Object.values(BASE_WEIGHTS).reduce((a, b) => a + b, 0);
-    const point = (54 + 0.5) / total;
+  it('rollSymbol respects uniform weighted boundaries', () => {
+    // uniform weights total = 9, 9 symbols each band width 1.
+    // 'seven' is index 6 -> band [6,7).
+    const point = (6 + 0.5) / 9;
     const sym: SymbolType = rollSymbol(BASE_WEIGHTS, () => point);
     expect(sym).toBe('seven');
   });

@@ -25,6 +25,17 @@ export function rollSymbol(weights: Record<SymbolType, number>, rng: Rng): Symbo
   return entries[entries.length - 1][0];
 }
 
+// Roll restricted to `allowed` symbols, using their weights renormalized.
+export function rollSymbolFrom(
+  allowed: SymbolType[],
+  weights: Record<SymbolType, number>,
+  rng: Rng,
+): SymbolType {
+  const restricted: Record<string, number> = {};
+  for (const s of allowed) restricted[s] = weights[s];
+  return rollSymbol(restricted as Record<SymbolType, number>, rng);
+}
+
 export function defaultRng(): number {
   return Math.random();
 }

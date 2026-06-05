@@ -90,7 +90,7 @@ export function JackpotCelebration() {
   );
 }
 
-export function RuleDrawCelebration() {
+export function ExtraRuleCelebration() {
   const reduced = useReducedMotion();
 
   return (
@@ -104,7 +104,29 @@ export function RuleDrawCelebration() {
         } select-none text-center`}
       >
         <p className="text-5xl font-black tracking-tight text-emerald-300 drop-shadow-[0_0_22px_rgba(16,185,129,0.8)] sm:text-7xl">
-          RULE DRAW!
+          추가 규칙!
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function MultiplierCelebration({ multiplier }: { multiplier: number }) {
+  const reduced = useReducedMotion();
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center">
+      {!reduced && (
+        <div className="jackpot-glow absolute inset-0" />
+      )}
+      <div
+        className={`${reduced ? "" : "celebrate-pop"} select-none text-center`}
+      >
+        <p className="text-6xl font-black tracking-tight text-amber-300 drop-shadow-[0_0_25px_rgba(245,197,24,0.8)] sm:text-8xl">
+          ×{multiplier} 배수!
+        </p>
+        <p className="mt-2 text-lg font-bold text-amber-200 sm:text-2xl">
+          다음 스핀 점수 배수 적용
         </p>
       </div>
     </div>

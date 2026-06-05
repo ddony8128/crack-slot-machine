@@ -3,13 +3,14 @@ export type SymbolType =
   | 'diamond' | 'ruby' | 'sapphire'   // gems
   | 'seven' | 'zero' | 'four';
 
-export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock';
+export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta';
 
 export type Rule = {
   id: string;
   name: string;
   description: string;   // short display text (Korean ok)
   type: RuleType;
+  build?: string;        // build tag (e.g. '7', 'fruit', 'gem', 'order', 'safe')
 };
 
 export type SpinLogStep = { label: string; result: SymbolType[] };  // one applied-rule snapshot
@@ -19,26 +20,34 @@ export type SpinLog = {
   baseResult: SymbolType[]; // raw roll before post-roll rules
   steps: SpinLogStep[];     // sequential rule applications (A->B->C)
   finalResult: SymbolType[];
-  hand: string;             // hand name e.g. 'Pair', 'JACKPOT', 'No Hand'
+  hand: string;             // hand name e.g. 'Pair', 'No Hand'
   handScore: number;        // positive hand points
+  sevenScore: number;       // points from sevens
+  bonusScore: number;       // color/type + score-rule bonuses
   penalty: number;          // positive number representing the 4-penalty magnitude
-  roundScore: number;       // handScore - penalty
-  ruleDraw: boolean;        // RULE DRAW triggered this spin
+  baseRoundScore: number;   // sevenScore + handScore + bonusScore - penalty
+  multiplier: number;       // multiplier applied this spin
+  roundScore: number;       // baseRoundScore * multiplier
+  zeroDraw: boolean;        // zeros>=3 triggered extra rule pick
+  multiplierSet: number;    // multiplier granted to next spin (1 if none)
 };
 
 export type GameStatus =
-  | 'start' | 'choosing-rule' | 'choosing-slot'
+  | 'start' | 'choosing-rule' | 'placing'
   | 'ready-to-spin' | 'spinning' | 'spin-result' | 'finished';
 
 export type GameState = {
   nickname: string;
-  spinIndex: number;        // 0-based current spin (0..4)
-  maxSpins: number;         // 5
+  spinIndex: number;        // 0-based, 0..6; == maxSpins when finished
+  maxSpins: number;         // 7
   totalScore: number;
-  previousResult: SymbolType[];  // last final result (for CENTER LOCK); starts ['zero',...x5]
+  nextMultiplier: number;   // applied to NEXT spin's score (default 1)
+  previousResult: SymbolType[];  // last final result; starts ['zero',...x5]
   currentResult: SymbolType[];
-  ruleSlots: Array<Rule | null>; // length 3
-  offeredRules: Rule[];
+  ruleSlots: Array<Rule | null>; // length 5, applied top->bottom
+  bag: Rule[];                   // inactive holding area
+  offeredRules: Rule[];          // 3
+  pendingRule: Rule | null;      // chosen card not yet placed
   extraRulePickCount: number;
   spinLogs: SpinLog[];
   status: GameStatus;

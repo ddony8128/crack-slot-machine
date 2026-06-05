@@ -12,18 +12,21 @@ export function computeWeights(
     if (!rule || rule.type !== 'weight') continue;
 
     switch (rule.id) {
-      case 'fruit-mode':
-        for (const f of FRUITS) weights[f] *= 2.2;
-        break;
-      case 'gem-mode':
-        for (const g of GEMS) weights[g] *= 2.2;
-        break;
       case 'seven-fever':
         weights.seven *= 3;
         break;
       case 'zero-fog':
         weights.zero *= 1.8;
         weights.four *= 0.4;
+        break;
+      case 'fruit-surge':
+        for (const f of FRUITS) weights[f] *= 2;
+        break;
+      case 'gem-surge':
+        for (const g of GEMS) weights[g] *= 2;
+        break;
+      case 'no-zero':
+        weights.zero = 0;
         break;
       default:
         break;

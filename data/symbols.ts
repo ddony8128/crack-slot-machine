@@ -15,14 +15,21 @@ export const SYMBOL_EMOJI: Record<SymbolType, string> = {
 export const FRUITS: SymbolType[] = ['cherry', 'lemon', 'grape'];
 export const GEMS: SymbolType[] = ['diamond', 'ruby', 'sapphire'];
 
+// RED set = {ruby, cherry}. BLUE set = {sapphire, grape}.
+export const RED: SymbolType[] = ['ruby', 'cherry'];
+export const BLUE: SymbolType[] = ['sapphire', 'grape'];
+export const RED_SET = new Set<SymbolType>(RED);
+export const BLUE_SET = new Set<SymbolType>(BLUE);
+
+// Base weights are UNIFORM: every symbol weight = 1.
 export const BASE_WEIGHTS: Record<SymbolType, number> = {
-  cherry: 10,
-  lemon: 10,
-  grape: 10,
-  diamond: 8,
-  ruby: 8,
-  sapphire: 8,
-  seven: 4,
-  zero: 18,
-  four: 14,
+  cherry: 1,
+  lemon: 1,
+  grape: 1,
+  diamond: 1,
+  ruby: 1,
+  sapphire: 1,
+  seven: 1,
+  zero: 1,
+  four: 1,
 };

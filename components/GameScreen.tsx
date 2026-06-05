@@ -10,11 +10,18 @@ import ScorePanel from "@/components/ScorePanel";
 import SpinResultLog from "@/components/SpinResultLog";
 import {
   JackpotCelebration,
-  RuleDrawCelebration,
+  ExtraRuleCelebration,
+  MultiplierCelebration,
 } from "@/components/Celebrations";
 import { useSpinReveal } from "@/hooks/useSpinReveal";
 
 const CELEBRATION_MS = 2200;
+
+type Celebration =
+  | { kind: "jackpot" }
+  | { kind: "extra" }
+  | { kind: "multiplier"; value: number }
+  | null;
 
 export default function GameScreen() {
   const status = useGameStore((s) => s.status);
@@ -26,9 +33,7 @@ export default function GameScreen() {
   const reveal = useSpinReveal(latestLog, currentResult);
 
   // Celebrations fire once the reveal completes for the latest log.
-  const [celebration, setCelebration] = useState<
-    null | "jackpot" | "ruledraw"
-  >(null);
+  const [celebration, setCelebration] = useState<Celebration>(null);
   const [celebratedIndex, setCelebratedIndex] = useState(-1);
 
   useEffect(() => {
@@ -37,12 +42,16 @@ export default function GameScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCelebratedIndex(latestLog.spinIndex);
 
-    let kind: "jackpot" | "ruledraw" | null = null;
-    if (latestLog.hand === "JACKPOT") kind = "jackpot";
-    else if (latestLog.ruleDraw) kind = "ruledraw";
+    let next: Celebration = null;
+    const bigWin =
+      latestLog.sevenScore >= 777 || latestLog.roundScore >= 500;
+    if (bigWin) next = { kind: "jackpot" };
+    else if (latestLog.multiplierSet > 1)
+      next = { kind: "multiplier", value: latestLog.multiplierSet };
+    else if (latestLog.zeroDraw) next = { kind: "extra" };
 
-    if (!kind) return;
-    setCelebration(kind);
+    if (!next) return;
+    setCelebration(next);
     const t = setTimeout(() => setCelebration(null), CELEBRATION_MS);
     return () => clearTimeout(t);
   }, [latestLog, reveal.scoreReady, celebratedIndex]);
@@ -63,8 +72,6 @@ export default function GameScreen() {
 
       {status === "choosing-rule" && <RulePicker />}
 
-      {/* choosing-slot: the slot picker UI lives inside RuleSlots above. */}
-
       {showSlot && (
         <SlotMachine
           symbols={reveal.symbols}
@@ -83,8 +90,11 @@ export default function GameScreen() {
         </>
       )}
 
-      {celebration === "jackpot" && <JackpotCelebration />}
-      {celebration === "ruledraw" && <RuleDrawCelebration />}
+      {celebration?.kind === "jackpot" && <JackpotCelebration />}
+      {celebration?.kind === "extra" && <ExtraRuleCelebration />}
+      {celebration?.kind === "multiplier" && (
+        <MultiplierCelebration multiplier={celebration.value} />
+      )}
     </main>
   );
 }
