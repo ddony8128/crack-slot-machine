@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/gameStore";
+import RankingPanel from "@/components/RankingPanel";
+import { loadRankings, clearRankings } from "@/lib/ranking";
+import type { RankingRecord } from "@/types";
 import { SYMBOL_EMOJI, FRUITS, GEMS } from "@/data/symbols";
 import {
   JACKPOT,
@@ -20,6 +23,22 @@ export default function StartScreen() {
   const setNickname = useGameStore((s) => s.setNickname);
   const startGame = useGameStore((s) => s.startGame);
   const [showHelp, setShowHelp] = useState(false);
+  const [rankings, setRankings] = useState<RankingRecord[]>([]);
+
+  const refreshRankings = () => {
+    setRankings(loadRankings());
+  };
+
+  useEffect(() => {
+    // Load persisted rankings after mount so SSR/client markup matches.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshRankings();
+  }, []);
+
+  const handleResetRankings = () => {
+    clearRankings();
+    refreshRankings();
+  };
 
   const canStart = nickname.trim().length > 0;
 
@@ -59,14 +78,15 @@ export default function StartScreen() {
         </button>
       </form>
 
-      {/* Top-5 ranking placeholder. A separate task fills this via localStorage. */}
       <section className="w-full max-w-sm">
         <h2 className="mb-2 text-center text-sm font-semibold tracking-wide text-zinc-400">
           TOP 5 RANKING
         </h2>
-        <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-8 text-center text-sm text-zinc-500">
-          아직 기록이 없습니다
-        </div>
+        <RankingPanel
+          records={rankings}
+          limit={5}
+          onReset={rankings.length > 0 ? handleResetRankings : undefined}
+        />
       </section>
 
       <section className="w-full max-w-sm">

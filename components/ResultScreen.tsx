@@ -1,6 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "@/store/gameStore";
+import RankingPanel from "@/components/RankingPanel";
+import { addRankingFromGame, bestSpinScore, getRank } from "@/lib/ranking";
+import type { RankingRecord } from "@/types";
 
 function tierMessage(score: number): string {
   if (score < 0) return "규칙이 당신을 버렸습니다";
@@ -13,7 +17,40 @@ function tierMessage(score: number): string {
 export default function ResultScreen() {
   const nickname = useGameStore((s) => s.nickname);
   const totalScore = useGameStore((s) => s.totalScore);
+  const spinLogs = useGameStore((s) => s.spinLogs);
+  const ruleSlots = useGameStore((s) => s.ruleSlots);
   const reset = useGameStore((s) => s.reset);
+
+  const [rankings, setRankings] = useState<RankingRecord[]>([]);
+  const [recordId, setRecordId] = useState<string>("");
+  const registeredRef = useRef(false);
+
+  useEffect(() => {
+    // Guard against React StrictMode double-invoke in dev.
+    if (registeredRef.current) return;
+    registeredRef.current = true;
+
+    const best = bestSpinScore(spinLogs.map((log) => log.roundScore));
+    const finalRules = ruleSlots
+      .filter((r): r is NonNullable<typeof r> => r != null)
+      .map((r) => r.name);
+
+    const updated = addRankingFromGame({
+      nickname,
+      score: totalScore,
+      bestSpinScore: best,
+      finalRules,
+    });
+    const newest = updated.find(
+      (r) => r.score === totalScore && r.nickname === nickname,
+    );
+    setRankings(updated);
+    setRecordId(newest?.id ?? "");
+    // Intentionally run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const rank = recordId ? getRank(rankings, recordId) : -1;
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
@@ -39,9 +76,18 @@ export default function ResultScreen() {
         <p className="text-lg font-semibold text-zinc-200">
           {tierMessage(totalScore)}
         </p>
+
+        {rank > 0 && (
+          <p className="text-2xl font-black text-emerald-300">랭킹 {rank}위!</p>
+        )}
       </div>
 
-      {/* TODO: Ranking registration goes here (separate localStorage task). */}
+      <section className="w-full">
+        <h2 className="mb-2 text-center text-sm font-semibold tracking-wide text-zinc-400">
+          RANKING
+        </h2>
+        <RankingPanel records={rankings} highlightId={recordId} limit={10} />
+      </section>
 
       <button
         type="button"
