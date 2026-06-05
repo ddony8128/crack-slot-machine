@@ -72,26 +72,34 @@ Evaluated after the round resolves:
   (If both somehow apply, fours==5 wins. fours==4/5 also incur the normal -20/four penalty this spin.)
 
 ## 5. Rule application (`applyRules`)
-Two phases:
+Three phases:
 - **Weight phase (pre-roll)**: `computeWeights(slotRules, BASE_WEIGHTS)` multiplies weights for
   every active `weight`-type rule, then `baseSpin` rolls 5 cells. **Exception by id:**
   `four-shield` is a `reroll` rule but ALSO multiplies the `zero` weight by **×2** in this phase
   (checked by id, like the weight rules; stacks multiplicatively with other weight rules).
-- **Post-roll phase**: iterate slot rules **top → bottom** (index 0→4). For each active rule that is
-  NOT `weight` and NOT `score` type, apply its effect to the working array and push a
-  `SpinLogStep { label: rule.name, result: <copy> }`.
+- **PRE-ROLL HOLD phase (locks)**: BEFORE the cascade, scan ALL slot rules. For each `lock` rule
+  freeze its cell to the PREVIOUS spin value: `center-lock` → cell[2] = previousResult[2],
+  `last-lock` → cell[4] = previousResult[4]. A held cell is set `claimed=true`, `locked=true`. A held
+  cell **does not spin** and is **ABSOLUTE**: it is order-independent — no later reroll/transform/meta
+  can ever change it regardless of slot position, and lock order among themselves is irrelevant
+  (different cells). Locks push **no** `SpinLogStep`s.
+  After this phase, `baseResult = [...working]` is captured: this is the effective LANDING board with
+  held cells = previous value and all other cells = the raw roll. `applyRules` returns it.
+- **Cascade phase (post-roll)**: iterate slot rules **top → bottom** (index 0→4). For each active rule
+  that is NOT `weight`, NOT `score`, and NOT `lock` (locks were already applied), apply its effect to
+  the working array and push a `SpinLogStep { label, result: <copy>, locked: <copy> }`.
 
-**Conflict model — "upper wins" (first-claim).** Maintain `claimed: boolean[5]` (all false). The
-FIRST rule to WRITE a cell claims it; any later rule that would write the same cell is skipped.
-Reading a cell always reads its current value. Consequences:
-- A `lock` only protects a cell when placed ABOVE the reroll/transform it wants to block (the lock
-  claims the cell first, so later rules skip it).
-- A reroll/transform placed ABOVE a lock claims the cell first, so the lock then finds it claimed
-  and FAILS (the cell is not frozen). i.e. "고정이 굴림/변환보다 위에 있어야 적용된다."
-- Among non-lock rules the same first-claim rule holds: the topmost rule touching a cell wins.
+**Conflict model — locks are absolute; non-lock rules use "upper wins" (first-claim).** Held (locked)
+cells are resolved pre-roll and can never be overwritten. Among the NON-lock rules maintain
+`claimed: boolean[5]` (held cells start `true`). The FIRST non-lock rule to WRITE a cell claims it;
+any later rule that would write the same cell is skipped. Reading a cell always reads its current
+value. Consequences:
+- A `lock` ALWAYS protects its cell, regardless of slot position — there is no "lock must be above"
+  requirement anymore; the hold is pre-roll and absolute.
+- Among non-lock rules the first-claim rule holds: the topmost rule touching a cell wins.
 
-Also maintain `locked: boolean[5]` set true ONLY when a `lock` rule successfully claims its cell
-(used by the UI to render frozen cells greyed-out as the reveal cascades top→bottom). Each
+`locked: boolean[5]` is set true for each cell frozen by a lock rule in the pre-roll hold pass (used
+by the UI to render frozen cells greyed-out for the WHOLE reveal — they never spin). Each
 `SpinLogStep` carries a `locked` snapshot; `applyRules` returns the final `locked` array too.
 
 "write a cell" = set it only if unclaimed, then mark it claimed. "reroll a cell" = write it via
@@ -122,16 +130,19 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `grape-to-sapphire` (transform): ALL grape → sapphire.
 - `red-dye` (transform): ALL ruby → cherry.
 - `blue-dye` (transform): ALL diamond → sapphire.
-- `center-lock` (lock): cell[2] = previousResult[2]; locked[2]=true.
-- `last-lock` (lock): cell[4] = previousResult[4]; locked[4]=true.
+- `center-lock` (lock): PRE-ROLL HOLD — cell[2] held at previousResult[2]; locked[2]=true. Resolved
+  before the spin; the cell does not spin and is absolute (cannot be changed by any other rule).
+- `last-lock` (lock): PRE-ROLL HOLD — cell[4] held at previousResult[4]; locked[4]=true. Same as above.
 - `copy-above` (meta): let `above = slotRules[thisSlotIndex - 1]`. If `above` exists (active,
-  non-null) AND is a post-roll type (reroll/transform/lock/meta), re-apply its effect once
+  non-null) AND is a post-roll cascade type (reroll/transform/meta), re-apply its effect once
   (same semantics as above) and push a step `label: "COPY ABOVE → {above.name}"`. If the slot
-  above is empty/null, or is a weight/score type, COPY ABOVE is a no-op (still push a step noting
-  no effect). COPY ABOVE does NOT recurse into another copy-above.
+  above is empty/null, or is a weight/score/**lock** type (locks are pre-roll, not cascade rules),
+  COPY ABOVE is a no-op (still push a "COPY ABOVE → (none)" step). COPY ABOVE does NOT recurse into
+  another copy-above.
 - `weight` and `score` types: no post-roll effect (handled in roll / scoring).
 
-`applyRules` returns `{ finalResult, steps }` with finalResult a fresh copy.
+`applyRules` returns `{ finalResult, steps, locked, baseResult }`, all fresh copies. `baseResult`
+already has held cells = previous value (and all other cells = the rolled base).
 
 ## 6. Rule pool (27)
 Type ∈ `weight | reroll | transform | lock | score | meta`. Grouped by `build`.

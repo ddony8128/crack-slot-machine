@@ -255,9 +255,9 @@ describe('applyRules — copy-above', () => {
   });
 });
 
-describe('applyRules — upper-wins ordering (lock must be ABOVE to win)', () => {
+describe('applyRules — pre-roll HOLD (locks are absolute, order-independent)', () => {
   it('lock ABOVE reroll: lock wins and the cell is reported locked', () => {
-    // center-lock (slot0) freezes cell2; four-shield (slot1) cannot touch it.
+    // center-lock (slot0) holds cell2 pre-roll; four-shield (slot1) cannot touch it.
     const base: SymbolType[] = ['four', 'cherry', 'four', 'cherry', 'cherry'];
     const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['four-shield']];
     const { finalResult, locked, steps } = applyRules(base, rules, {
@@ -265,16 +265,19 @@ describe('applyRules — upper-wins ordering (lock must be ABOVE to win)', () =>
       weights: BASE_WEIGHTS,
       rng: rngForSymbol('lemon'),
     });
-    expect(finalResult[2]).toBe('four'); // locked, not rerolled
+    expect(finalResult[2]).toBe('four'); // held, not rerolled
     expect(finalResult[0]).toBe('lemon'); // other four still rerolled
     expect(locked[2]).toBe(true);
-    // per-step locked snapshot is present for the reveal
+    // locks push no steps; only four-shield does
+    expect(steps).toHaveLength(1);
+    expect(steps[0].label).toBe('FOUR SHIELD');
+    // per-step locked snapshot still reflects the held cell for the reveal
     expect(steps[0].locked[2]).toBe(true);
   });
 
-  it('reroll ABOVE lock: reroll wins, the lock FAILS (cell not locked)', () => {
-    // four-shield (slot0) rerolls + claims cell of the four; last-lock (slot1) is below
-    // and finds the cell already claimed -> it cannot freeze it.
+  it('reroll ABOVE lock: the lock STILL wins (pre-roll hold is absolute)', () => {
+    // four-shield (slot0) is ABOVE last-lock (slot1). Under pre-roll HOLD the lock
+    // is resolved before the cascade, so cell4 is held no matter the order.
     const base: SymbolType[] = ['cherry', 'cherry', 'cherry', 'cherry', 'four'];
     const rules: Rule[] = [RULES_BY_ID['four-shield'], RULES_BY_ID['last-lock']];
     const { finalResult, locked } = applyRules(base, rules, {
@@ -282,7 +285,24 @@ describe('applyRules — upper-wins ordering (lock must be ABOVE to win)', () =>
       weights: BASE_WEIGHTS,
       rng: rngForSymbol('lemon'),
     });
-    expect(finalResult[4]).toBe('lemon'); // reroll won (lock was below)
-    expect(locked[4]).toBe(false); // lock did not take effect
+    expect(finalResult[4]).toBe('ruby'); // held at previous value, NOT rerolled
+    expect(locked[4]).toBe(true); // lock took effect regardless of position
+  });
+
+  it('returns baseResult with held cells = previousResult, others = rolled base', () => {
+    const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'four'];
+    const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['last-lock']];
+    const { baseResult } = applyRules(base, rules, {
+      previousResult: ['seven', 'seven', 'ruby', 'seven', 'sapphire'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([]),
+    });
+    // held cells take the previous value
+    expect(baseResult[2]).toBe('ruby');
+    expect(baseResult[4]).toBe('sapphire');
+    // non-held cells keep the rolled base
+    expect(baseResult[0]).toBe('cherry');
+    expect(baseResult[1]).toBe('lemon');
+    expect(baseResult[3]).toBe('diamond');
   });
 });

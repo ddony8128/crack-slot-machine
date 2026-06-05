@@ -91,8 +91,12 @@ function run(label, weights) {
   console.log(`  special: 0>=3 ${pct(zero3)} | 4x4 ${pct(four4)} | 4x5 ${pct(four5)}`);
 }
 
+// NOTE: sim covers BASE-ROLL odds + base scoring only (count-based hands, 7-track,
+// color bonuses, -20/four). Post-roll rules (rerolls/transforms/locks/mirrors) and
+// score rules (seven-double/bonus-77/clean-bonus) are NOT simulated.
 run("BASE (uniform 1/9 each)", makeWeights());
 run("SEVEN FEVER (7 x3)", makeWeights({ seven: 3 }));
-run("FRUIT MODE (fruit x2.2)", makeWeights({ cherry:2.2, lemon:2.2, grape:2.2 }));
-run("GEM MODE (gem x2.2)", makeWeights({ diamond:2.2, ruby:2.2, sapphire:2.2 }));
-run("ZERO FOG (0 x1.8, 4 x0.4)", makeWeights({ zero: 1.8, four: 0.4 }));
+run("FRUIT SURGE (fruit x2)", makeWeights({ cherry:2, lemon:2, grape:2 }));
+run("GEM SURGE (gem x2)", makeWeights({ diamond:2, ruby:2, sapphire:2 }));
+run("NO ZERO (zero x0)", makeWeights({ zero: 0 }));
+run("FOUR SHIELD weight-part (zero x2)", makeWeights({ zero: 2 }));

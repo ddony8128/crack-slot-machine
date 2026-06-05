@@ -119,6 +119,9 @@ export function useSpinReveal(
     clearAll();
 
     const len = latestLog.baseResult.length;
+    // Locked (held) cells are known up-front: they never spin and stay frozen
+    // at their held value (baseResult[i] == previousResult[i]) for the whole reveal.
+    const lockedSet = new Set(trueIndices(latestLog.lockedCells));
 
     if (reduced) {
       // Instant: jump straight to the final result + score.
@@ -135,22 +138,32 @@ export function useSpinReveal(
       return clearAll;
     }
 
-    // --- Phase 1: rolling ---
+    // --- Phase 1: rolling (locked cells do NOT roll) ---
     setScoreReady(false);
     setRevealing(true);
     setRolling(true);
-    setReelRolling(Array(len).fill(true));
+    // Locked cells are not rolling from the very start.
+    setReelRolling(Array.from({ length: len }, (_, i) => !lockedSet.has(i)));
     setFlashIndices([]);
     setLandIndices([]);
     setStepLabel(null);
-    setLockedIndices([]);
+    // Locked cells are shown frozen from the start of the reveal.
+    setLockedIndices(trueIndices(latestLog.lockedCells));
+    // Seed display: locked cells already at their held value, others arbitrary.
+    setSymbols(latestLog.baseResult.slice());
 
     rollInterval.current = setInterval(() => {
-      setSymbols(randomReels(len));
+      // Only randomize NON-locked cells; held cells keep their value.
+      setSymbols(() =>
+        randomReels(len).map((s, i) =>
+          lockedSet.has(i) ? latestLog.baseResult[i] : s,
+        ),
+      );
     }, 70);
 
-    // --- Phase 2: stop left -> right, landing on baseResult ---
+    // --- Phase 2: stop left -> right, landing on baseResult (skip locked cells) ---
     for (let i = 0; i < len; i++) {
+      if (lockedSet.has(i)) continue; // held cells already show their value
       at(ROLL_DURATION + i * REEL_STAGGER, () => {
         setSymbols((prev) => {
           const next = prev.slice();

@@ -181,6 +181,29 @@ describe('spin', () => {
     expect(log.finalResult.every((c) => c === 'cherry')).toBe(true);
   });
 
+  it('SpinLog.baseResult reflects pre-roll held cells (last-lock holds cell4)', () => {
+    // All rolls are cherry; last-lock holds cell4 at the previous spin value.
+    const store = createGameStore(loopingRng([RNG_CHERRY]));
+    store.getState().setNickname('liz');
+    store.getState().startGame();
+    store.getState().selectRule(RULES_BY_ID['last-lock']);
+    store.getState().placePending({ type: 'slot', index: 0 });
+
+    // Seed a distinct previous value on cell4 to observe the hold.
+    store.setState({
+      previousResult: ['lemon', 'lemon', 'lemon', 'lemon', 'sapphire'],
+      status: 'ready-to-spin',
+    });
+    store.getState().spin();
+
+    const log = store.getState().spinLogs[0];
+    // Held cell4 = previousResult[4]; others = the rolled base (cherry).
+    expect(log.baseResult[4]).toBe('sapphire');
+    expect(log.finalResult[4]).toBe('sapphire');
+    expect(log.baseResult[0]).toBe('cherry');
+    expect(log.lockedCells[4]).toBe(true);
+  });
+
   it('detects zeros>=3 -> extraRulePickCount, consumed by next() w/o advancing spinIndex', () => {
     // Empty slots: spin draws 5 zeros, no post-roll rules -> zeroDraw, mult 1.
     const store = createGameStore(loopingRng([RNG_ZERO]));

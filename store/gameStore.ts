@@ -215,7 +215,7 @@ function buildInitializer(rng: Rng): Initializer {
 
       const weights = computeWeights(ruleSlots, BASE_WEIGHTS);
       const base = baseSpin(weights, rng);
-      const { finalResult, steps, locked } = applyRules(base, ruleSlots, {
+      const { finalResult, steps, locked, baseResult } = applyRules(base, ruleSlots, {
         previousResult,
         weights,
         rng,
@@ -227,7 +227,7 @@ function buildInitializer(rng: Rng): Initializer {
 
       const log: SpinLog = {
         spinIndex,
-        baseResult: base,
+        baseResult,
         steps,
         finalResult,
         hand: score.hand,

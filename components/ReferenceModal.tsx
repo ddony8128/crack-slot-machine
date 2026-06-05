@@ -24,19 +24,7 @@ import {
 } from "@/data/scoreTable";
 import { BuildTag } from "@/components/RuleCard";
 
-const BUILD_ORDER = [
-  "7",
-  "fruit",
-  "gem",
-  "gem/blue",
-  "red",
-  "order",
-  "safe",
-  "7/safe",
-  "anti-gem",
-  "score",
-  "score/safe",
-];
+const BUILD_ORDER = ["7", "fruit", "gem", "color", "order", "safe", "score"];
 
 function groupByBuild() {
   const groups = new Map<string, typeof RULES>();

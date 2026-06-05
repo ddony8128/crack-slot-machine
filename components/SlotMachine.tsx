@@ -66,10 +66,11 @@ export default function SlotMachine({
 
         <div className="relative flex flex-wrap items-center justify-center gap-2 sm:gap-3">
           {display.map((symbol, i) => {
-            const rolling = reelRolling[i];
+            const isLocked = lockedSet.has(i);
+            // A locked (held) cell never rolls, even if a stale rolling flag lingers.
+            const rolling = reelRolling[i] && !isLocked;
             const flashing = flashSet.has(i);
             const landed = landSet.has(i);
-            const isLocked = !rolling && lockedSet.has(i);
             const motion = [
               rolling ? "reel-rolling" : "",
               flashing ? "reel-flash" : "",

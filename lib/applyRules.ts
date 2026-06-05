@@ -15,29 +15,66 @@ const NUMBERS: SymbolType[] = ['seven', 'zero', 'four'];
 /**
  * Apply equipped slot rules to a freshly-rolled board.
  *
- * MODEL: "upper wins" (first-claim). Rules are applied top -> bottom (slot 0..4).
- * The FIRST rule to write a cell "claims" it; any later rule that would write the
- * same cell is skipped. So a `lock` only protects a cell when placed ABOVE the
- * reroll/transform it wants to block (the lock claims the cell first). Conversely
- * a reroll/transform placed above a lock claims the cell, and the lock then skips.
+ * MODEL: locks are PRE-ROLL HOLD; everything else is "upper wins" (first-claim).
+ *
+ * 1. PRE-ROLL HOLD pass (before the cascade): scan ALL slot rules and for each
+ *    `lock` rule freeze its cell to `previousResult` (center-lock -> cell2,
+ *    last-lock -> cell4), mark it claimed + locked. A held cell never spins and
+ *    is ABSOLUTE — order-independent, no reroll/transform can ever touch it
+ *    regardless of slot position. Locks push no steps.
+ * 2. `baseResult` is captured right after the hold pass: held cells = previous
+ *    value, all other cells = the raw roll. This is the effective landing board.
+ * 3. Cascade pass: iterate non-lock slot rules top -> bottom, each claiming cells
+ *    first-claim style among themselves ("the topmost rule touching a cell wins").
  *
  * `weight` and `score` rules have no post-roll effect here. `claimed[]` tracks the
- * first-claim state; `locked[]` tracks only cells frozen by an actual lock rule
- * (used by the UI to render them greyed-out as the reveal cascades down).
+ * first-claim state; `locked[]` tracks only cells frozen by a lock rule (used by
+ * the UI to render them frozen for the entire reveal).
  */
 export function applyRules(
   base: SymbolType[],
   rules: (Rule | null)[],
   ctx: ApplyCtx,
-): { finalResult: SymbolType[]; steps: SpinLogStep[]; locked: boolean[] } {
+): {
+  finalResult: SymbolType[];
+  steps: SpinLogStep[];
+  locked: boolean[];
+  baseResult: SymbolType[];
+} {
   const working: SymbolType[] = [...base];
   const steps: SpinLogStep[] = [];
   const claimed: boolean[] = [false, false, false, false, false];
   const locked: boolean[] = [false, false, false, false, false];
 
+  // --- PRE-ROLL HOLD pass: freeze locked cells to the previous spin value. ---
+  // Order among locks is irrelevant (different cells); locks push no steps.
+  for (const rule of rules) {
+    if (!rule || rule.type !== 'lock') continue;
+    if (rule.id === 'center-lock') {
+      working[2] = ctx.previousResult[2];
+      claimed[2] = true;
+      locked[2] = true;
+    } else if (rule.id === 'last-lock') {
+      working[4] = ctx.previousResult[4];
+      claimed[4] = true;
+      locked[4] = true;
+    }
+  }
+
+  // Effective landing board: held cells = previous value, others = raw roll.
+  const baseResult: SymbolType[] = [...working];
+
+  // --- Cascade pass: non-lock rules, top -> bottom, first-claim among themselves. ---
   for (let slotIndex = 0; slotIndex < rules.length; slotIndex++) {
     const rule = rules[slotIndex];
-    if (!rule || rule.type === 'weight' || rule.type === 'score') continue;
+    if (
+      !rule ||
+      rule.type === 'weight' ||
+      rule.type === 'score' ||
+      rule.type === 'lock'
+    ) {
+      continue;
+    }
 
     if (rule.id === 'copy-above') {
       const above = slotIndex > 0 ? rules[slotIndex - 1] : null;
@@ -45,6 +82,7 @@ export function applyRules(
         !above ||
         above.type === 'weight' ||
         above.type === 'score' ||
+        above.type === 'lock' ||
         above.id === 'copy-above'
       ) {
         steps.push({ label: 'COPY ABOVE → (none)', result: [...working], locked: [...locked] });
@@ -59,7 +97,7 @@ export function applyRules(
     steps.push({ label: rule.name, result: [...working], locked: [...locked] });
   }
 
-  return { finalResult: [...working], steps, locked };
+  return { finalResult: [...working], steps, locked, baseResult };
 }
 
 /** Write a cell only if unclaimed; returns true if it actually wrote (and claimed). */
@@ -82,7 +120,7 @@ function applyOne(
   locked: boolean[],
   ctx: ApplyCtx,
 ): void {
-  const { weights, rng, previousResult } = ctx;
+  const { weights, rng } = ctx;
   switch (rule.id) {
     // ---- reroll ----
     case 'four-shield':
@@ -172,13 +210,7 @@ function applyOne(
       }
       break;
 
-    // ---- lock (claims the cell only if not already claimed = must be ABOVE to win) ----
-    case 'center-lock':
-      if (write(working, claimed, 2, previousResult[2])) locked[2] = true;
-      break;
-    case 'last-lock':
-      if (write(working, claimed, 4, previousResult[4])) locked[4] = true;
-      break;
+    // ---- lock rules are handled in the PRE-ROLL HOLD pass, not here. ----
 
     default:
       break;
