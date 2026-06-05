@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { SpinLog, SymbolType } from "@/types";
+import type { RevealStream, SymbolType } from "@/types";
 import { SYMBOL_EMOJI } from "@/data/symbols";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 
@@ -30,6 +30,12 @@ export type SpinRevealState = {
   lockedIndices: number[];
   /** True from the moment a spin starts until the score is revealed. */
   revealing: boolean;
+  /**
+   * True when the step animation has caught up to a pending `select` rule and
+   * the spin is paused waiting for the player to pick. The picker should only
+   * show once this is true (until then the stage shows the step animation).
+   */
+  readyForPick: boolean;
   /** True once the reveal finished and the score should be shown. */
   scoreReady: boolean;
 };
@@ -57,19 +63,30 @@ function trueIndices(b?: boolean[]): number[] {
 }
 
 /**
- * Drives the UI-only reveal sequence for the latest spin.
+ * Drives the UI-only reveal sequence, consuming the store's incremental
+ * `revealStream`. The reveal plays exactly ONCE per spin:
  *
- * Watches spinLogs.length; when a new log appears it plays:
- *   rolling -> land on baseResult -> apply each step -> finalResult -> score.
+ *   roll → land on baseResult → animate each step → (pause at a `select`) →
+ *   continue with the new steps → settle on final → score.
+ *
+ * State machine:
+ *  - A NEW `stream.id` means a brand-new spin: reset, play the roll phase, then
+ *    animate every step that has arrived so far.
+ *  - The SAME `stream.id` gaining more steps (after `selectCells`) continues
+ *    animating the appended steps from where it left off — NO re-roll, NO
+ *    replay.
+ *  - When the animation catches up to all currently-known steps:
+ *      • if `stream.done` → score is revealed.
+ *      • else → a `select` rule is waiting: pause and raise `readyForPick`.
  *
  * The store stays pure: this hook owns all timers and the displayed symbol
- * array. When idle it falls back to `idleResult` (the store's currentResult).
+ * array. When `stream` is null (idle) it shows `idleResult`.
  *
- * Under prefers-reduced-motion the whole sequence collapses to an instant
- * jump to the final result with the score immediately ready.
+ * Under prefers-reduced-motion the sequence collapses to an instant jump to the
+ * latest known result; the picker appears immediately when input is awaited.
  */
 export function useSpinReveal(
-  latestLog: SpinLog | null,
+  stream: RevealStream | null,
   idleResult: SymbolType[],
 ): SpinRevealState {
   const reduced = useReducedMotion();
@@ -82,30 +99,41 @@ export function useSpinReveal(
   const [stepLabel, setStepLabel] = useState<string | null>(null);
   const [lockedIndices, setLockedIndices] = useState<number[]>([]);
   const [revealing, setRevealing] = useState(false);
+  const [readyForPick, setReadyForPick] = useState(false);
   const [scoreReady, setScoreReady] = useState(false);
 
-  // Track the last log we revealed by OBJECT IDENTITY (a fresh log object is
-  // pushed every spin). spinIndex is NOT unique — it repeats after an extra
-  // rule pick (zeros>=3), which previously made the reveal skip those spins.
-  const seenLogRef = useRef<SpinLog | null>(latestLog);
+  // Reveal-machine bookkeeping. `lastId` is the stream id we're currently
+  // animating; `shownSteps` counts how many steps have already been animated for
+  // that id (so appended steps continue rather than replay).
+  const lastIdRef = useRef<number | null>(null);
+  const shownStepsRef = useRef(0);
+  // The board snapshot of the last animated step (or baseResult), used to
+  // compute the flash diff for the next step.
+  const prevResultRef = useRef<SymbolType[]>(idleResult);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const rollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Keep idle display in sync with the store when not revealing.
+  // Keep idle display in sync with the store when no stream is active.
   useEffect(() => {
-    if (!revealing) {
+    if (stream == null) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSymbols(idleResult);
-      setLockedIndices(trueIndices(latestLog?.lockedCells));
+      setLockedIndices([]);
+      setRevealing(false);
+      setReadyForPick(false);
+      setScoreReady(false);
+      setRolling(false);
+      setReelRolling([]);
+      setFlashIndices([]);
+      setLandIndices([]);
+      setStepLabel(null);
+      lastIdRef.current = null;
+      shownStepsRef.current = 0;
     }
-    // idleResult identity changes each spin via the store.
-  }, [idleResult, revealing, latestLog]);
+  }, [stream, idleResult]);
 
   useEffect(() => {
-    if (!latestLog) return;
-    // Only react to a genuinely new spin log (by object identity).
-    if (latestLog === seenLogRef.current) return;
-    seenLogRef.current = latestLog;
+    if (stream == null) return;
 
     const clearAll = () => {
       timers.current.forEach(clearTimeout);
@@ -119,61 +147,173 @@ export function useSpinReveal(
       timers.current.push(setTimeout(fn, ms));
     };
 
-    clearAll();
+    const len = stream.baseResult.length;
+    const isNewSpin = stream.id !== lastIdRef.current;
 
-    const len = latestLog.baseResult.length;
-    // Locked (held) cells are known up-front: they never spin and stay frozen
-    // at their held value (baseResult[i] == previousResult[i]) for the whole reveal.
-    const lockedSet = new Set(trueIndices(latestLog.lockedCells));
+    /**
+     * Animate steps[from .. end] STEP_INTERVAL apart, starting at `startAt`ms.
+     * Returns the time (ms) at which the last step finishes. Updates the refs
+     * (shownSteps / prevResult) as each step fires.
+     */
+    const animateSteps = (from: number, startAt: number): number => {
+      const steps = stream.steps;
+      let cursor = startAt;
+      let prev = prevResultRef.current;
+      for (let s = from; s < steps.length; s++) {
+        const step = steps[s];
+        const changed = diffIndices(prev, step.result);
+        const resultSnapshot = step.result;
+        const labelSnapshot = step.label;
+        const lockedSnapshot = trueIndices(step.locked);
+        const stepCount = s + 1;
+        at(cursor, () => {
+          setStepLabel(labelSnapshot);
+          setSymbols(resultSnapshot.slice());
+          setFlashIndices(changed);
+          setLockedIndices(lockedSnapshot);
+          shownStepsRef.current = stepCount;
+          prevResultRef.current = resultSnapshot;
+          at(STEP_INTERVAL - 80, () => {
+            setFlashIndices([]);
+            setStepLabel(null);
+          });
+        });
+        prev = step.result;
+        cursor += STEP_INTERVAL;
+      }
+      return cursor;
+    };
 
-    // After all player selections resolve, replay the FULL cinematic reveal
-    // (roll -> rules incl. the select-rule results -> final) — interactive spins
-    // are no longer skipped, so the animation/연출 isn't lost.
+    /**
+     * After the steps known so far finish at `endAt`ms, decide what happens:
+     *  - done → reveal the score.
+     *  - else → a select rule is waiting → pause and raise readyForPick.
+     */
+    const settle = (endAt: number) => {
+      if (stream.done) {
+        // Ensure the final board is shown, then reveal score.
+        const final = stream.steps.length
+          ? stream.steps[stream.steps.length - 1].result
+          : stream.baseResult;
+        at(endAt, () => {
+          setSymbols(final.slice());
+          setStepLabel(null);
+          setFlashIndices([]);
+        });
+        at(endAt + SETTLE_AFTER_FINAL, () => {
+          setRevealing(false);
+          setReadyForPick(false);
+          setScoreReady(true);
+        });
+      } else {
+        // Paused at a select rule: stop and wait for the player.
+        at(endAt, () => {
+          setRevealing(false);
+          setReadyForPick(true);
+          setStepLabel(null);
+          setFlashIndices([]);
+        });
+      }
+    };
+
+    // ---- Reduced motion: collapse to an instant jump to the latest result. ----
     if (reduced) {
-      // Instant: jump straight to the final result + score.
+      clearAll();
+      const final = stream.steps.length
+        ? stream.steps[stream.steps.length - 1].result
+        : stream.baseResult;
+      const lockedNow = stream.steps.length
+        ? trueIndices(stream.steps[stream.steps.length - 1].locked)
+        : [];
+      lastIdRef.current = stream.id;
+      shownStepsRef.current = stream.steps.length;
+      prevResultRef.current = final;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRolling(false);
       setReelRolling(Array(len).fill(false));
       setFlashIndices([]);
       setLandIndices([]);
       setStepLabel(null);
-      setLockedIndices(trueIndices(latestLog.lockedCells));
-      setSymbols(latestLog.finalResult);
-      setRevealing(false);
-      setScoreReady(true);
+      setLockedIndices(lockedNow);
+      setSymbols(final.slice());
+      if (stream.done) {
+        setRevealing(false);
+        setReadyForPick(false);
+        setScoreReady(true);
+      } else {
+        setRevealing(false);
+        setReadyForPick(true);
+        setScoreReady(false);
+      }
       return clearAll;
     }
 
-    // --- Phase 1: rolling (locked cells do NOT roll) ---
+    if (!isNewSpin) {
+      // ---- SAME spin, more steps arrived: continue, no roll, no replay. ----
+      if (stream.steps.length <= shownStepsRef.current) {
+        // No new steps to animate (e.g. only `done` flipped with no new step).
+        // Re-evaluate settle from now.
+        settle(0);
+        return clearAll;
+      }
+      clearAll();
+      setReadyForPick(false);
+      setScoreReady(false);
+      setRevealing(true);
+      const endAt = animateSteps(shownStepsRef.current, 0);
+      settle(endAt);
+      return clearAll;
+    }
+
+    // ---- NEW spin: full roll phase, then animate all known steps. ----
+    clearAll();
+    lastIdRef.current = stream.id;
+    shownStepsRef.current = 0;
+    prevResultRef.current = stream.baseResult;
+
+    // Locked (held) cells are known up-front: they never spin and stay frozen
+    // at their held value (baseResult[i]) for the roll. We derive the held set
+    // from the FIRST step's lock snapshot if present, else none roll-frozen.
+    // (Pre-roll holds are the only locks affecting the baseResult; later lock
+    // rules grey cells mid-stream.) We approximate held cells as those whose
+    // baseResult value should not roll — taken from the first step that has any
+    // locked flag, or empty if no step locks. To stay safe, derive from step 0.
+    const firstLocked =
+      stream.steps.length && stream.steps[0].locked
+        ? stream.steps[0].locked
+        : undefined;
+    // Held-from-start cells: only those locked AND already at baseResult. Since
+    // pre-roll holds set baseResult to the held value, locked cells from the
+    // first lock snapshot that equal baseResult are the held ones. Simplest &
+    // correct for the existing lock rules: treat all firstLocked cells as held.
+    const lockedSet = new Set(trueIndices(firstLocked));
+
     setScoreReady(false);
+    setReadyForPick(false);
     setRevealing(true);
     setRolling(true);
-    // Locked cells are not rolling from the very start.
     setReelRolling(Array.from({ length: len }, (_, i) => !lockedSet.has(i)));
     setFlashIndices([]);
     setLandIndices([]);
     setStepLabel(null);
-    // Locked cells are shown frozen from the start of the reveal.
-    setLockedIndices(trueIndices(latestLog.lockedCells));
-    // Seed display: locked cells already at their held value, others arbitrary.
-    setSymbols(latestLog.baseResult.slice());
+    setLockedIndices(trueIndices(firstLocked));
+    setSymbols(stream.baseResult.slice());
 
     rollInterval.current = setInterval(() => {
-      // Only randomize NON-locked cells; held cells keep their value.
       setSymbols(() =>
         randomReels(len).map((s, i) =>
-          lockedSet.has(i) ? latestLog.baseResult[i] : s,
+          lockedSet.has(i) ? stream.baseResult[i] : s,
         ),
       );
     }, 70);
 
-    // --- Phase 2: stop left -> right, landing on baseResult (skip locked cells) ---
+    // Stop reels left -> right, landing on baseResult (skip held cells).
     for (let i = 0; i < len; i++) {
-      if (lockedSet.has(i)) continue; // held cells already show their value
+      if (lockedSet.has(i)) continue;
       at(ROLL_DURATION + i * REEL_STAGGER, () => {
         setSymbols((prev) => {
           const next = prev.slice();
-          next[i] = latestLog.baseResult[i];
+          next[i] = stream.baseResult[i];
           return next;
         });
         setReelRolling((prev) => {
@@ -182,7 +322,6 @@ export function useSpinReveal(
           return next;
         });
         setLandIndices((prev) => [...prev, i]);
-        // clear this cell's land flag shortly after so it can re-pop later
         at(360, () => setLandIndices((prev) => prev.filter((x) => x !== i)));
       });
     }
@@ -192,46 +331,19 @@ export function useSpinReveal(
       setRolling(false);
       if (rollInterval.current) clearInterval(rollInterval.current);
       rollInterval.current = null;
+      setSymbols(stream.baseResult.slice());
     });
 
-    // --- Phase 3: sequential rule steps ---
-    const steps = latestLog.steps;
-    let cursor = allLanded + 220;
-    let prevResult = latestLog.baseResult;
-
-    steps.forEach((step) => {
-      const changed = diffIndices(prevResult, step.result);
-      const resultSnapshot = step.result;
-      const labelSnapshot = step.label;
-      const lockedSnapshot = trueIndices(step.locked);
-      at(cursor, () => {
-        setStepLabel(labelSnapshot);
-        setSymbols(resultSnapshot.slice());
-        setFlashIndices(changed);
-        setLockedIndices(lockedSnapshot);
-        at(STEP_INTERVAL - 80, () => {
-          setFlashIndices([]);
-          setStepLabel(null);
-        });
-      });
-      prevResult = step.result;
-      cursor += STEP_INTERVAL;
-    });
-
-    // --- Phase 4: ensure final result, then reveal score ---
-    at(cursor, () => {
-      setSymbols(latestLog.finalResult.slice());
-      setStepLabel(null);
-      setFlashIndices([]);
-      setLockedIndices(trueIndices(latestLog.lockedCells));
-    });
-    at(cursor + SETTLE_AFTER_FINAL, () => {
-      setRevealing(false);
-      setScoreReady(true);
-    });
+    // Animate all steps known so far, then settle (done → score, else → pause).
+    const stepsStart = allLanded + 220;
+    const endAt = animateSteps(0, stepsStart);
+    settle(endAt);
 
     return clearAll;
-  }, [latestLog, reduced]);
+    // We intentionally depend on id + steps.length + done so the effect re-runs
+    // when a new spin starts OR the same spin gains steps / completes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream?.id, stream?.steps.length, stream?.done, reduced]);
 
   // Cleanup on unmount.
   useEffect(() => {
@@ -250,6 +362,7 @@ export function useSpinReveal(
     stepLabel,
     lockedIndices,
     revealing,
+    readyForPick,
     scoreReady,
   };
 }

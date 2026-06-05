@@ -31,25 +31,32 @@ export default function GameScreen() {
   const currentResult = useGameStore((s) => s.currentResult);
   const pendingSelection = useGameStore((s) => s.pendingSelection);
   const selectCells = useGameStore((s) => s.selectCells);
+  const revealStream = useGameStore((s) => s.revealStream);
 
   const latestLog = spinLogs[spinLogs.length - 1] ?? null;
 
-  const reveal = useSpinReveal(latestLog, currentResult);
+  const reveal = useSpinReveal(revealStream, currentResult);
 
   // Local picking state: indices the player has clicked so far during a
   // 'select' rule. Cleared whenever we leave 'awaiting-selection'.
   const [chosen, setChosen] = useState<number[]>([]);
 
-  const picking = status === "awaiting-selection" && pendingSelection != null;
+  // The picker is shown ONLY once the step animation has caught up to the
+  // pending select rule (reveal.readyForPick). Until then the stage shows the
+  // step animation with no picker yet.
+  const picking =
+    status === "awaiting-selection" &&
+    pendingSelection != null &&
+    reveal.readyForPick;
 
-  // Reset local picks when leaving the selection status (or when a new
-  // pendingSelection arrives, e.g. a second select rule in the same spin).
+  // Reset local picks whenever there is no active selection to pick for, or when
+  // a new pendingSelection arrives (e.g. a second select rule in the same spin).
   useEffect(() => {
-    if (!picking) {
+    if (status !== "awaiting-selection") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setChosen([]);
     }
-  }, [picking, pendingSelection]);
+  }, [status, pendingSelection]);
 
   const selectableArr = pendingSelection
     ? pendingSelection.selectable.flatMap((ok, i) => (ok ? [i] : []))
@@ -125,9 +132,11 @@ export default function GameScreen() {
   const showScore =
     status === "spin-result" && latestLog && reveal.scoreReady;
 
-  // While a spin is actively revealing OR the player must pick cells, the
-  // cinematic SpinStage overlay takes over; the inline reels hide behind it.
-  const stageActive = reveal.revealing || picking;
+  // The cinematic SpinStage is shown for the whole life of a spin — rolling,
+  // step animation, and awaiting input — and hides only once the reveal has
+  // fully finished (done + animation settled → scoreReady). The inline reels
+  // hide behind it.
+  const stageActive = revealStream != null && !reveal.scoreReady;
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-6">
@@ -157,7 +166,7 @@ export default function GameScreen() {
 
       {stageActive && (
         <SpinStage
-          symbols={picking ? currentResult : reveal.symbols}
+          symbols={reveal.symbols}
           reelRolling={reveal.reelRolling}
           flashIndices={reveal.flashIndices}
           landIndices={reveal.landIndices}

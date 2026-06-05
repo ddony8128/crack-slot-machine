@@ -293,6 +293,27 @@ describe('interactive select rules', () => {
     expect(s.currentResult).toHaveLength(5);
     // no log yet.
     expect(s.spinLogs).toHaveLength(0);
+    // a revealStream is opened so the UI can animate the steps so far and pause.
+    expect(s.revealStream).not.toBeNull();
+    expect(s.revealStream?.done).toBe(false);
+    expect(s.revealStream?.baseResult).toHaveLength(5);
+  });
+
+  it('selectCells keeps the SAME revealStream id and marks it done when finished', () => {
+    const store = readyWithRule('select-copy', loopingRng([RNG_CHERRY]));
+    store.getState().spin();
+    const idDuring = store.getState().revealStream?.id;
+    expect(idDuring).toBeDefined();
+    const stepsDuring = store.getState().revealStream?.steps.length ?? 0;
+
+    store.getState().selectCells([3]);
+    const s = store.getState();
+    expect(s.status).toBe('spin-result');
+    // SAME id (same spin, more steps) — not a new reveal.
+    expect(s.revealStream?.id).toBe(idDuring);
+    expect(s.revealStream?.done).toBe(true);
+    // resolving the select rule appended at least one step.
+    expect((s.revealStream?.steps.length ?? 0)).toBeGreaterThanOrEqual(stepsDuring);
   });
 
   it('select-copy: count 1, cell0 not selectable, selectCells resolves to spin-result', () => {
@@ -361,6 +382,9 @@ describe('interactive select rules', () => {
     const s = store.getState();
     expect(s.status).toBe('spin-result');
     expect(s.spinLogs[0].interactive).toBe(false);
+    // non-interactive spins also produce a done revealStream the UI animates once.
+    expect(s.revealStream).not.toBeNull();
+    expect(s.revealStream?.done).toBe(true);
   });
 });
 
@@ -382,5 +406,6 @@ describe('reset', () => {
     expect(after.totalScore).toBe(0);
     expect(after.bag).toEqual([]);
     expect(after.ruleSlots).toEqual([null, null, null, null, null]);
+    expect(after.revealStream).toBeNull();
   });
 });

@@ -57,6 +57,23 @@ export type GameStatus =
   | 'ready-to-spin' | 'spinning' | 'spin-result' | 'finished'
   | 'awaiting-selection';
 
+/**
+ * The incremental reveal feed the UI animates from. Unlike a completed SpinLog,
+ * this is updated DURING resolution: `steps` grows as auto rules run and as the
+ * player resolves each `select` rule, so the reveal can play once and pause at
+ * each selection without ever replaying.
+ *
+ * `id` increments per spin so the reveal hook can distinguish a brand-new spin
+ * (new id → roll from scratch) from "same spin, more steps arrived" (same id →
+ * continue animating the appended steps with no re-roll).
+ */
+export type RevealStream = {
+  id: number;
+  baseResult: SymbolType[];
+  steps: SpinLogStep[];
+  done: boolean;
+};
+
 export type GameState = {
   nickname: string;
   spinIndex: number;        // 0-based, 0..6; == maxSpins when finished
@@ -73,6 +90,9 @@ export type GameState = {
   spinLogs: SpinLog[];
   status: GameStatus;
   pendingSelection: PendingSelection | null; // set while status === 'awaiting-selection'
+  // Incremental reveal feed for the UI; null when idle. Updated as the cascade
+  // progresses (spin → selectCells → finalize) so the reveal plays once.
+  revealStream: RevealStream | null;
 };
 
 export type RankingRecord = {

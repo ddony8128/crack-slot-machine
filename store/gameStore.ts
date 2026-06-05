@@ -85,6 +85,7 @@ function freshState(nickname: string): GameState {
     spinLogs: [],
     status: 'start',
     pendingSelection: null,
+    revealStream: null,
   };
 }
 
@@ -99,6 +100,12 @@ function buildInitializer(rng: Rng): Initializer {
   // matters between spin() and selectCells()/finalize().
   let activeFrame: CascadeFrame | null = null;
   let activeCtx: ApplyCtx | null = null;
+
+  // Monotonic reveal-stream id. Incremented at the START of each spin() so the
+  // reveal hook can tell a brand-new spin (new id → roll) apart from the same
+  // spin gaining more steps after a selection (same id → continue, no replay).
+  let revealId = 0;
+  const nextId = () => (revealId += 1);
 
   return (set, get) => {
     /**
@@ -140,6 +147,21 @@ function buildInitializer(rng: Rng): Initializer {
       activeFrame = null;
       activeCtx = null;
 
+      // Keep the SAME-id revealStream (so the hook continues, never replays) but
+      // mark it done with the final steps. Do NOT clear it here — the reveal hook
+      // still needs it to finish animating; it's cleared on the next spin (new id)
+      // or in reset().
+      const prevStream = state.revealStream;
+      const revealStream =
+        prevStream != null
+          ? { ...prevStream, steps: [...frame.steps], done: true }
+          : {
+              id: revealId,
+              baseResult: frame.baseResult,
+              steps: [...frame.steps],
+              done: true,
+            };
+
       set({
         totalScore: state.totalScore + roundScore,
         spinLogs: [...state.spinLogs, log],
@@ -149,6 +171,7 @@ function buildInitializer(rng: Rng): Initializer {
         extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
         status: 'spin-result',
         pendingSelection: null,
+        revealStream,
       });
     };
 
@@ -286,12 +309,23 @@ function buildInitializer(rng: Rng): Initializer {
       activeFrame = frame;
       activeCtx = ctx;
 
+      // Open a fresh reveal stream for this spin (new id → the hook rolls anew).
+      const id = nextId();
+      const revealStream = {
+        id,
+        baseResult: frame.baseResult,
+        steps: [...frame.steps],
+        done: frame.done,
+      };
+
       if (frame.pending) {
         // Cascade reached a `select` rule that needs player input. PAUSE: show
-        // the partial board and wait for selectCells().
+        // the partial board and wait for selectCells(). The reveal animates the
+        // steps so far and pauses for the picker.
         const p = frame.pending;
         set({
           currentResult: [...frame.working],
+          revealStream,
           pendingSelection: {
             kind: p.kind,
             ruleName: p.ruleName,
@@ -303,6 +337,7 @@ function buildInitializer(rng: Rng): Initializer {
         return;
       }
 
+      set({ currentResult: [...frame.working], revealStream });
       finalize(frame);
     },
 
@@ -328,11 +363,25 @@ function buildInitializer(rng: Rng): Initializer {
       const frame = resolveSelection(activeFrame, ruleSlots, activeCtx, indices);
       activeFrame = frame;
 
+      // SAME-id revealStream, now with MORE steps: the hook continues animating
+      // the appended steps from where it left off (no re-roll, no replay).
+      const prevStream = state.revealStream;
+      const revealStream =
+        prevStream != null
+          ? { ...prevStream, steps: [...frame.steps], done: frame.done }
+          : {
+              id: revealId,
+              baseResult: frame.baseResult,
+              steps: [...frame.steps],
+              done: frame.done,
+            };
+
       if (frame.pending) {
         // Another select rule paused: keep awaiting input on the new board.
         const p = frame.pending;
         set({
           currentResult: [...frame.working],
+          revealStream,
           pendingSelection: {
             kind: p.kind,
             ruleName: p.ruleName,
@@ -344,6 +393,7 @@ function buildInitializer(rng: Rng): Initializer {
         return;
       }
 
+      set({ currentResult: [...frame.working], revealStream });
       finalize(frame);
     },
 
