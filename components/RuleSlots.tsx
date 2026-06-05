@@ -167,7 +167,7 @@ function BagArea({
       )}
       {bag.length === 0 ? (
         <p className="py-4 text-center text-sm text-zinc-600">
-          가방이 비어 있습니다 (비활성 규칙 보관)
+          가방이 비어 있습니다
         </p>
       ) : (
         <div
@@ -271,11 +271,11 @@ export default function RuleSlots() {
       onDragCancel={() => setActiveDrag(null)}
     >
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
             Rule Slots
           </h2>
-          <span className="flex items-center gap-1 rounded-full bg-zinc-800/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-amber-300 ring-1 ring-zinc-700">
+          <span className="flex items-center gap-1 rounded-full bg-zinc-800/80 px-3 py-1 text-sm font-bold tracking-wide text-amber-300 ring-1 ring-zinc-700">
             <span aria-hidden>▼</span> 위 → 아래 순서로 적용
           </span>
         </div>
@@ -318,15 +318,6 @@ export default function RuleSlots() {
             <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
               Bag
             </h3>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
-                emphasizeBag
-                  ? "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/50"
-                  : "text-zinc-600"
-              }`}
-            >
-              비활성
-            </span>
           </div>
           <BagArea
             bag={bag}

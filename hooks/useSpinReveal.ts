@@ -10,7 +10,7 @@ const REEL_SYMBOLS = Object.keys(SYMBOL_EMOJI) as SymbolType[];
 // Timing (ms)
 const ROLL_DURATION = 800; // total roll before reels begin to stop
 const REEL_STAGGER = 110; // extra delay per reel as they stop left->right
-const STEP_INTERVAL = 1000; // gap between each rule-step reveal (slower = clearer)
+const STEP_INTERVAL = 1500; // gap between each rule-step reveal (slower = clearer)
 const SETTLE_AFTER_FINAL = 360; // pause after final result before showing score
 
 export type SpinRevealState = {
