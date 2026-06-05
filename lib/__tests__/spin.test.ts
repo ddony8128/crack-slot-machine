@@ -5,7 +5,7 @@ import { RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS, FRUITS } from '@/data/symbols';
 import { rollSymbol, type Rng } from '@/lib/rng';
 
-const NUMBER_SET = new Set<SymbolType>(['seven', 'zero']);
+const NUMBER_SET = new Set<SymbolType>(['seven', 'zero', 'four']);
 
 function queuedRng(values: number[]): Rng {
   let i = 0;
@@ -130,9 +130,9 @@ describe('rollBoard — number-spin pre-roll restriction', () => {
     expect(board).toEqual(['cherry', 'cherry', 'cherry', 'cherry', 'cherry']);
   });
 
-  it('cells that started as a number land on 0 or 7 (never 4); others roll normally', () => {
+  it('cells that started as a number land on a number (7/0/4); others roll normally', () => {
     const prev: SymbolType[] = ['seven', 'cherry', 'zero', 'lemon', 'four'];
-    // firstBand on restricted {seven,zero} -> 'seven'; on full weights -> 'cherry'.
+    // firstBand on restricted {seven,zero,four} -> 'seven'; on full weights -> 'cherry'.
     const board = rollBoard(
       [RULES_BY_ID['number-spin']],
       BASE_WEIGHTS,
@@ -140,13 +140,10 @@ describe('rollBoard — number-spin pre-roll restriction', () => {
       firstBand,
       5,
     );
-    // number-prev cells (0,2,4) restricted to {seven, zero} -> seven, never four
+    // number-prev cells (0,2,4) restricted to numbers {seven, zero, four}
     expect(NUMBER_SET.has(board[0])).toBe(true);
     expect(NUMBER_SET.has(board[2])).toBe(true);
     expect(NUMBER_SET.has(board[4])).toBe(true);
-    expect(board[0]).not.toBe('four');
-    expect(board[2]).not.toBe('four');
-    expect(board[4]).not.toBe('four');
     expect(board[0]).toBe('seven');
     // non-number-prev cells (1,3) roll normally -> cherry (not forced to a number)
     expect(board[1]).toBe('cherry');

@@ -407,3 +407,28 @@ describe('rule interaction (sequential, lower-wins)', () => {
     expect(finalResult[4]).toBe('seven');
   });
 });
+
+describe('regression — rules no longer no-op after another rule touched a cell', () => {
+  it("RED DYE converts a cell that FRUIT FISH just rerolled (user's report)", () => {
+    // base: cell0 sapphire is the leftmost non-fruit -> fruit-fish rerolls it to a
+    // fruit (we feed lemon). Then RED DYE must convert ALL lemons INCLUDING cell0.
+    const base: SymbolType[] = ['sapphire', 'lemon', 'ruby', 'grape', 'lemon'];
+    const rules: Rule[] = [RULES_BY_ID['fruit-fish'], RULES_BY_ID['red-dye']];
+    const ctx = { previousResult: PREV, weights: BASE_WEIGHTS, rng: queuedRng([rngPoint('lemon')]) };
+    const { finalResult } = applyRules(base, rules, ctx);
+    // cell0 lemon (from fruit-fish) -> cherry; cells 1 and 4 lemon -> cherry too.
+    expect(finalResult[0]).toBe('cherry');
+    expect(finalResult[1]).toBe('cherry');
+    expect(finalResult[4]).toBe('cherry');
+  });
+
+  it('CENTER ECHO overwrites a cell a prior rule changed (cell3 = cell1)', () => {
+    // safe-convert turns the 4s -> ruby (claims nothing now); center-echo then
+    // sets cell3 = cell1 regardless of earlier writes.
+    const base: SymbolType[] = ['grape', 'grape', 'four', 'four', 'cherry'];
+    const rules: Rule[] = [RULES_BY_ID['safe-convert'], RULES_BY_ID['center-echo']];
+    const { finalResult } = applyRules(base, rules, ctxNoRng);
+    // safe-convert: cells 2,3 four->ruby; center-echo: cell3 = cell1 = grape.
+    expect(finalResult[3]).toBe('grape');
+  });
+});

@@ -28,7 +28,7 @@ export const RULES: Rule[] = [
     name: 'NUMBER SPIN',
     type: 'weight',
     build: '7',
-    description: '시작할 때 숫자였던 칸은 0 또는 7이 된다.',
+    description: '시작할 때 숫자였던 칸은 다시 숫자가 된다.',
   },
 
   // ---- fruit ----
