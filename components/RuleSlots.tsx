@@ -231,8 +231,13 @@ export default function RuleSlots() {
   const reduced = useReducedMotion();
 
   const placing = status === "placing";
-  // Free arranging via DnD allowed during ready-to-spin AND placing.
-  const arranging = status === "ready-to-spin" || status === "placing";
+  // Free arranging via DnD allowed in every non-spinning state (everything
+  // except the active spin reveal / awaiting-selection / start / finished).
+  const arranging =
+    status === "choosing-rule" ||
+    status === "placing" ||
+    status === "ready-to-spin" ||
+    status === "spin-result";
   // Emphasize bag-is-inactive while the player is choosing/placing/arranging.
   const emphasizeBag =
     status === "placing" ||
@@ -271,12 +276,15 @@ export default function RuleSlots() {
       onDragCancel={() => setActiveDrag(null)}
     >
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
             Rule Slots
           </h2>
           <span className="flex items-center gap-1 rounded-full bg-zinc-800/80 px-3 py-1 text-sm font-bold tracking-wide text-amber-300 ring-1 ring-zinc-700">
             <span aria-hidden>▼</span> 위 → 아래 순서로 적용
+          </span>
+          <span className="text-xs text-zinc-500">
+            드래그해서 순서를 바꿀 수 있어요
           </span>
         </div>
 

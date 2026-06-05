@@ -95,11 +95,19 @@ export default function GameScreen() {
   // Track the already-celebrated spin by log OBJECT IDENTITY (spinIndex repeats
   // after an extra rule pick, so it can't identify a unique spin).
   const celebratedLogRef = useRef<SpinLog | null>(null);
+  // "Armed" only after we've observed scoreReady go FALSE (i.e. a new reveal has
+  // started). This prevents firing on the stale scoreReady=true left over from
+  // the previous spin the instant the new log appears (which spoiled the result).
+  const armedRef = useRef(false);
+  useEffect(() => {
+    if (!reveal.scoreReady) armedRef.current = true;
+  }, [reveal.scoreReady]);
 
   // Trigger effect: decide whether the latest resolved spin warrants a celebration.
   useEffect(() => {
-    if (!latestLog || !reveal.scoreReady) return;
+    if (!latestLog || !reveal.scoreReady || !armedRef.current) return;
     if (latestLog === celebratedLogRef.current) return;
+    armedRef.current = false;
     celebratedLogRef.current = latestLog;
 
     let next: Celebration = null;

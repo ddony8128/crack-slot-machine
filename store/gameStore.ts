@@ -243,7 +243,14 @@ function buildInitializer(rng: Rng): Initializer {
 
     moveRule: (from: RuleLocation, to: RuleLocation) => {
       const state = get();
-      if (state.status !== 'ready-to-spin' && state.status !== 'placing') return;
+      // Allow rearranging in every non-spinning state (the spin reveal /
+      // awaiting-selection cover the board with the stage overlay anyway).
+      const canArrange =
+        state.status === 'choosing-rule' ||
+        state.status === 'placing' ||
+        state.status === 'ready-to-spin' ||
+        state.status === 'spin-result';
+      if (!canArrange) return;
 
       const slots = state.ruleSlots.slice();
       const bag = state.bag.slice();
