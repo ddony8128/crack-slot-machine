@@ -206,6 +206,9 @@ export default function ReferenceModal({
               <ScoreRow label="풀하우스" value={`+${HAND_FULL_HOUSE}`} />
               <ScoreRow label="포카드" value={`+${HAND_FOUR_KIND}`} />
               <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
+              <li className="pt-1 text-[11px] leading-snug text-zinc-500">
+                ※ 족보는 과일과 보석에 대해서만 적용됩니다 (숫자 7·0·4 제외).
+              </li>
             </ScoreCard>
 
             <ScoreCard title="색·종류 보너스">
@@ -225,10 +228,13 @@ export default function ReferenceModal({
               />
             </ScoreCard>
 
-            <ScoreCard title="특수 (다음 스핀)">
+            <ScoreCard title="특수 족보">
               <ScoreRow label="0이 3개 이상" value="규칙 1장 추가" />
               <ScoreRow label="4가 4개" value={`점수 ×${FOURS_4_MULT}`} />
               <ScoreRow label="4가 5개" value={`점수 ×${FOURS_5_MULT}`} />
+              <li className="pt-1 text-[11px] leading-snug text-zinc-500">
+                ※ 특수 족보의 효과는 이번 스핀이 아니라 다음 스핀에 적용됩니다.
+              </li>
             </ScoreCard>
           </section>
         </div>

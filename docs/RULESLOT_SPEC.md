@@ -79,7 +79,7 @@ Three phases:
   `rollBoard(slotRules, weights,
   previousResult, rng)` (5 cells). `rollBoard` honors the `number-spin` PRE-ROLL roll-restriction:
   if `number-spin` is active, every cell `i` whose `previousResult[i]` was a number (seven/zero/four)
-  is rolled restricted to {seven, zero, four} (via `rollSymbolFrom`) so it lands on a number; all
+  is rolled restricted to {seven, zero} (via `rollSymbolFrom`) so it lands on 0 or 7 (never 4); all
   other cells roll normally with `rollSymbol`. With `number-spin` absent, `rollBoard` ≡ `baseSpin`.
   `baseSpin` is retained for other callers/tests. **Exception by id:**
   `four-shield` is a `reroll` rule but ALSO multiplies the `zero` weight by **×2** in this phase
@@ -138,8 +138,8 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `zero-to-seven` (transform): ALL zero → seven.
 - `diamond-to-lemon` (transform): ALL diamond → lemon.
 - `grape-to-sapphire` (transform): ALL grape → sapphire.
-- `red-dye` (transform): ALL ruby → cherry.
-- `blue-dye` (transform): ALL diamond → sapphire.
+- `red-dye` (transform): ALL non-claimed lemon AND diamond → cherry (ruby is untouched).
+- `blue-dye` (transform): ALL non-claimed lemon AND diamond → sapphire.
 - `center-lock` (lock): PRE-ROLL HOLD — cell[2] held at previousResult[2]; locked[2]=true. Resolved
   before the spin; the cell does not spin and is absolute (cannot be changed by any other rule).
 - `last-lock` (lock): PRE-ROLL HOLD — cell[4] held at previousResult[4]; locked[4]=true. Same as above.
@@ -170,7 +170,7 @@ All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, n
 | seven-fever | SEVEN FEVER | 7 | weight | seven weight ×3 |
 | seven-double | SEVEN DOUBLE | 7 | score | 7-based score ×2 this spin |
 | zero-to-seven | ZERO ASCEND | 7 | transform | all 0 → 7 |
-| number-spin | NUMBER SPIN | 7 | weight | PRE-ROLL: cells that started as a number land on a number (7/0/4) |
+| number-spin | NUMBER SPIN | 7 | weight | PRE-ROLL: cells that started as a number land on 0 or 7 (never 4) |
 | fruit-surge | FRUIT SURGE | fruit | weight | fruit weight ×3 |
 | diamond-to-lemon | DIAMOND CUT | fruit | transform | all 💎 → 🍋 |
 | fruit-fish | FRUIT FISH | fruit | reroll | leftmost non-fruit cell reroll until fruit (cap 30) |
@@ -178,8 +178,8 @@ All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, n
 | grape-to-sapphire | GRAPE FREEZE | gem | transform | all 🍇 → 🔵 |
 | gem-fish | GEM FISH | gem | reroll | leftmost non-gem cell reroll until gem (cap 30) |
 | first-cherry | FIRST CHERRY | color | transform | cell1 → 🍒 |
-| red-dye | RED DYE | color | transform | all 🔴 → 🍒 |
-| blue-dye | BLUE DYE | color | transform | all 💎 → 🔵 |
+| red-dye | RED DYE | color | transform | all 🍋 and 💎 → 🍒 |
+| blue-dye | BLUE DYE | color | transform | all 🍋 and 💎 → 🔵 |
 | center-lock | CENTER LOCK | order | lock | cell3 keeps previous spin value |
 | last-lock | LAST LOCK | order | lock | cell5 keeps previous value |
 | left-pair | LEFT PAIR | order | transform | cell2 = cell1 |

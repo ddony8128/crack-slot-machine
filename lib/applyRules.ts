@@ -217,12 +217,14 @@ function applyOne(
       break;
     case 'red-dye':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'ruby' && !claimed[i]) write(working, claimed, i, 'cherry');
+        if ((working[i] === 'lemon' || working[i] === 'diamond') && !claimed[i])
+          write(working, claimed, i, 'cherry');
       }
       break;
     case 'blue-dye':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'diamond' && !claimed[i]) write(working, claimed, i, 'sapphire');
+        if ((working[i] === 'lemon' || working[i] === 'diamond') && !claimed[i])
+          write(working, claimed, i, 'sapphire');
       }
       break;
 

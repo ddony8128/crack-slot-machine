@@ -3,7 +3,7 @@ import { FRUITS, GEMS } from '@/data/symbols';
 import { rollSymbol, rollSymbolFrom, type Rng } from '@/lib/rng';
 import { expandRules } from '@/lib/expandRules';
 
-const NUMBERS: SymbolType[] = ['seven', 'zero', 'four'];
+const NUMBER_SPIN_POOL: SymbolType[] = ['seven', 'zero'];
 
 export function computeWeights(
   rules: (Rule | null)[],
@@ -62,7 +62,7 @@ export function baseSpin(
  *
  * If `number-spin` is active (any slot rule id === 'number-spin'), every cell
  * whose `previousResult` value was a number (seven/zero/four) is rolled
- * restricted to {seven, zero, four} so it lands on a number. All other cells
+ * restricted to {seven, zero} so it lands on 0 or 7 (never 4). All other cells
  * roll normally. With `number-spin` absent this is equivalent to `baseSpin`.
  */
 export function rollBoard(
@@ -80,7 +80,7 @@ export function rollBoard(
       numberSpin &&
       (prev === 'seven' || prev === 'zero' || prev === 'four')
     ) {
-      result.push(rollSymbolFrom(NUMBERS, weights, rng));
+      result.push(rollSymbolFrom(NUMBER_SPIN_POOL, weights, rng));
     } else {
       result.push(rollSymbol(weights, rng));
     }

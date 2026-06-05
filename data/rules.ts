@@ -28,7 +28,7 @@ export const RULES: Rule[] = [
     name: 'NUMBER SPIN',
     type: 'weight',
     build: '7',
-    description: '시작할 때 숫자였던 칸은 릴을 돌려도 숫자가 된다.',
+    description: '시작할 때 숫자였던 칸은 0 또는 7이 된다.',
   },
 
   // ---- fruit ----
@@ -90,14 +90,14 @@ export const RULES: Rule[] = [
     name: 'RED DYE',
     type: 'transform',
     build: 'color',
-    description: '모든 루비가 체리로 바뀐다.',
+    description: '레몬과 다이아몬드가 체리로 바뀐다.',
   },
   {
     id: 'blue-dye',
     name: 'BLUE DYE',
     type: 'transform',
     build: 'color',
-    description: '모든 다이아몬드가 사파이어로 바뀐다.',
+    description: '레몬과 다이아몬드가 사파이어로 바뀐다.',
   },
 
   // ---- order ----

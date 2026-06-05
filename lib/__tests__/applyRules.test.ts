@@ -71,16 +71,18 @@ describe('applyRules — transforms', () => {
     expect(finalResult).toEqual(['sapphire', 'cherry', 'sapphire', 'zero', 'four']);
   });
 
-  it('red-dye: all 🔴 => 🍒', () => {
-    const base: SymbolType[] = ['ruby', 'cherry', 'ruby', 'zero', 'four'];
+  it('red-dye: all 🍋 and 💎 => 🍒 (ruby stays ruby)', () => {
+    const base: SymbolType[] = ['ruby', 'lemon', 'diamond', 'zero', 'four'];
     const { finalResult } = applyRules(base, [RULES_BY_ID['red-dye']], noCtx);
-    expect(finalResult).toEqual(['cherry', 'cherry', 'cherry', 'zero', 'four']);
+    // lemon & diamond -> cherry; ruby untouched; numbers untouched
+    expect(finalResult).toEqual(['ruby', 'cherry', 'cherry', 'zero', 'four']);
   });
 
-  it('blue-dye: all 💎 => 🔵', () => {
-    const base: SymbolType[] = ['diamond', 'cherry', 'diamond', 'zero', 'four'];
+  it('blue-dye: all 🍋 and 💎 => 🔵 (ruby and others unchanged)', () => {
+    const base: SymbolType[] = ['ruby', 'lemon', 'diamond', 'cherry', 'four'];
     const { finalResult } = applyRules(base, [RULES_BY_ID['blue-dye']], noCtx);
-    expect(finalResult).toEqual(['sapphire', 'cherry', 'sapphire', 'zero', 'four']);
+    // lemon & diamond -> sapphire; ruby/cherry/numbers untouched
+    expect(finalResult).toEqual(['ruby', 'sapphire', 'sapphire', 'cherry', 'four']);
   });
 
   it('safe-convert: ALL 4 => 🔴 (ruby)', () => {
