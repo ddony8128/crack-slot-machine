@@ -21,7 +21,8 @@ const REROLL_CAP = 30;
  *
  * 1. PRE-ROLL HOLD pass (before the cascade): scan ALL slot rules and for each
  *    `lock` rule freeze its cell to `previousResult` (center-lock -> cell2,
- *    last-lock -> cell4), mark it claimed + locked. A held cell never spins and
+ *    last-lock -> cell4, fruit-freeze -> leftmost two FRUIT cells of
+ *    previousResult), mark it claimed + locked. A held cell never spins and
  *    is ABSOLUTE — order-independent, no reroll/transform can ever touch it
  *    regardless of slot position. Locks push no steps.
  * 2. `baseResult` is captured right after the hold pass: held cells = previous
@@ -60,6 +61,18 @@ export function applyRules(
       working[4] = ctx.previousResult[4];
       claimed[4] = true;
       locked[4] = true;
+    } else if (rule.id === 'fruit-freeze') {
+      // Hold the leftmost two cells of previousResult whose symbol is a FRUIT.
+      // If fewer than two fruits exist, hold however many there are (0/1/2).
+      let held = 0;
+      for (let i = 0; i < ctx.previousResult.length && held < 2; i++) {
+        if (FRUIT_SET.has(ctx.previousResult[i])) {
+          working[i] = ctx.previousResult[i];
+          claimed[i] = true;
+          locked[i] = true;
+          held += 1;
+        }
+      }
     }
   }
 
@@ -203,16 +216,6 @@ function applyOne(
     case 'zero-to-seven':
       for (let i = 0; i < working.length; i++) {
         if (working[i] === 'zero' && !claimed[i]) write(working, claimed, i, 'seven');
-      }
-      break;
-    case 'diamond-to-lemon':
-      for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'diamond' && !claimed[i]) write(working, claimed, i, 'lemon');
-      }
-      break;
-    case 'grape-to-sapphire':
-      for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'grape' && !claimed[i]) write(working, claimed, i, 'sapphire');
       }
       break;
     case 'red-dye':

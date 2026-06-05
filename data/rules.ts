@@ -40,11 +40,11 @@ export const RULES: Rule[] = [
     description: '과일이 나올 확률이 세 배가 된다.',
   },
   {
-    id: 'diamond-to-lemon',
+    id: 'diamond-cut',
     name: 'DIAMOND CUT',
-    type: 'transform',
+    type: 'weight',
     build: 'fruit',
-    description: '모든 다이아몬드가 레몬으로 바뀐다.',
+    description: '다이아몬드와 사파이어가 나오지 않는다.',
   },
   {
     id: 'fruit-fish',
@@ -63,11 +63,11 @@ export const RULES: Rule[] = [
     description: '보석이 나올 확률이 세 배가 된다.',
   },
   {
-    id: 'grape-to-sapphire',
-    name: 'GRAPE FREEZE',
-    type: 'transform',
-    build: 'gem',
-    description: '모든 포도가 사파이어로 바뀐다.',
+    id: 'fruit-freeze',
+    name: 'FRUIT FREEZE',
+    type: 'lock',
+    build: 'order',
+    description: '이전 결과에서 가장 왼쪽 과일 두 개가 유지된다.',
   },
   {
     id: 'gem-fish',

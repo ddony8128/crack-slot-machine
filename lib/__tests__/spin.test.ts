@@ -43,6 +43,19 @@ describe('computeWeights', () => {
     expect(w.zero).toBe(0);
   });
 
+  it('diamond-cut sets diamond and sapphire weights to 0 (other weights untouched)', () => {
+    const w = computeWeights([RULES_BY_ID['diamond-cut']], BASE_WEIGHTS);
+    expect(w.diamond).toBe(0);
+    expect(w.sapphire).toBe(0);
+    // fruit and other symbols untouched
+    for (const f of FRUITS) {
+      expect(w[f]).toBe(BASE_WEIGHTS[f]);
+    }
+    expect(w.ruby).toBe(BASE_WEIGHTS.ruby);
+    expect(w.seven).toBe(BASE_WEIGHTS.seven);
+    expect(w.zero).toBe(BASE_WEIGHTS.zero);
+  });
+
   it('four-shield multiplies the zero weight by 2 (even though it is a reroll rule)', () => {
     const w = computeWeights([RULES_BY_ID['four-shield']], BASE_WEIGHTS);
     expect(w.zero).toBe(BASE_WEIGHTS.zero * 2);

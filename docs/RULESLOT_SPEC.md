@@ -75,7 +75,8 @@ Evaluated after the round resolves:
 Three phases:
 - **Weight phase (pre-roll)**: `computeWeights(slotRules, BASE_WEIGHTS)` multiplies weights for
   every active `weight`-type rule (in `computeWeights`: `seven-fever` seven ×3, `fruit-surge` each
-  fruit ×3, `gem-surge` each gem ×3, `no-zero` zero → 0), then the board is rolled by
+  fruit ×3, `gem-surge` each gem ×3, `no-zero` zero → 0, `diamond-cut` diamond → 0 AND sapphire → 0),
+  then the board is rolled by
   `rollBoard(slotRules, weights,
   previousResult, rng)` (5 cells). `rollBoard` honors the `number-spin` PRE-ROLL roll-restriction:
   if `number-spin` is active, every cell `i` whose `previousResult[i]` was a number (seven/zero/four)
@@ -85,11 +86,15 @@ Three phases:
   `four-shield` is a `reroll` rule but ALSO multiplies the `zero` weight by **×2** in this phase
   (checked by id, like the weight rules; stacks multiplicatively with other weight rules).
 - **PRE-ROLL HOLD phase (locks)**: BEFORE the cascade, scan ALL slot rules. For each `lock` rule
-  freeze its cell to the PREVIOUS spin value: `center-lock` → cell[2] = previousResult[2],
-  `last-lock` → cell[4] = previousResult[4]. A held cell is set `claimed=true`, `locked=true`. A held
+  freeze its cell(s) to the PREVIOUS spin value: `center-lock` → cell[2] = previousResult[2],
+  `last-lock` → cell[4] = previousResult[4], `fruit-freeze` → the leftmost TWO indices of
+  `previousResult` whose symbol is a FRUIT (cherry/lemon/grape) are each held to that previous value
+  (if fewer than two fruits exist, hold however many there are: 0, 1, or 2). A held cell is set
+  `claimed=true`, `locked=true`. A held
   cell **does not spin** and is **ABSOLUTE**: it is order-independent — no later reroll/transform/meta
   can ever change it regardless of slot position, and lock order among themselves is irrelevant
-  (different cells). Locks push **no** `SpinLogStep`s.
+  (different cells). Locks push **no** `SpinLogStep`s. The `lock`-type rules are
+  `center-lock`, `last-lock`, and `fruit-freeze`.
   After this phase, `baseResult = [...working]` is captured: this is the effective LANDING board with
   held cells = previous value and all other cells = the raw roll. `applyRules` returns it.
 - **Cascade phase (post-roll)**: iterate slot rules **top → bottom** (index 0→4). For each active rule
@@ -136,13 +141,17 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `safe-convert` (transform): ALL non-claimed four → ruby (loops over every cell, respecting
   `claimed`; no-op if none).
 - `zero-to-seven` (transform): ALL zero → seven.
-- `diamond-to-lemon` (transform): ALL diamond → lemon.
-- `grape-to-sapphire` (transform): ALL grape → sapphire.
 - `red-dye` (transform): ALL non-claimed lemon AND diamond → cherry (ruby is untouched).
 - `blue-dye` (transform): ALL non-claimed lemon AND diamond → sapphire.
 - `center-lock` (lock): PRE-ROLL HOLD — cell[2] held at previousResult[2]; locked[2]=true. Resolved
   before the spin; the cell does not spin and is absolute (cannot be changed by any other rule).
 - `last-lock` (lock): PRE-ROLL HOLD — cell[4] held at previousResult[4]; locked[4]=true. Same as above.
+- `fruit-freeze` (lock): PRE-ROLL HOLD — the leftmost two indices of previousResult whose symbol is a
+  FRUIT (cherry/lemon/grape) are held to those previous values; locked=true on each (0/1/2 cells
+  depending on how many fruits the previous result had). Resolved before the spin; held cells do not
+  spin and are absolute.
+- `diamond-cut` (weight): PRE-ROLL weight rule — sets diamond weight = 0 AND sapphire weight = 0, so
+  neither symbol can appear this spin. No post-roll cascade effect.
 - `copy-above` (meta): duplicates the EFFECT of the rule directly above (`slotRules[i-1]`), for
   ALL rule types:
   - post-roll cascade types (reroll/transform): the effect is re-applied once on the board in
@@ -172,16 +181,16 @@ All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, n
 | zero-to-seven | ZERO ASCEND | 7 | transform | all 0 → 7 |
 | number-spin | NUMBER SPIN | 7 | weight | PRE-ROLL: cells that started as a number land on 0 or 7 (never 4) |
 | fruit-surge | FRUIT SURGE | fruit | weight | fruit weight ×3 |
-| diamond-to-lemon | DIAMOND CUT | fruit | transform | all 💎 → 🍋 |
+| diamond-cut | DIAMOND CUT | fruit | weight | diamond weight → 0 AND sapphire weight → 0 (neither appears) |
 | fruit-fish | FRUIT FISH | fruit | reroll | leftmost non-fruit cell reroll until fruit (cap 30) |
 | gem-surge | GEM SURGE | gem | weight | gem weight ×3 |
-| grape-to-sapphire | GRAPE FREEZE | gem | transform | all 🍇 → 🔵 |
 | gem-fish | GEM FISH | gem | reroll | leftmost non-gem cell reroll until gem (cap 30) |
 | first-cherry | FIRST CHERRY | color | transform | cell1 → 🍒 |
 | red-dye | RED DYE | color | transform | all 🍋 and 💎 → 🍒 |
 | blue-dye | BLUE DYE | color | transform | all 🍋 and 💎 → 🔵 |
 | center-lock | CENTER LOCK | order | lock | cell3 keeps previous spin value |
 | last-lock | LAST LOCK | order | lock | cell5 keeps previous value |
+| fruit-freeze | FRUIT FREEZE | order | lock | leftmost two fruit cells of the previous result are held |
 | left-pair | LEFT PAIR | order | transform | cell2 = cell1 |
 | center-echo | CENTER ECHO | order | transform | cell4 = cell2 |
 | third-mirror | THIRD MIRROR | order | transform | cell3 = cell5 |

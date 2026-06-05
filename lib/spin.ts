@@ -37,6 +37,10 @@ export function computeWeights(
       case 'no-zero':
         weights.zero = 0;
         break;
+      case 'diamond-cut':
+        weights.diamond = 0;
+        weights.sapphire = 0;
+        break;
       default:
         break;
     }

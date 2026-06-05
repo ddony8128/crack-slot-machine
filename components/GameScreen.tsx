@@ -46,9 +46,10 @@ export default function GameScreen() {
     celebratedLogRef.current = latestLog;
 
     let next: Celebration = null;
-    // True jackpot only: five 7s (sevenScore 777) or a five-of-a-kind hand (700).
-    const jackpot =
-      latestLog.sevenScore >= 777 || latestLog.handScore >= 700;
+    // True jackpot only: five actual 7s, or a five-of-a-kind hand (700).
+    // Use the seven COUNT (not sevenScore) so SEVEN DOUBLE on 4 sevens (→1000) doesn't false-trigger.
+    const sevenCount = latestLog.finalResult.filter((s) => s === "seven").length;
+    const jackpot = sevenCount === 5 || latestLog.handScore >= 700;
     if (jackpot) next = { kind: "jackpot" };
     else if (latestLog.multiplierSet > 1)
       next = { kind: "multiplier", value: latestLog.multiplierSet };

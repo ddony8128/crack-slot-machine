@@ -233,7 +233,7 @@ export default function ReferenceModal({
               <ScoreRow label="4가 4개" value={`점수 ×${FOURS_4_MULT}`} />
               <ScoreRow label="4가 5개" value={`점수 ×${FOURS_5_MULT}`} />
               <li className="pt-1 text-[11px] leading-snug text-zinc-500">
-                ※ 특수 족보의 효과는 이번 스핀이 아니라 다음 스핀에 적용됩니다.
+                ※ 특수 족보의 효과는 다음 스핀에만 적용됩니다.
               </li>
             </ScoreCard>
           </section>

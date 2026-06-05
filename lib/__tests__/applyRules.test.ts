@@ -59,18 +59,6 @@ describe('applyRules — transforms', () => {
     expect(finalResult).toEqual(['seven', 'cherry', 'seven', 'four', 'seven']);
   });
 
-  it('diamond-to-lemon: all 💎 => 🍋', () => {
-    const base: SymbolType[] = ['diamond', 'diamond', 'cherry', 'diamond', 'zero'];
-    const { finalResult } = applyRules(base, [RULES_BY_ID['diamond-to-lemon']], noCtx);
-    expect(finalResult).toEqual(['lemon', 'lemon', 'cherry', 'lemon', 'zero']);
-  });
-
-  it('grape-to-sapphire: all 🍇 => 🔵', () => {
-    const base: SymbolType[] = ['grape', 'cherry', 'grape', 'zero', 'four'];
-    const { finalResult } = applyRules(base, [RULES_BY_ID['grape-to-sapphire']], noCtx);
-    expect(finalResult).toEqual(['sapphire', 'cherry', 'sapphire', 'zero', 'four']);
-  });
-
   it('red-dye: all 🍋 and 💎 => 🍒 (ruby stays ruby)', () => {
     const base: SymbolType[] = ['ruby', 'lemon', 'diamond', 'zero', 'four'];
     const { finalResult } = applyRules(base, [RULES_BY_ID['red-dye']], noCtx);
@@ -289,6 +277,47 @@ describe('applyRules — pre-roll HOLD (locks are absolute, order-independent)',
     });
     expect(finalResult[4]).toBe('ruby'); // held at previous value, NOT rerolled
     expect(locked[4]).toBe(true); // lock took effect regardless of position
+  });
+
+  it('fruit-freeze holds the leftmost two FRUIT cells of previousResult (absolute)', () => {
+    // previousResult fruits are at indices 0 (lemon) and 2 (cherry); grape at 4 is
+    // the third fruit and must NOT be held (only the leftmost two).
+    const prev: SymbolType[] = ['lemon', 'four', 'cherry', 'zero', 'grape'];
+    const base: SymbolType[] = ['diamond', 'diamond', 'diamond', 'diamond', 'diamond'];
+    // first-cherry would rewrite cell0, four-shield would reroll — neither may touch
+    // the held fruit cells (0 and 2).
+    const rules: Rule[] = [
+      RULES_BY_ID['fruit-freeze'],
+      RULES_BY_ID['first-cherry'],
+    ];
+    const { finalResult, locked } = applyRules(base, rules, {
+      previousResult: prev,
+      weights: BASE_WEIGHTS,
+      rng: rngForSymbol('seven'),
+    });
+    // leftmost two fruit cells held to their previous values
+    expect(finalResult[0]).toBe('lemon');
+    expect(finalResult[2]).toBe('cherry');
+    expect(locked[0]).toBe(true);
+    expect(locked[2]).toBe(true);
+    // the third fruit (grape at index 4) was NOT held
+    expect(locked[4]).toBe(false);
+    // first-cherry could not overwrite the held cell0 (absolute)
+    expect(finalResult[0]).not.toBe('cherry');
+  });
+
+  it('fruit-freeze holds fewer cells when previousResult has under two fruits', () => {
+    const prev: SymbolType[] = ['zero', 'four', 'grape', 'seven', 'zero'];
+    const base: SymbolType[] = ['diamond', 'diamond', 'diamond', 'diamond', 'diamond'];
+    const { finalResult, locked } = applyRules(base, [RULES_BY_ID['fruit-freeze']], {
+      previousResult: prev,
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([]),
+    });
+    // only one fruit (grape at index 2) -> only that cell held
+    expect(finalResult[2]).toBe('grape');
+    expect(locked[2]).toBe(true);
+    expect(locked.filter(Boolean)).toHaveLength(1);
   });
 
   it('returns baseResult with held cells = previousResult, others = rolled base', () => {
