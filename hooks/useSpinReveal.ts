@@ -84,7 +84,10 @@ export function useSpinReveal(
   const [revealing, setRevealing] = useState(false);
   const [scoreReady, setScoreReady] = useState(false);
 
-  const seenIndexRef = useRef<number>(latestLog ? latestLog.spinIndex : -1);
+  // Track the last log we revealed by OBJECT IDENTITY (a fresh log object is
+  // pushed every spin). spinIndex is NOT unique — it repeats after an extra
+  // rule pick (zeros>=3), which previously made the reveal skip those spins.
+  const seenLogRef = useRef<SpinLog | null>(latestLog);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const rollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -100,9 +103,9 @@ export function useSpinReveal(
 
   useEffect(() => {
     if (!latestLog) return;
-    // Only react to a genuinely new spin log.
-    if (latestLog.spinIndex === seenIndexRef.current) return;
-    seenIndexRef.current = latestLog.spinIndex;
+    // Only react to a genuinely new spin log (by object identity).
+    if (latestLog === seenLogRef.current) return;
+    seenLogRef.current = latestLog;
 
     const clearAll = () => {
       timers.current.forEach(clearTimeout);

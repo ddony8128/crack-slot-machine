@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { SpinLog } from "@/types";
 import { useGameStore } from "@/store/gameStore";
 import StatusBar from "@/components/StatusBar";
 import RuleSlots from "@/components/RuleSlots";
@@ -34,15 +35,15 @@ export default function GameScreen() {
 
   // Celebrations fire once the reveal completes for the latest log.
   const [celebration, setCelebration] = useState<Celebration>(null);
-  // Track which spin we've already celebrated in a ref so updating it does NOT
-  // re-run the trigger effect (which would clear the dismiss timer prematurely).
-  const celebratedIndexRef = useRef(-1);
+  // Track the already-celebrated spin by log OBJECT IDENTITY (spinIndex repeats
+  // after an extra rule pick, so it can't identify a unique spin).
+  const celebratedLogRef = useRef<SpinLog | null>(null);
 
   // Trigger effect: decide whether the latest resolved spin warrants a celebration.
   useEffect(() => {
     if (!latestLog || !reveal.scoreReady) return;
-    if (latestLog.spinIndex === celebratedIndexRef.current) return;
-    celebratedIndexRef.current = latestLog.spinIndex;
+    if (latestLog === celebratedLogRef.current) return;
+    celebratedLogRef.current = latestLog;
 
     let next: Celebration = null;
     // True jackpot only: five 7s (sevenScore 777) or a five-of-a-kind hand (700).
