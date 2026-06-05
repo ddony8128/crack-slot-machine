@@ -283,6 +283,130 @@ body {
   animation: confetti-fall linear forwards;
 }
 
+/* ----------------------------------------------------------------------------
+ * SPIN STAGE — cinematic centered overlay (UI only)
+ * ------------------------------------------------------------------------- */
+
+/* Overlay backdrop fade-in */
+@keyframes stage-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.stage-in {
+  animation: stage-in 0.25s ease-out both;
+}
+
+/* Stage content rises/scales into view */
+@keyframes stage-rise {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.stage-rise {
+  animation: stage-rise 0.34s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+/* Whole stage shake while reels are at full roll */
+@keyframes stage-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-3px, 2px);
+  }
+  40% {
+    transform: translate(3px, -2px);
+  }
+  60% {
+    transform: translate(-2px, -2px);
+  }
+  80% {
+    transform: translate(2px, 2px);
+  }
+}
+
+.stage-shake {
+  animation: stage-shake 0.32s ease-in-out infinite;
+}
+
+/* Glowing pulse around the big reel housing during the roll */
+@keyframes stage-housing-glow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 2px 18px rgba(0, 0, 0, 0.8),
+      0 0 24px 4px rgba(245, 197, 24, 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 2px 18px rgba(0, 0, 0, 0.8),
+      0 0 52px 14px rgba(245, 197, 24, 0.65);
+  }
+}
+
+.stage-housing-glow {
+  animation: stage-housing-glow 0.7s ease-in-out infinite;
+}
+
+/* Heavier motion-blur cell cycle for the larger stage reels */
+@keyframes reel-roll-stage {
+  0% {
+    transform: translateY(-22%);
+    filter: blur(2.5px);
+  }
+  50% {
+    transform: translateY(22%);
+    filter: blur(2.5px);
+  }
+  100% {
+    transform: translateY(-22%);
+    filter: blur(2.5px);
+  }
+}
+
+.reel-rolling-stage {
+  animation: reel-roll-stage 0.1s linear infinite;
+}
+
+/* Big rule-step announcement above the stage reels */
+@keyframes stage-announce {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.82);
+  }
+  22% {
+    opacity: 1;
+    transform: translateY(0) scale(1.06);
+  }
+  34% {
+    transform: translateY(0) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+}
+
+.stage-announce {
+  animation: stage-announce 0.62s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
 /* Center payline subtle pulse */
 @keyframes payline-pulse {
   0%,
@@ -318,6 +442,7 @@ body {
  * ------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   .reel-rolling,
+  .reel-rolling-stage,
   .reel-land,
   .reel-flash,
   .rule-label-float,
@@ -331,13 +456,28 @@ body {
   .celebrate-pop,
   .confetti-piece,
   .payline-pulse,
-  .btn-breathe {
+  .btn-breathe,
+  .stage-in,
+  .stage-rise,
+  .stage-shake,
+  .stage-housing-glow,
+  .stage-announce {
     animation: none !important;
   }
 
-  .reel-rolling {
+  .reel-rolling,
+  .reel-rolling-stage {
     filter: none;
     transform: none;
+  }
+
+  /* No screen shake / heavy glow under reduced motion */
+  .stage-shake {
+    transform: none !important;
+  }
+
+  .stage-housing-glow {
+    box-shadow: inset 0 2px 18px rgba(0, 0, 0, 0.8);
   }
 
   /* Keep flashed cells readable without movement */

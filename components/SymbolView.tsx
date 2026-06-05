@@ -25,12 +25,13 @@ const SYMBOL_SVG: Partial<Record<SymbolType, string>> = {
   sapphire: "/symbols/sapphire.svg",
 };
 
-type Size = "sm" | "md" | "lg";
+type Size = "sm" | "md" | "lg" | "xl";
 
 const SIZE_BOX: Record<Size, string> = {
   sm: "h-8 w-8 text-lg",
   md: "h-12 w-12 text-2xl",
   lg: "h-20 w-16 text-4xl sm:h-24 sm:w-20 sm:text-5xl",
+  xl: "h-28 w-24 text-6xl sm:h-36 sm:w-28 sm:text-7xl",
 };
 
 /** Pixel dimensions for the rendered Twemoji image per size variant. */
@@ -38,6 +39,7 @@ const SIZE_IMG: Record<Size, number> = {
   sm: 24,
   md: 32,
   lg: 48,
+  xl: 72,
 };
 
 /**

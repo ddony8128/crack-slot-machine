@@ -7,6 +7,7 @@ import StatusBar from "@/components/StatusBar";
 import RuleSlots from "@/components/RuleSlots";
 import RulePicker from "@/components/RulePicker";
 import SlotMachine from "@/components/SlotMachine";
+import SpinStage from "@/components/SpinStage";
 import ScorePanel from "@/components/ScorePanel";
 import SpinResultLog from "@/components/SpinResultLog";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
@@ -125,33 +126,24 @@ export default function GameScreen() {
   const showScore =
     status === "spin-result" && latestLog && reveal.scoreReady;
 
+  // While a spin is actively revealing OR the player must pick cells, the
+  // cinematic SpinStage overlay takes over; the inline reels hide behind it.
+  const stageActive = reveal.revealing || picking;
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-6">
       <StatusBar />
       <RuleSlots />
 
-      {picking && (
-        <div className="rule-label-float rounded-xl border border-amber-500/40 bg-amber-400/10 px-4 py-3 text-center text-sm font-bold text-amber-200">
-          <span className="mr-2 rounded-full bg-amber-400/90 px-2 py-0.5 text-xs font-black uppercase tracking-wide text-zinc-950">
-            {pendingSelection?.ruleName}
-          </span>
-          {promptText}
-        </div>
-      )}
-
-      {showSlot && (
+      {showSlot && !stageActive && (
         <SlotMachine
-          symbols={picking ? currentResult : reveal.symbols}
+          symbols={reveal.symbols}
           reelRolling={reveal.reelRolling}
           flashIndices={reveal.flashIndices}
           landIndices={reveal.landIndices}
           stepLabel={reveal.stepLabel}
           lockedIndices={reveal.lockedIndices}
           revealing={reveal.revealing}
-          picking={picking}
-          selectable={selectableArr}
-          chosen={chosen}
-          onPick={handlePick}
         />
       )}
 
@@ -163,6 +155,23 @@ export default function GameScreen() {
           {latestLog.steps.length > 0 && <SpinResultLog log={latestLog} />}
           <ScoreBreakdown log={latestLog} />
         </>
+      )}
+
+      {stageActive && (
+        <SpinStage
+          symbols={picking ? currentResult : reveal.symbols}
+          reelRolling={reveal.reelRolling}
+          flashIndices={reveal.flashIndices}
+          landIndices={reveal.landIndices}
+          stepLabel={reveal.stepLabel}
+          lockedIndices={reveal.lockedIndices}
+          picking={picking}
+          selectable={selectableArr}
+          chosen={chosen}
+          onPick={handlePick}
+          promptText={promptText}
+          pickRuleName={pendingSelection?.ruleName}
+        />
       )}
 
       {celebration?.kind === "jackpot" && <JackpotCelebration />}

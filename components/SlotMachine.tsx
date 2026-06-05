@@ -27,6 +27,10 @@ type SlotMachineProps = {
   chosen?: number[];
   /** Click handler for a selectable cell. */
   onPick?: (i: number) => void;
+  /** Render bigger/heavier for the cinematic SpinStage overlay. */
+  stage?: boolean;
+  /** Hide the in-place SPIN button + housing chrome (used when not standalone). */
+  hideSpinButton?: boolean;
 };
 
 export default function SlotMachine({
@@ -41,6 +45,8 @@ export default function SlotMachine({
   selectable = [],
   chosen = [],
   onPick,
+  stage = false,
+  hideSpinButton = false,
 }: SlotMachineProps) {
   const currentResult = useGameStore((s) => s.currentResult);
   const status = useGameStore((s) => s.status);
@@ -56,18 +62,28 @@ export default function SlotMachine({
   const selectableSet = new Set(selectable);
   const chosenSet = new Set(chosen);
 
+  // Any cell currently rolling? Drives the housing glow on the stage.
+  const anyRolling = reelRolling.some((r, i) => r && !lockedSet.has(i));
+  const symbolSize = stage ? "xl" : "lg";
+  const rollClass = stage ? "reel-rolling-stage" : "reel-rolling";
+  const housingGlow = stage && anyRolling ? "stage-housing-glow" : "";
+
   return (
-    <section className="space-y-4 fade-rise">
+    <section className={stage ? "space-y-4" : "space-y-4 fade-rise"}>
       {/* Reel housing — slot-machine feel: accent frame, inner shadow, payline. */}
-      <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-900 p-4 shadow-[inset_0_2px_18px_rgba(0,0,0,0.8),inset_0_-2px_12px_rgba(0,0,0,0.6)] sm:p-6">
+      <div
+        className={`relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-900 shadow-[inset_0_2px_18px_rgba(0,0,0,0.8),inset_0_-2px_12px_rgba(0,0,0,0.6)] ${
+          stage ? "p-6 sm:p-10" : "p-4 sm:p-6"
+        } ${housingGlow}`}
+      >
         {/* center payline highlight */}
         <div
           aria-hidden
           className="payline-pulse pointer-events-none absolute inset-x-6 top-1/2 -z-0 h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent"
         />
 
-        {/* floating rule-step label */}
-        {stepLabel && (
+        {/* floating rule-step label (stage renders its own announce area) */}
+        {stepLabel && !stage && (
           <div
             key={stepLabel + display.join(",")}
             className="rule-label-float pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2"
@@ -86,7 +102,7 @@ export default function SlotMachine({
             const flashing = flashSet.has(i);
             const landed = landSet.has(i);
             const motion = [
-              rolling ? "reel-rolling" : "",
+              rolling ? rollClass : "",
               flashing ? "reel-flash" : "",
               !rolling && landed ? "reel-land" : "",
               isLocked ? "reel-locked" : "",
@@ -124,7 +140,7 @@ export default function SlotMachine({
                     : undefined
                 }
               >
-                <SymbolView symbol={symbol} size="lg" className={motion} />
+                <SymbolView symbol={symbol} size={symbolSize} className={motion} />
                 {isLocked && (
                   <span
                     aria-label="고정됨"
@@ -140,7 +156,7 @@ export default function SlotMachine({
         </div>
       </div>
 
-      {canSpin && (
+      {canSpin && !hideSpinButton && (
         <div className="flex justify-center">
           <button
             type="button"
