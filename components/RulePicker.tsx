@@ -1,7 +1,6 @@
 "use client";
 
 import { useGameStore } from "@/store/gameStore";
-import { BuildTag } from "@/components/RuleCard";
 
 export default function RulePicker() {
   const offeredRules = useGameStore((s) => s.offeredRules);
@@ -27,12 +26,9 @@ export default function RulePicker() {
             onClick={() => selectRule(rule)}
             className="flex flex-col gap-2 rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-left transition duration-150 hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-zinc-800/60 hover:shadow-lg hover:shadow-emerald-500/10 active:translate-y-0 active:scale-[0.99]"
           >
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-base font-bold text-emerald-300">
-                {rule.name}
-              </span>
-              <BuildTag rule={rule} />
-            </div>
+            <span className="text-base font-bold text-emerald-300">
+              {rule.name}
+            </span>
             <span className="text-sm leading-snug text-zinc-400">
               {rule.description}
             </span>

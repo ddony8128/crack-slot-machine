@@ -1,1 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><circle fill="#DD2E44" cx="18" cy="18" r="18"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
+  <polygon points="11,6 25,6 28,15 8,15" fill="#ff7aa0"/>
+  <polygon points="11,6 8,15 3,15" fill="#d61f4e"/>
+  <polygon points="25,6 28,15 33,15" fill="#d61f4e"/>
+  <polygon points="3,15 8,15 18,32" fill="#9e1538"/>
+  <polygon points="33,15 28,15 18,32" fill="#9e1538"/>
+  <polygon points="8,15 28,15 18,32" fill="#c81d4a"/>
+  <polygon points="11,6 25,6 33,15 18,32 3,15" fill="none" stroke="#6b0a26" stroke-width="1.2" stroke-linejoin="round"/>
+  <polygon points="13,8 16.5,8 11,13" fill="#ffffff" opacity="0.55"/>
+</svg>

@@ -195,10 +195,10 @@ function BagItem({
     >
       {draggable ? (
         <DraggableRule loc={loc} rule={rule} disabled={false}>
-          <RuleCard rule={rule} dense />
+          <RuleCard rule={rule} />
         </DraggableRule>
       ) : (
-        <RuleCard rule={rule} dense />
+        <RuleCard rule={rule} />
       )}
     </div>
   );

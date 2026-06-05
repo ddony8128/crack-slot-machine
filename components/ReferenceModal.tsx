@@ -17,14 +17,21 @@ import {
   BONUS_ALL_BLUE,
   BONUS_ALL_RED,
   FOUR_PENALTY_PER,
-  BONUS_77,
-  CLEAN_BONUS,
   FOURS_4_MULT,
   FOURS_5_MULT,
 } from "@/data/scoreTable";
-import { BuildTag } from "@/components/RuleCard";
 
+// Build keys -> clean Korean section headers.
 const BUILD_ORDER = ["7", "fruit", "gem", "color", "order", "safe", "score"];
+const BUILD_LABEL: Record<string, string> = {
+  "7": "7/잭팟",
+  fruit: "과일",
+  gem: "보석",
+  color: "컬러",
+  order: "순서",
+  safe: "안전",
+  score: "점수",
+};
 
 function groupByBuild() {
   const groups = new Map<string, typeof RULES>();
@@ -66,6 +73,23 @@ function ScoreRow({
         {value}
       </span>
     </li>
+  );
+}
+
+function ScoreCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+      <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
+        {title}
+      </h4>
+      <ul className="space-y-1 text-sm">{children}</ul>
+    </div>
   );
 }
 
@@ -135,12 +159,12 @@ export default function ReferenceModal({
           {/* Rules grouped by build */}
           <section className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-400">
-              규칙 ({RULES.length}) — 빌드별
+              규칙 ({RULES.length})
             </h3>
             {groups.map(([build, rules]) => (
               <div key={build} className="space-y-2">
                 <h4 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-                  {build}
+                  {BUILD_LABEL[build] ?? build}
                 </h4>
                 <ul className="space-y-1.5">
                   {rules.map((rule) => (
@@ -148,12 +172,9 @@ export default function ReferenceModal({
                       key={rule.id}
                       className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2.5"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-bold text-emerald-300">
-                          {rule.name}
-                        </span>
-                        <BuildTag rule={rule} />
-                      </div>
+                      <span className="text-sm font-bold text-emerald-300">
+                        {rule.name}
+                      </span>
                       <p className="mt-0.5 text-xs leading-snug text-zinc-400">
                         {rule.description}
                       </p>
@@ -170,89 +191,45 @@ export default function ReferenceModal({
               점수표
             </h3>
 
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-              <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                7 개수 점수
-              </h4>
-              <ul className="space-y-1 text-sm">
-                {([1, 2, 3, 4, 5] as const).map((n) => (
-                  <ScoreRow
-                    key={n}
-                    label={`7 × ${n}`}
-                    value={`+${SEVEN_SCORE[n]}`}
-                  />
-                ))}
-              </ul>
-            </div>
+            <ScoreCard title="7 점수">
+              <ScoreRow label="1개" value={`+${SEVEN_SCORE[1]}`} />
+              <ScoreRow label="2개" value={`+${SEVEN_SCORE[2]}`} />
+              <ScoreRow label="3개" value={`+${SEVEN_SCORE[3]}`} />
+              <ScoreRow label="4개" value={`+${SEVEN_SCORE[4]}`} />
+              <ScoreRow label="5개" value={`+${SEVEN_SCORE[5]}`} />
+            </ScoreCard>
 
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-              <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                족보 (색 심볼 기준)
-              </h4>
-              <ul className="space-y-1 text-sm">
-                <ScoreRow label="Pair (페어)" value={`+${HAND_PAIR}`} />
-                <ScoreRow label="Two Pair (투페어)" value={`+${HAND_TWO_PAIR}`} />
-                <ScoreRow label="Triple (트리플)" value={`+${HAND_TRIPLE}`} />
-                <ScoreRow
-                  label="Full House (풀하우스)"
-                  value={`+${HAND_FULL_HOUSE}`}
-                />
-                <ScoreRow
-                  label="Four of a Kind"
-                  value={`+${HAND_FOUR_KIND}`}
-                />
-                <ScoreRow
-                  label="Five of a Kind"
-                  value={`+${HAND_FIVE_KIND}`}
-                />
-              </ul>
-            </div>
+            <ScoreCard title="족보">
+              <ScoreRow label="페어" value={`+${HAND_PAIR}`} />
+              <ScoreRow label="투페어" value={`+${HAND_TWO_PAIR}`} />
+              <ScoreRow label="트리플" value={`+${HAND_TRIPLE}`} />
+              <ScoreRow label="풀하우스" value={`+${HAND_FULL_HOUSE}`} />
+              <ScoreRow label="포카드" value={`+${HAND_FOUR_KIND}`} />
+              <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
+            </ScoreCard>
 
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-              <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                색 / 종류 보너스
-              </h4>
-              <ul className="space-y-1 text-sm">
-                <ScoreRow
-                  label="과일 3종 모두"
-                  value={`+${BONUS_ALL_FRUIT_TYPES}`}
-                />
-                <ScoreRow
-                  label="보석 3종 모두"
-                  value={`+${BONUS_ALL_GEM_TYPES}`}
-                />
-                <ScoreRow label="올 과일" value={`+${BONUS_ONLY_FRUITS}`} />
-                <ScoreRow label="올 보석" value={`+${BONUS_ONLY_GEMS}`} />
-                <ScoreRow label="올 블루" value={`+${BONUS_ALL_BLUE}`} />
-                <ScoreRow label="올 레드" value={`+${BONUS_ALL_RED}`} />
-              </ul>
-            </div>
+            <ScoreCard title="색·종류 보너스">
+              <ScoreRow label="과일 3종" value={`+${BONUS_ALL_FRUIT_TYPES}`} />
+              <ScoreRow label="보석 3종" value={`+${BONUS_ALL_GEM_TYPES}`} />
+              <ScoreRow label="올 과일" value={`+${BONUS_ONLY_FRUITS}`} />
+              <ScoreRow label="올 보석" value={`+${BONUS_ONLY_GEMS}`} />
+              <ScoreRow label="올 블루" value={`+${BONUS_ALL_BLUE}`} />
+              <ScoreRow label="올 레드" value={`+${BONUS_ALL_RED}`} />
+            </ScoreCard>
 
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-              <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                규칙 보너스 / 페널티
-              </h4>
-              <ul className="space-y-1 text-sm">
-                <ScoreRow label="LUCKY SEVEN-SEVEN" value={`+${BONUS_77}`} />
-                <ScoreRow label="CLEAN SWEEP (4 없음)" value={`+${CLEAN_BONUS}`} />
-                <ScoreRow
-                  label="4 페널티 (개당)"
-                  value={`-${FOUR_PENALTY_PER}`}
-                  negative
-                />
-              </ul>
-            </div>
+            <ScoreCard title="4 페널티">
+              <ScoreRow
+                label="개당"
+                value={`-${FOUR_PENALTY_PER}`}
+                negative
+              />
+            </ScoreCard>
 
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-              <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                특수 (다음 스핀)
-              </h4>
-              <ul className="space-y-1 text-sm">
-                <ScoreRow label="0 3개 이상" value="규칙 1장 추가" />
-                <ScoreRow label="4 × 4" value={`×${FOURS_4_MULT} 배수`} />
-                <ScoreRow label="4 × 5" value={`×${FOURS_5_MULT} 배수`} />
-              </ul>
-            </div>
+            <ScoreCard title="특수 (다음 스핀)">
+              <ScoreRow label="0이 3개 이상" value="규칙 1장 추가" />
+              <ScoreRow label="4가 4개" value={`점수 ×${FOURS_4_MULT}`} />
+              <ScoreRow label="4가 5개" value={`점수 ×${FOURS_5_MULT}`} />
+            </ScoreCard>
           </section>
         </div>
       </div>

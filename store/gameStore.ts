@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { GameState, Rule, SpinLog, SymbolType } from '@/types';
 import { defaultRng, type Rng } from '@/lib/rng';
-import { baseSpin, computeWeights } from '@/lib/spin';
+import { rollBoard, computeWeights } from '@/lib/spin';
 import { applyRules } from '@/lib/applyRules';
 import { scoreResult } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
@@ -48,7 +48,7 @@ function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
 /**
  * Offer 3 distinct rules (by id) that are NOT currently in a slot OR the bag.
  * Shuffles the allowed pool with the injected rng and takes the first 3.
- * With 30 rules this never starves a 3-card offer.
+ * With 26 rules this never starves a 3-card offer.
  */
 function offerRules(rng: Rng, slots: Array<Rule | null>, bag: Rule[]): Rule[] {
   const usedIds = new Set<string>();
@@ -214,7 +214,7 @@ function buildInitializer(rng: Rng): Initializer {
       const { ruleSlots, previousResult, spinIndex } = state;
 
       const weights = computeWeights(ruleSlots, BASE_WEIGHTS);
-      const base = baseSpin(weights, rng);
+      const base = rollBoard(ruleSlots, weights, previousResult, rng);
       const { finalResult, steps, locked, baseResult } = applyRules(base, ruleSlots, {
         previousResult,
         weights,

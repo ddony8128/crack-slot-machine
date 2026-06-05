@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { SymbolType } from '@/types';
-import { baseSpin, computeWeights } from '@/lib/spin';
+import { baseSpin, computeWeights, rollBoard } from '@/lib/spin';
 import { RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS, FRUITS } from '@/data/symbols';
 import { rollSymbol, type Rng } from '@/lib/rng';
+
+const NUMBER_SET = new Set<SymbolType>(['seven', 'zero', 'four']);
 
 function queuedRng(values: number[]): Rng {
   let i = 0;
@@ -87,5 +89,49 @@ describe('baseSpin', () => {
     const point = (6 + 0.5) / 9;
     const sym: SymbolType = rollSymbol(BASE_WEIGHTS, () => point);
     expect(sym).toBe('seven');
+  });
+});
+
+describe('rollBoard — number-spin pre-roll restriction', () => {
+  // rng that always lands on the first symbol of whatever weight map it's given.
+  const firstBand: Rng = () => 0.001;
+
+  it('without number-spin rolls normally (equivalent to baseSpin)', () => {
+    const prev: SymbolType[] = ['seven', 'cherry', 'zero', 'lemon', 'four'];
+    // firstBand against full BASE_WEIGHTS -> first symbol = 'cherry' for every cell.
+    const board = rollBoard([], BASE_WEIGHTS, prev, firstBand, 5);
+    expect(board).toEqual(['cherry', 'cherry', 'cherry', 'cherry', 'cherry']);
+  });
+
+  it('cells that started as a number land on a number; others roll normally', () => {
+    const prev: SymbolType[] = ['seven', 'cherry', 'zero', 'lemon', 'four'];
+    // firstBand on restricted {seven,zero,four} -> 'seven'; on full weights -> 'cherry'.
+    const board = rollBoard(
+      [RULES_BY_ID['number-spin']],
+      BASE_WEIGHTS,
+      prev,
+      firstBand,
+      5,
+    );
+    // number-prev cells (0,2,4) restricted to numbers -> seven
+    expect(NUMBER_SET.has(board[0])).toBe(true);
+    expect(NUMBER_SET.has(board[2])).toBe(true);
+    expect(NUMBER_SET.has(board[4])).toBe(true);
+    expect(board[0]).toBe('seven');
+    // non-number-prev cells (1,3) roll normally -> cherry (not forced to a number)
+    expect(board[1]).toBe('cherry');
+    expect(board[3]).toBe('cherry');
+  });
+
+  it('a non-number previous cell is never forced to a number under number-spin', () => {
+    const prev: SymbolType[] = ['cherry', 'cherry', 'cherry', 'cherry', 'cherry'];
+    const board = rollBoard(
+      [RULES_BY_ID['number-spin']],
+      BASE_WEIGHTS,
+      prev,
+      firstBand,
+      5,
+    );
+    expect(board.every((s) => s === 'cherry')).toBe(true);
   });
 });

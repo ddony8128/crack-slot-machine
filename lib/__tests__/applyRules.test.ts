@@ -127,33 +127,43 @@ describe('applyRules — locks & rerolls', () => {
     expect(finalResult[4]).toBe('four');
   });
 
-  it('gem-fish rerolls the leftmost non-gem cell (one only)', () => {
+  it('gem-fish targets the leftmost non-gem cell (loops until a gem)', () => {
+    // cell0 is a gem -> skipped; cell1 (seven) is the leftmost non-gem -> target.
+    // Feed a non-gem (lemon) first to force another iteration, then a gem (ruby).
     const base: SymbolType[] = ['diamond', 'seven', 'cherry', 'ruby', 'zero'];
+    const rng = queuedRng([rngPoint('lemon'), rngPoint('ruby')]);
     const { finalResult } = applyRules(base, [RULES_BY_ID['gem-fish']], {
       previousResult: noCtx.previousResult,
       weights: BASE_WEIGHTS,
-      rng: rngForSymbol('lemon'),
+      rng,
     });
-    // cell0 is a gem -> skipped; cell1 (seven) is the leftmost non-gem -> rerolled
     expect(finalResult[0]).toBe('diamond');
-    expect(finalResult[1]).toBe('lemon');
+    expect(finalResult[1]).toBe('ruby'); // looped past lemon, landed on a gem
     expect(finalResult[2]).toBe('cherry'); // later non-gems untouched
   });
 
-  it('number-spin keeps numbers: a 4 becomes a 7 (restricted reroll)', () => {
-    const base: SymbolType[] = ['four', 'cherry', 'four', 'diamond', 'lemon'];
-    // restricted order is [seven, zero, four]; target 'seven' is first band.
-    const { finalResult } = applyRules(base, [RULES_BY_ID['number-spin']], {
+  it('fruit-fish loops until the target cell becomes a fruit', () => {
+    // cell0 (seven) is the leftmost non-fruit. Feed a non-fruit (ruby) then a fruit (grape).
+    const base: SymbolType[] = ['seven', 'cherry', 'lemon', 'grape', 'zero'];
+    const rng = queuedRng([rngPoint('ruby'), rngPoint('grape')]);
+    const { finalResult } = applyRules(base, [RULES_BY_ID['fruit-fish']], {
       previousResult: noCtx.previousResult,
       weights: BASE_WEIGHTS,
-      rng: () => 0.01, // tiny -> first restricted symbol = seven
+      rng,
     });
-    expect(finalResult[0]).toBe('seven');
-    expect(finalResult[2]).toBe('seven');
-    // non-number cells untouched
-    expect(finalResult[1]).toBe('cherry');
-    expect(finalResult[3]).toBe('diamond');
-    expect(finalResult[4]).toBe('lemon');
+    expect(finalResult[0]).toBe('grape'); // looped past ruby, landed on a fruit
+  });
+
+  it('gem-shuffle loops until the target gem cell becomes a non-gem', () => {
+    // cell0 (ruby) is the leftmost gem. Feed a gem (sapphire) then a non-gem (lemon).
+    const base: SymbolType[] = ['ruby', 'cherry', 'seven', 'lemon', 'zero'];
+    const rng = queuedRng([rngPoint('sapphire'), rngPoint('lemon')]);
+    const { finalResult } = applyRules(base, [RULES_BY_ID['gem-shuffle']], {
+      previousResult: noCtx.previousResult,
+      weights: BASE_WEIGHTS,
+      rng,
+    });
+    expect(finalResult[0]).toBe('lemon'); // looped past sapphire, landed on a non-gem
   });
 
   it('four-parry rerolls only the leftmost four', () => {
@@ -165,21 +175,6 @@ describe('applyRules — locks & rerolls', () => {
     });
     expect(finalResult[1]).toBe('lemon');
     expect(finalResult[2]).toBe('four'); // second four untouched
-  });
-
-  it('unique-second loops until cell1 is unique', () => {
-    // base cell1 = cherry, which duplicates cell0. Feed a duplicate (cherry) then a unique (sapphire).
-    const base: SymbolType[] = ['cherry', 'cherry', 'lemon', 'grape', 'diamond'];
-    const rng = queuedRng([
-      rngPoint('cherry'), // still duplicate -> loop again
-      rngPoint('sapphire'), // unique now
-    ]);
-    const { finalResult } = applyRules(base, [RULES_BY_ID['unique-second']], {
-      previousResult: noCtx.previousResult,
-      weights: BASE_WEIGHTS,
-      rng,
-    });
-    expect(finalResult[1]).toBe('sapphire');
   });
 });
 

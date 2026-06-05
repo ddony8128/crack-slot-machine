@@ -1,6 +1,8 @@
 import type { Rule, SymbolType } from '@/types';
 import { FRUITS, GEMS } from '@/data/symbols';
-import { rollSymbol, type Rng } from '@/lib/rng';
+import { rollSymbol, rollSymbolFrom, type Rng } from '@/lib/rng';
+
+const NUMBERS: SymbolType[] = ['seven', 'zero', 'four'];
 
 export function computeWeights(
   rules: (Rule | null)[],
@@ -49,6 +51,37 @@ export function baseSpin(
   const result: SymbolType[] = [];
   for (let i = 0; i < n; i++) {
     result.push(rollSymbol(weights, rng));
+  }
+  return result;
+}
+
+/**
+ * Roll the landing board honoring the `number-spin` PRE-ROLL roll-restriction.
+ *
+ * If `number-spin` is active (any slot rule id === 'number-spin'), every cell
+ * whose `previousResult` value was a number (seven/zero/four) is rolled
+ * restricted to {seven, zero, four} so it lands on a number. All other cells
+ * roll normally. With `number-spin` absent this is equivalent to `baseSpin`.
+ */
+export function rollBoard(
+  rules: (Rule | null)[],
+  weights: Record<SymbolType, number>,
+  previousResult: SymbolType[],
+  rng: Rng,
+  n = 5,
+): SymbolType[] {
+  const numberSpin = rules.some((r) => r?.id === 'number-spin');
+  const result: SymbolType[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = previousResult[i];
+    if (
+      numberSpin &&
+      (prev === 'seven' || prev === 'zero' || prev === 'four')
+    ) {
+      result.push(rollSymbolFrom(NUMBERS, weights, rng));
+    } else {
+      result.push(rollSymbol(weights, rng));
+    }
   }
   return result;
 }

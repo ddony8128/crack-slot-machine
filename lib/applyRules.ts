@@ -1,6 +1,6 @@
 import type { Rule, SpinLogStep, SymbolType } from '@/types';
 import { FRUITS, GEMS } from '@/data/symbols';
-import { rollSymbol, rollSymbolFrom, type Rng } from '@/lib/rng';
+import { rollSymbol, type Rng } from '@/lib/rng';
 
 type ApplyCtx = {
   previousResult: SymbolType[];
@@ -10,7 +10,9 @@ type ApplyCtx = {
 
 const FRUIT_SET = new Set<SymbolType>(FRUITS);
 const GEM_SET = new Set<SymbolType>(GEMS);
-const NUMBERS: SymbolType[] = ['seven', 'zero', 'four'];
+
+/** Max reroll iterations for loop-until-condition rules (fish/shuffle). */
+const REROLL_CAP = 30;
 
 /**
  * Apply equipped slot rules to a freshly-rolled board.
@@ -134,35 +136,42 @@ function applyOne(
       break;
     }
     case 'gem-shuffle': {
+      // leftmost non-claimed GEM cell -> reroll until it is NOT a gem (cap 30), then claim.
       const idx = working.findIndex((s, i) => GEM_SET.has(s) && !claimed[i]);
-      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
+      if (idx !== -1) {
+        let iter = 0;
+        while (iter < REROLL_CAP && GEM_SET.has(working[idx])) {
+          working[idx] = rollSymbol(weights, rng);
+          iter += 1;
+        }
+        claimed[idx] = true;
+      }
       break;
     }
     case 'fruit-fish': {
+      // leftmost non-claimed NON-fruit cell -> reroll until it IS a fruit (cap 30), then claim.
       const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !claimed[i]);
-      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
+      if (idx !== -1) {
+        let iter = 0;
+        while (iter < REROLL_CAP && !FRUIT_SET.has(working[idx])) {
+          working[idx] = rollSymbol(weights, rng);
+          iter += 1;
+        }
+        claimed[idx] = true;
+      }
       break;
     }
     case 'gem-fish': {
+      // leftmost non-claimed NON-gem cell -> reroll until it IS a gem (cap 30), then claim.
       const idx = working.findIndex((s, i) => !GEM_SET.has(s) && !claimed[i]);
-      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
-      break;
-    }
-    case 'number-spin':
-      for (let i = 0; i < working.length; i++) {
-        if (!claimed[i] && (working[i] === 'seven' || working[i] === 'zero' || working[i] === 'four')) {
-          write(working, claimed, i, rollSymbolFrom(NUMBERS, weights, rng));
+      if (idx !== -1) {
+        let iter = 0;
+        while (iter < REROLL_CAP && !GEM_SET.has(working[idx])) {
+          working[idx] = rollSymbol(weights, rng);
+          iter += 1;
         }
+        claimed[idx] = true;
       }
-      break;
-    case 'unique-second': {
-      if (claimed[1]) break;
-      let iter = 0;
-      while (iter < 30 && working.some((s, i) => i !== 1 && s === working[1])) {
-        working[1] = rollSymbol(weights, rng);
-        iter += 1;
-      }
-      claimed[1] = true;
       break;
     }
 

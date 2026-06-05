@@ -74,7 +74,12 @@ Evaluated after the round resolves:
 ## 5. Rule application (`applyRules`)
 Three phases:
 - **Weight phase (pre-roll)**: `computeWeights(slotRules, BASE_WEIGHTS)` multiplies weights for
-  every active `weight`-type rule, then `baseSpin` rolls 5 cells. **Exception by id:**
+  every active `weight`-type rule, then the board is rolled by `rollBoard(slotRules, weights,
+  previousResult, rng)` (5 cells). `rollBoard` honors the `number-spin` PRE-ROLL roll-restriction:
+  if `number-spin` is active, every cell `i` whose `previousResult[i]` was a number (seven/zero/four)
+  is rolled restricted to {seven, zero, four} (via `rollSymbolFrom`) so it lands on a number; all
+  other cells roll normally with `rollSymbol`. With `number-spin` absent, `rollBoard` ≡ `baseSpin`.
+  `baseSpin` is retained for other callers/tests. **Exception by id:**
   `four-shield` is a `reroll` rule but ALSO multiplies the `zero` weight by **×2** in this phase
   (checked by id, like the weight rules; stacks multiplicatively with other weight rules).
 - **PRE-ROLL HOLD phase (locks)**: BEFORE the cascade, scan ALL slot rules. For each `lock` rule
@@ -110,16 +115,16 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `four-shield` (reroll): every cell == four (and not locked) rerolled once. (Also applies a
   zero ×2 weight in the pre-roll weight phase — see above.)
 - `four-parry` (reroll): the leftmost non-locked cell == four rerolled once (one only).
-- `gem-shuffle` (reroll): the leftmost non-locked GEM cell rerolled once (one only). [anti-gem]
-- `fruit-fish` (reroll): the leftmost non-locked NON-fruit cell (a number or gem) rerolled once
-  (one only).
-- `gem-fish` (reroll): the leftmost non-locked NON-gem cell (a number or fruit) rerolled once
-  (one only). Symmetric to `fruit-fish`.
-- `number-spin` (transform): every non-locked cell that is a number (seven/zero/four) rerolled using
-  weights RESTRICTED to {seven, zero, four} (renormalized), so it stays a number. (Typed
-  `transform` for build grouping, but mechanically uses rng and claims cells like a reroll.)
-- `unique-second` (reroll): while cell[1] equals any other cell's symbol, reroll cell[1]
-  (full weights). Cap at 30 iterations to avoid infinite loops. (Skip if cell[1] is locked.)
+- `gem-shuffle` (reroll, loop-until): the leftmost non-claimed GEM cell is rerolled REPEATEDLY
+  (`rollSymbol`, full weights) until it is NOT a gem, capped at **30** iterations, then the cell is
+  claimed. No-op if no such cell. [anti-gem]
+- `fruit-fish` (reroll, loop-until): the leftmost non-claimed NON-fruit cell (a number or gem) is
+  rerolled REPEATEDLY until it IS a fruit, capped at **30** iterations, then claimed. No-op if none.
+- `gem-fish` (reroll, loop-until): the leftmost non-claimed NON-gem cell (a number or fruit) is
+  rerolled REPEATEDLY until it IS a gem, capped at **30** iterations, then claimed. Symmetric to
+  `fruit-fish`. No-op if none.
+- `number-spin` (weight): PRE-ROLL roll-restriction, NOT a post-roll cascade rule. It is handled in
+  `rollBoard` during the roll (see §5) and produces NO step. It is skipped by the cascade.
 - `left-pair` (transform): cell[1] = cell[0].
 - `center-echo` (transform): cell[3] = cell[1].
 - `third-mirror` (transform): cell[2] = cell[4].
@@ -144,21 +149,22 @@ Per-rule post-roll behavior (cell indices 0-based):
 `applyRules` returns `{ finalResult, steps, locked, baseResult }`, all fresh copies. `baseResult`
 already has held cells = previous value (and all other cells = the rolled base).
 
-## 6. Rule pool (27)
+## 6. Rule pool (26)
 Type ∈ `weight | reroll | transform | lock | score | meta`. Grouped by `build`.
+All `description` strings are CLEAN KOREAN SENTENCES — no emojis, no arrows, no parentheses.
 
 | id | name | build | type | effect |
 |---|---|---|---|---|
 | seven-fever | SEVEN FEVER | 7 | weight | seven weight ×3 |
 | seven-double | SEVEN DOUBLE | 7 | score | 7-based score ×2 this spin |
 | zero-to-seven | ZERO ASCEND | 7 | transform | all 0 → 7 |
-| number-spin | NUMBER SPIN | 7 | transform | number cells (7/0/4) re-rolled among {7,0,4} only |
+| number-spin | NUMBER SPIN | 7 | weight | PRE-ROLL: cells that started as a number land on a number (7/0/4) |
 | fruit-surge | FRUIT SURGE | fruit | weight | fruit weight ×2 |
 | diamond-to-lemon | DIAMOND CUT | fruit | transform | all 💎 → 🍋 |
-| fruit-fish | FRUIT FISH | fruit | reroll | leftmost non-fruit cell reroll once |
+| fruit-fish | FRUIT FISH | fruit | reroll | leftmost non-fruit cell reroll until fruit (cap 30) |
 | gem-surge | GEM SURGE | gem | weight | gem weight ×2 |
 | grape-to-sapphire | GRAPE FREEZE | gem | transform | all 🍇 → 🔵 |
-| gem-fish | GEM FISH | gem | reroll | leftmost non-gem cell reroll once |
+| gem-fish | GEM FISH | gem | reroll | leftmost non-gem cell reroll until gem (cap 30) |
 | first-cherry | FIRST CHERRY | color | transform | cell1 → 🍒 |
 | red-dye | RED DYE | color | transform | all 🔴 → 🍒 |
 | blue-dye | BLUE DYE | color | transform | all 💎 → 🔵 |
@@ -168,16 +174,16 @@ Type ∈ `weight | reroll | transform | lock | score | meta`. Grouped by `build`
 | center-echo | CENTER ECHO | order | transform | cell4 = cell2 |
 | third-mirror | THIRD MIRROR | order | transform | cell3 = cell5 |
 | copy-above | COPY ABOVE | order | meta | re-apply the active rule directly above |
-| unique-second | UNIQUE SECOND | order | reroll | reroll cell2 until no other cell matches it |
 | no-zero | NO ZERO | safe | weight | zero weight → 0 (no zeros) |
 | four-shield | FOUR SHIELD | safe | reroll | all 4s reroll once; this spin zero weight ×2 |
 | four-parry | FOUR PARRY | safe | reroll | leftmost 4 reroll once |
 | safe-convert | SAFE CONVERT | safe | transform | leftmost 4 → 🔴 |
-| gem-shuffle | GEM SHUFFLE | safe | reroll | leftmost gem cell reroll once (anti-gem) |
+| gem-shuffle | GEM SHUFFLE | safe | reroll | leftmost gem cell reroll until non-gem (cap 30) [anti-gem] |
 | bonus-77 | LUCKY SEVEN-SEVEN | score | score | +77 points |
 | clean-bonus | CLEAN SWEEP | score | score | +100 if no 4s on board |
 
 (Removed in v2.1: lucky-convert, edge-mirror, fourth-lock, zero-fog, zero-break.)
+(Removed in v2.2: unique-second. Pool is now **26 rules**.)
 
 ## 7. Types
 ```ts
@@ -237,7 +243,7 @@ type SpinLog = {
   status 'choosing-rule'.
 - `reset()` — fresh 'start', keep nickname.
 
-Offering excludes any rule currently in a slot OR the bag (compare by id). With 30 rules this never
+Offering excludes any rule currently in a slot OR the bag (compare by id). With 26 rules this never
 starves a 3-card offer.
 
 ## 9. UI requirements (summary; details in UI task)
