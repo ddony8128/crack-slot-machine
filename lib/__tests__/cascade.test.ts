@@ -169,3 +169,241 @@ describe('applyRules — select rules AUTO-SKIP (pure path)', () => {
     expect(steps[0].label).toBe('SELECT COPY (건너뜀)');
   });
 });
+
+/**
+ * The headline behavior change: rules apply top→bottom and a LATER rule OVERWRITES
+ * whatever an earlier rule wrote (pure sequential). The ONLY off-limits cells are
+ * pre-roll LOCKED ones. There is no first-claim / "upper wins".
+ */
+describe('rule interaction (sequential, lower-wins)', () => {
+  const ctx = (rng = queuedRng([])) => ({
+    previousResult: PREV,
+    weights: BASE_WEIGHTS,
+    rng,
+  });
+
+  it('gem-fish then left-pair: left-pair OVERWRITES cell1 (the motivating case)', () => {
+    // cell0 gem (diamond). gem-fish targets leftmost non-gem = cell1 (seven) and
+    // rerolls it to a gem (ruby). Then left-pair sets cell1 = cell0 = diamond,
+    // OVERWRITING gem-fish's reroll. Under the OLD first-claim model left-pair
+    // would have been blocked.
+    const base: SymbolType[] = ['diamond', 'seven', 'cherry', 'lemon', 'four'];
+    const rules: Rule[] = [RULES_BY_ID['gem-fish'], RULES_BY_ID['left-pair']];
+    const { finalResult } = applyRules(base, rules, ctx(queuedRng([rngPoint('ruby')])));
+    expect(finalResult[1]).toBe('diamond'); // left-pair wins, copies cell0
+  });
+
+  it('left-pair then gem-fish: order reversed, gem-fish may reroll the copied cell', () => {
+    // left-pair sets cell1 = cell0 = seven (a non-gem). Now leftmost non-gem is
+    // cell0 (seven). gem-fish rerolls cell0 to a gem (ruby). cell1 stays seven.
+    const base: SymbolType[] = ['seven', 'diamond', 'ruby', 'sapphire', 'diamond'];
+    const rules: Rule[] = [RULES_BY_ID['left-pair'], RULES_BY_ID['gem-fish']];
+    const { finalResult } = applyRules(base, rules, ctx(queuedRng([rngPoint('ruby')])));
+    expect(finalResult[1]).toBe('seven'); // left-pair copied cell0 (seven)
+    expect(finalResult[0]).toBe('ruby'); // gem-fish then rerolled cell0 (leftmost non-gem)
+  });
+
+  it('left-pair then center-echo chain: cell1=cell0, then cell3=cell1', () => {
+    // left-pair: cell1 = cell0 = cherry. center-echo: cell3 = cell1 = cherry.
+    const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'ruby'];
+    const rules: Rule[] = [RULES_BY_ID['left-pair'], RULES_BY_ID['center-echo']];
+    const { finalResult } = applyRules(base, rules, ctx());
+    expect(finalResult).toEqual(['cherry', 'cherry', 'grape', 'cherry', 'ruby']);
+  });
+
+  it('red-dye then center-echo: the mirror copies a just-converted cell', () => {
+    // red-dye: cell1 (lemon) and cell3 (diamond) -> cherry. center-echo: cell3 =
+    // cell1 = cherry (cell1 is now the converted cherry).
+    const base: SymbolType[] = ['ruby', 'lemon', 'grape', 'diamond', 'seven'];
+    const rules: Rule[] = [RULES_BY_ID['red-dye'], RULES_BY_ID['center-echo']];
+    const { finalResult } = applyRules(base, rules, ctx());
+    expect(finalResult[1]).toBe('cherry'); // converted by red-dye
+    expect(finalResult[3]).toBe('cherry'); // center-echo copied the converted cell1
+  });
+
+  it('two transforms on the same cell: the LOWER one wins', () => {
+    // first-cherry writes cell0 = cherry. Then left-pair-equivalent? Use two rules
+    // that both write cell0: first-cherry, then a copy-above of nothing... instead
+    // use first-cherry (cell0=cherry) then select? Simpler: first-cherry then
+    // red-dye does NOT touch cherry. Use first-cherry then ... we want two writers
+    // of cell0. third-mirror writes cell2; use first-cherry then a manual: red-dye
+    // would skip cherry. So pair first-cherry with a later transform on cell0.
+    // left-pair writes cell1 (not cell0). The cleanest two-writers-of-cell0:
+    // safe-convert (cell0 four -> ruby) THEN first-cherry (cell0 -> cherry).
+    const base: SymbolType[] = ['four', 'lemon', 'grape', 'diamond', 'seven'];
+    const rules: Rule[] = [RULES_BY_ID['safe-convert'], RULES_BY_ID['first-cherry']];
+    const { finalResult } = applyRules(base, rules, ctx());
+    expect(finalResult[0]).toBe('cherry'); // first-cherry (lower) overwrites safe-convert's ruby
+  });
+
+  it('first-cherry above safe-convert: reverse order -> safe-convert no longer sees a 4', () => {
+    // first-cherry: cell0 (four) -> cherry. safe-convert: no 4s left -> no-op.
+    const base: SymbolType[] = ['four', 'lemon', 'grape', 'diamond', 'seven'];
+    const rules: Rule[] = [RULES_BY_ID['first-cherry'], RULES_BY_ID['safe-convert']];
+    const { finalResult } = applyRules(base, rules, ctx());
+    expect(finalResult[0]).toBe('cherry');
+  });
+
+  it('four-shield then four-parry: shield removes all 4s, parry finds none -> no-op', () => {
+    // four-shield rerolls cell0 & cell2 (both four) to grape. four-parry then finds
+    // no four -> no-op. Only two draws consumed.
+    const base: SymbolType[] = ['four', 'cherry', 'four', 'diamond', 'lemon'];
+    const rng = queuedRng([rngPoint('grape'), rngPoint('grape')]);
+    const rules: Rule[] = [RULES_BY_ID['four-shield'], RULES_BY_ID['four-parry']];
+    const { finalResult } = applyRules(base, rules, ctx(rng));
+    expect(finalResult[0]).toBe('grape');
+    expect(finalResult[2]).toBe('grape');
+    expect(finalResult.includes('four')).toBe(false);
+  });
+
+  it('four-parry then four-shield: parry clears the leftmost 4, shield clears the rest', () => {
+    // four-parry: cell0 (four) -> lemon. four-shield: remaining fours (cell2) -> grape.
+    const base: SymbolType[] = ['four', 'cherry', 'four', 'diamond', 'seven'];
+    const rng = queuedRng([rngPoint('lemon'), rngPoint('grape')]);
+    const rules: Rule[] = [RULES_BY_ID['four-parry'], RULES_BY_ID['four-shield']];
+    const { finalResult } = applyRules(base, rules, ctx(rng));
+    expect(finalResult[0]).toBe('lemon'); // parry
+    expect(finalResult[2]).toBe('grape'); // shield got the second four
+    expect(finalResult.includes('four')).toBe(false);
+  });
+
+  it('lock (pre-roll) + transform targeting the locked cell: transform is BLOCKED', () => {
+    // center-lock holds cell2 = previous[2] = ruby. third-mirror would set cell2 =
+    // cell4, but cell2 is frozen -> blocked.
+    const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'seven'];
+    const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['third-mirror']];
+    const { finalResult, locked } = applyRules(base, rules, {
+      previousResult: ['x', 'x', 'ruby', 'x', 'x'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([]),
+    });
+    expect(finalResult[2]).toBe('ruby'); // frozen, third-mirror could not write it
+    expect(locked[2]).toBe(true);
+  });
+
+  it('lock (pre-roll) + reroll targeting the locked cell: reroll SKIPS it', () => {
+    // last-lock holds cell4 = previous[4] = four. four-shield rerolls all NON-locked
+    // fours: cell0 -> lemon, but the locked cell4 (also a four) is skipped.
+    const base: SymbolType[] = ['four', 'cherry', 'cherry', 'cherry', 'four'];
+    const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['four-shield']];
+    const { finalResult, locked } = applyRules(base, rules, {
+      previousResult: ['x', 'x', 'x', 'x', 'four'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([rngPoint('lemon')]),
+    });
+    expect(finalResult[0]).toBe('lemon'); // rerolled
+    expect(finalResult[4]).toBe('four'); // locked, skipped
+    expect(locked[4]).toBe(true);
+  });
+
+  it('third-mirror after last-lock: cell2 copies the HELD cell4 value', () => {
+    // last-lock holds cell4 = previous[4] = sapphire. third-mirror: cell2 = cell4 =
+    // sapphire (reading the held value). cell2 itself is NOT locked, so it writes.
+    const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'four'];
+    const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['third-mirror']];
+    const { finalResult, locked } = applyRules(base, rules, {
+      previousResult: ['x', 'x', 'x', 'x', 'sapphire'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([]),
+    });
+    expect(finalResult[4]).toBe('sapphire'); // held
+    expect(finalResult[2]).toBe('sapphire'); // copied the held value
+    expect(locked[2]).toBe(false);
+  });
+
+  it('first-cherry then left-pair: left-pair copies the just-written cherry', () => {
+    // first-cherry: cell0 = cherry. left-pair: cell1 = cell0 = cherry.
+    const base: SymbolType[] = ['seven', 'lemon', 'grape', 'diamond', 'ruby'];
+    const rules: Rule[] = [RULES_BY_ID['first-cherry'], RULES_BY_ID['left-pair']];
+    const { finalResult } = applyRules(base, rules, ctx());
+    expect(finalResult[0]).toBe('cherry');
+    expect(finalResult[1]).toBe('cherry'); // copied the new cell0
+  });
+
+  it('copy-above duplicates a transform under sequential model (left-pair twice = idempotent copy)', () => {
+    // left-pair: cell1 = cell0 = cherry. copy-above re-applies left-pair: cell1 =
+    // cell0 = cherry again (same result, but it DID overwrite, not skip).
+    const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'ruby'];
+    const rules: Rule[] = [RULES_BY_ID['left-pair'], RULES_BY_ID['copy-above']];
+    const { finalResult, steps } = applyRules(base, rules, ctx());
+    expect(finalResult[1]).toBe('cherry');
+    expect(steps[1].label).toBe('COPY ABOVE → LEFT PAIR');
+  });
+
+  it('copy-above duplicates a reroll, hitting the NOW-leftmost match', () => {
+    // gem-fish: leftmost non-gem = cell0 (seven) -> ruby. copy-above re-runs
+    // gem-fish: leftmost non-gem is now cell1 (zero) -> sapphire.
+    const base: SymbolType[] = ['seven', 'zero', 'diamond', 'ruby', 'sapphire'];
+    const rng = queuedRng([rngPoint('ruby'), rngPoint('sapphire')]);
+    const rules: Rule[] = [RULES_BY_ID['gem-fish'], RULES_BY_ID['copy-above']];
+    const { finalResult } = applyRules(base, rules, ctx(rng));
+    expect(finalResult[0]).toBe('ruby'); // first gem-fish
+    expect(finalResult[1]).toBe('sapphire'); // copy-above hit the next non-gem
+  });
+
+  it('select-copy OVERWRITES a prior transform (locked cells excluded)', () => {
+    // first-cherry sets cell0 = cherry, then select-copy lets the player set
+    // cell1 = cell0 = cherry, OVERWRITING whatever was there. cell0 stays excluded
+    // from copy selection (no left neighbour); nothing is locked.
+    const base: SymbolType[] = ['seven', 'lemon', 'grape', 'diamond', 'ruby'];
+    const rules: Rule[] = [RULES_BY_ID['first-cherry'], RULES_BY_ID['select-copy']];
+    const frame = beginCascade(base, rules, ctxNoRng);
+    expect(frame.pending?.kind).toBe('copy');
+    expect(frame.working[0]).toBe('cherry'); // first-cherry already applied
+    expect(frame.pending?.selectable).toEqual([false, true, true, true, true]);
+    const done = resolveSelection(frame, rules, ctxNoRng, [1]);
+    expect(done.working[1]).toBe('cherry'); // copied cell0 (cherry), overwriting lemon
+  });
+
+  it('select-swap OVERWRITES prior transforms; a locked cell is not selectable', () => {
+    // center-lock holds cell2. left-pair sets cell1 = cell0. select-swap then swaps
+    // two NON-locked cells the player picks (cell2 excluded).
+    const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'ruby'];
+    const rules: Rule[] = [
+      RULES_BY_ID['center-lock'],
+      RULES_BY_ID['left-pair'],
+      RULES_BY_ID['select-swap'],
+    ];
+    const frame = beginCascade(base, rules, {
+      previousResult: ['x', 'x', 'grape', 'x', 'x'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([]),
+    });
+    expect(frame.working[1]).toBe('cherry'); // left-pair applied
+    expect(frame.pending?.kind).toBe('swap');
+    expect(frame.pending?.selectable[2]).toBe(false); // locked
+    const done = resolveSelection(frame, rules, {
+      previousResult: ['x', 'x', 'grape', 'x', 'x'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([]),
+    }, [0, 4]);
+    expect(done.working[0]).toBe('ruby'); // swapped from cell4
+    expect(done.working[4]).toBe('cherry'); // swapped from cell0
+    expect(done.working[2]).toBe('grape'); // locked, untouched
+  });
+
+  it('select-reroll OVERWRITES a prior transform on the chosen cell', () => {
+    // first-cherry sets cell0 = cherry; select-reroll rerolls cell0 -> seven,
+    // overwriting it (cell0 IS selectable for reroll — only locks are excluded).
+    const base: SymbolType[] = ['lemon', 'lemon', 'grape', 'diamond', 'ruby'];
+    const rules: Rule[] = [RULES_BY_ID['first-cherry'], RULES_BY_ID['select-reroll']];
+    const ictx = { previousResult: PREV, weights: BASE_WEIGHTS, rng: queuedRng([rngPoint('seven')]) };
+    const frame = beginCascade(base, rules, ictx);
+    expect(frame.working[0]).toBe('cherry');
+    expect(frame.pending?.selectable[0]).toBe(true); // not locked -> selectable
+    const done = resolveSelection(frame, rules, ictx, [0]);
+    expect(done.working[0]).toBe('seven'); // rerolled, overwriting the cherry
+  });
+
+  it('zero-to-seven then seven-fish-like chain: conversions stack sequentially', () => {
+    // zero-to-seven: all zeros -> seven. Then left-pair copies cell0 (now seven)
+    // into cell1 -> demonstrates reading a converted value downstream.
+    const base: SymbolType[] = ['zero', 'lemon', 'zero', 'diamond', 'zero'];
+    const rules: Rule[] = [RULES_BY_ID['zero-to-seven'], RULES_BY_ID['left-pair']];
+    const { finalResult } = applyRules(base, rules, ctx());
+    expect(finalResult[0]).toBe('seven'); // converted
+    expect(finalResult[1]).toBe('seven'); // left-pair copied the converted cell0
+    expect(finalResult[2]).toBe('seven');
+    expect(finalResult[4]).toBe('seven');
+  });
+});

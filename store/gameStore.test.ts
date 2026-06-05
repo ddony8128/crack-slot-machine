@@ -388,6 +388,67 @@ describe('interactive select rules', () => {
   });
 });
 
+describe('multi-rule sequential resolution (full spin via store)', () => {
+  // Place a list of rules into slots 0..n directly, then spin. The board is rolled
+  // by the injected rng; transform-only rule sets keep rng consumption to the
+  // 5 board draws so the result is fully deterministic.
+  function spinWithSlots(ruleIds: string[], rng: Rng) {
+    const store = createGameStore(rng);
+    store.getState().setNickname('seq');
+    store.getState().startGame();
+    const slots: Array<typeof RULES_BY_ID[string] | null> = [null, null, null, null, null];
+    ruleIds.forEach((id, i) => {
+      slots[i] = RULES_BY_ID[id];
+    });
+    store.setState({ ruleSlots: slots, status: 'ready-to-spin' });
+    store.getState().spin();
+    return store;
+  }
+
+  it('gem-fish then left-pair resolves with left-pair OVERWRITING cell1', () => {
+    // Force a non-gem board so gem-fish has work: roll all sevens (cell0..4=seven),
+    // gem-fish rerolls leftmost non-gem (cell0) -> ruby, then left-pair sets cell1 =
+    // cell0 = ruby (OVERWRITES whatever was at cell1). 5 board draws + 1 reroll draw.
+    const band = (k: number) => (k + 0.5) / TOTAL;
+    // sevens for the 5 board cells, then a ruby (index 4) for the gem-fish reroll.
+    const rng = loopingRng([
+      band(6), band(6), band(6), band(6), band(6), // board: 5 sevens
+      band(4), // gem-fish reroll -> ruby
+    ]);
+    const store = spinWithSlots(['gem-fish', 'left-pair'], rng);
+    const s = store.getState();
+    expect(s.status).toBe('spin-result');
+    const fr = s.spinLogs[0].finalResult;
+    expect(fr[0]).toBe('ruby'); // gem-fish rerolled cell0
+    expect(fr[1]).toBe('ruby'); // left-pair OVERWROTE cell1 = cell0
+  });
+
+  it('first-cherry then left-pair then center-echo chains sequentially', () => {
+    // board all lemons. first-cherry: cell0 -> cherry. left-pair: cell1 = cell0 =
+    // cherry. center-echo: cell3 = cell1 = cherry. Only 5 board draws consumed.
+    const band = (k: number) => (k + 0.5) / TOTAL;
+    const rng = loopingRng([band(1), band(1), band(1), band(1), band(1)]); // lemons
+    const store = spinWithSlots(['first-cherry', 'left-pair', 'center-echo'], rng);
+    const fr = store.getState().spinLogs[0].finalResult;
+    expect(fr[0]).toBe('cherry');
+    expect(fr[1]).toBe('cherry');
+    expect(fr[3]).toBe('cherry');
+  });
+
+  it('safe-convert then first-cherry: the lower first-cherry wins on cell0', () => {
+    // board all fours. safe-convert: every four -> ruby. first-cherry: cell0 ->
+    // cherry (OVERWRITES the ruby). cells 1..4 stay ruby.
+    const band = (k: number) => (k + 0.5) / TOTAL;
+    const rng = loopingRng([band(8), band(8), band(8), band(8), band(8)]); // fours
+    const store = spinWithSlots(['safe-convert', 'first-cherry'], rng);
+    const fr = store.getState().spinLogs[0].finalResult;
+    expect(fr[0]).toBe('cherry'); // first-cherry (lower) overwrote safe-convert
+    expect(fr[1]).toBe('ruby');
+    expect(fr[4]).toBe('ruby');
+    expect(fr.includes('four')).toBe(false);
+  });
+});
+
 describe('reset', () => {
   it('preserves nickname and clears state', () => {
     const store = createGameStore(loopingRng([RNG_CHERRY]));

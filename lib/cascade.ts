@@ -16,7 +16,7 @@ const REROLL_CAP = 30;
 
 /**
  * A `select` rule waiting for player input. `selectable[i]` is true for cells
- * the player may pick (computed per-rule from the current claimed/locked state).
+ * the player may pick (computed per-rule from the current locked state).
  */
 export type Pending = {
   kind: SelectKind;
@@ -34,7 +34,6 @@ export type Pending = {
  */
 export type CascadeFrame = {
   working: SymbolType[];
-  claimed: boolean[];
   locked: boolean[];
   steps: SpinLogStep[];
   baseResult: SymbolType[];
@@ -44,16 +43,20 @@ export type CascadeFrame = {
   interactive: boolean;
 };
 
-/** Write a cell only if unclaimed; returns true if it actually wrote (and claimed). */
+/**
+ * Write a cell UNLESS it is frozen by a lock. Under the PURE SEQUENTIAL model a
+ * later rule freely overwrites whatever an earlier rule wrote — the ONLY cell a
+ * rule may never touch is a `locked` (pre-roll held) cell. Returns true if it
+ * actually wrote.
+ */
 function write(
   working: SymbolType[],
-  claimed: boolean[],
+  locked: boolean[],
   i: number,
   value: SymbolType,
 ): boolean {
-  if (claimed[i]) return false;
+  if (locked[i]) return false;
   working[i] = value;
-  claimed[i] = true;
   return true;
 }
 
@@ -61,12 +64,15 @@ function write(
  * Apply a single non-lock, non-select, non-meta board rule (reroll/transform).
  * Mirrors the original applyRules switch. `select` and `lock` are handled
  * elsewhere; weight/score have no board effect.
+ *
+ * PURE SEQUENTIAL: each rule writes its target(s) freely, overwriting any earlier
+ * change; the only off-limits cells are `locked` (pre-roll held) ones. "leftmost
+ * X" targeting therefore skips only LOCKED cells, never previously-written ones.
  */
 function applyOne(
   rule: Rule,
   working: SymbolType[],
-  claimed: boolean[],
-  _locked: boolean[],
+  locked: boolean[],
   ctx: ApplyCtx,
 ): void {
   const { weights, rng } = ctx;
@@ -74,91 +80,88 @@ function applyOne(
     // ---- reroll ----
     case 'four-shield':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'four' && !claimed[i]) write(working, claimed, i, rollSymbol(weights, rng));
+        if (working[i] === 'four' && !locked[i]) write(working, locked, i, rollSymbol(weights, rng));
       }
       break;
     case 'four-parry': {
-      const idx = working.findIndex((s, i) => s === 'four' && !claimed[i]);
+      const idx = working.findIndex((s, i) => s === 'four' && !locked[i]);
       if (idx !== -1) {
         let iter = 0;
         while (iter < REROLL_CAP && working[idx] === 'four') {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
-        claimed[idx] = true;
       }
       break;
     }
     case 'gem-shuffle': {
-      const idx = working.findIndex((s, i) => GEM_SET.has(s) && !claimed[i]);
+      const idx = working.findIndex((s, i) => GEM_SET.has(s) && !locked[i]);
       if (idx !== -1) {
         let iter = 0;
         while (iter < REROLL_CAP && GEM_SET.has(working[idx])) {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
-        claimed[idx] = true;
       }
       break;
     }
     case 'fruit-fish': {
-      const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !claimed[i]);
+      const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !locked[i]);
       if (idx !== -1) {
         let iter = 0;
         while (iter < REROLL_CAP && !FRUIT_SET.has(working[idx])) {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
-        claimed[idx] = true;
       }
       break;
     }
     case 'gem-fish': {
-      const idx = working.findIndex((s, i) => !GEM_SET.has(s) && !claimed[i]);
+      const idx = working.findIndex((s, i) => !GEM_SET.has(s) && !locked[i]);
       if (idx !== -1) {
         let iter = 0;
         while (iter < REROLL_CAP && !GEM_SET.has(working[idx])) {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
-        claimed[idx] = true;
       }
       break;
     }
 
     // ---- transform ----
     case 'left-pair':
-      write(working, claimed, 1, working[0]);
+      write(working, locked, 1, working[0]);
       break;
     case 'center-echo':
-      write(working, claimed, 3, working[1]);
+      write(working, locked, 3, working[1]);
       break;
     case 'third-mirror':
-      write(working, claimed, 2, working[4]);
+      write(working, locked, 2, working[4]);
       break;
     case 'first-cherry':
-      write(working, claimed, 0, 'cherry');
+      write(working, locked, 0, 'cherry');
       break;
     case 'safe-convert':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'four' && !claimed[i]) write(working, claimed, i, 'ruby');
+        if ((working[i] === 'four' || working[i] === 'zero') && !locked[i])
+          write(working, locked, i, 'ruby');
       }
       break;
     case 'zero-to-seven':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'zero' && !claimed[i]) write(working, claimed, i, 'seven');
+        if (working[i] === 'zero' && !locked[i]) write(working, locked, i, 'seven');
       }
       break;
     case 'red-dye':
       for (let i = 0; i < working.length; i++) {
-        if ((working[i] === 'lemon' || working[i] === 'diamond') && !claimed[i])
-          write(working, claimed, i, 'cherry');
+        if ((working[i] === 'lemon' || working[i] === 'diamond') && !locked[i])
+          write(working, locked, i, 'cherry');
       }
       break;
     case 'blue-dye':
       for (let i = 0; i < working.length; i++) {
-        if ((working[i] === 'lemon' || working[i] === 'diamond') && !claimed[i])
-          write(working, claimed, i, 'sapphire');
+        if ((working[i] === 'lemon' || working[i] === 'diamond') && !locked[i])
+          write(working, locked, i, 'sapphire');
       }
       break;
 
@@ -178,11 +181,10 @@ const SELECT_KIND: Record<string, SelectKind> = {
 
 /**
  * Cells the player may pick for the given select rule. The player can act on ANY
- * cell that is not FROZEN by a lock rule — NOT limited to "unclaimed" cells. This
- * gives the interactive rule real agency (it can rearrange cells earlier auto
- * rules already touched) and makes the disabled criterion obvious: only the
- * greyed/🔒 locked cells are off-limits. (`select-copy` also excludes index 0,
- * which has no left neighbour to copy.)
+ * cell that is not FROZEN by a lock rule. Under the pure sequential model the
+ * select rule simply overwrites whatever earlier rules wrote — only the greyed/🔒
+ * locked cells are off-limits. (`select-copy` also excludes index 0, which has no
+ * left neighbour to copy.)
  */
 function selectableFor(kind: SelectKind, locked: boolean[]): boolean[] {
   const out = locked.map((l) => !l);
@@ -214,7 +216,6 @@ export function beginCascade(
   opts: { autoSkipSelect?: boolean } = {},
 ): CascadeFrame {
   const working: SymbolType[] = [...base];
-  const claimed: boolean[] = [false, false, false, false, false];
   const locked: boolean[] = [false, false, false, false, false];
 
   // --- PRE-ROLL HOLD pass: freeze locked cells to the previous spin value. ---
@@ -222,18 +223,15 @@ export function beginCascade(
     if (!rule || rule.type !== 'lock') continue;
     if (rule.id === 'center-lock') {
       working[2] = ctx.previousResult[2];
-      claimed[2] = true;
       locked[2] = true;
     } else if (rule.id === 'last-lock') {
       working[4] = ctx.previousResult[4];
-      claimed[4] = true;
       locked[4] = true;
     } else if (rule.id === 'fruit-freeze') {
       let held = 0;
       for (let i = 0; i < ctx.previousResult.length && held < 2; i++) {
         if (FRUIT_SET.has(ctx.previousResult[i])) {
           working[i] = ctx.previousResult[i];
-          claimed[i] = true;
           locked[i] = true;
           held += 1;
         }
@@ -245,7 +243,6 @@ export function beginCascade(
 
   const frame: CascadeFrame = {
     working,
-    claimed,
     locked,
     steps: [],
     baseResult,
@@ -259,11 +256,13 @@ export function beginCascade(
 }
 
 /**
- * Process slots from `frame.slotIndex` onward (top -> bottom), first-claim
- * semantics. PAUSES (returns with `frame.pending` set, slotIndex left on the
- * select rule) when it reaches a `select` rule that needs input. Auto-skips a
- * select rule whose constraint can't be met (pushes a "(건너뜀)" step). When all
- * slots are processed, sets `frame.done = true`.
+ * Process slots from `frame.slotIndex` onward (top -> bottom) under PURE
+ * SEQUENTIAL semantics: each rule overwrites whatever earlier rules wrote, the
+ * only off-limits cells being pre-roll `locked` ones. PAUSES (returns with
+ * `frame.pending` set, slotIndex left on the select rule) when it reaches a
+ * `select` rule that needs input. Auto-skips a select rule whose constraint can't
+ * be met (pushes a "(건너뜀)" step). When all slots are processed, sets
+ * `frame.done = true`.
  */
 export function advanceCascade(
   frame: CascadeFrame,
@@ -271,7 +270,7 @@ export function advanceCascade(
   ctx: ApplyCtx,
   opts: { autoSkipSelect?: boolean } = {},
 ): CascadeFrame {
-  const { working, claimed, locked, steps } = frame;
+  const { working, locked, steps } = frame;
 
   for (; frame.slotIndex < rules.length; frame.slotIndex++) {
     const slotIndex = frame.slotIndex;
@@ -307,14 +306,14 @@ export function advanceCascade(
         // weight/score/select rules are not board-changing here; only
         // reroll/transform re-apply a post-roll board effect.
         if (above.type === 'reroll' || above.type === 'transform') {
-          applyOne(above, working, claimed, locked, ctx);
+          applyOne(above, working, locked, ctx);
         }
         steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
       }
       continue;
     }
 
-    applyOne(rule, working, claimed, locked, ctx);
+    applyOne(rule, working, locked, ctx);
     steps.push({ label: rule.name, result: [...working], locked: [...locked] });
   }
 
@@ -324,8 +323,10 @@ export function advanceCascade(
 
 /**
  * Apply the pending select rule at `frame.slotIndex` with the player's chosen
- * `indices`, claim the written cell(s), push a step, then resume advancing to
- * the next pause or completion. Assumes `indices` were validated by the caller.
+ * `indices`, push a step, then resume advancing to the next pause or completion.
+ * Assumes `indices` were validated by the caller (selectable cells exclude locked
+ * ones, so the write is always safe). Under the pure sequential model the select
+ * rule simply overwrites the chosen cells.
  */
 export function resolveSelection(
   frame: CascadeFrame,
@@ -336,16 +337,15 @@ export function resolveSelection(
   const pending = frame.pending;
   if (!pending) return frame;
 
-  const { working, claimed, locked, steps } = frame;
+  const { working, locked, steps } = frame;
   const rule = rules[frame.slotIndex];
   const ruleName = rule?.name ?? pending.ruleName;
 
   switch (pending.kind) {
     case 'copy': {
       const i = indices[0];
-      // cell[i] = cell[i-1]; claim i.
+      // cell[i] = cell[i-1].
       working[i] = working[i - 1];
-      claimed[i] = true;
       break;
     }
     case 'swap': {
@@ -353,14 +353,11 @@ export function resolveSelection(
       const tmp = working[a];
       working[a] = working[b];
       working[b] = tmp;
-      claimed[a] = true;
-      claimed[b] = true;
       break;
     }
     case 'reroll': {
       const i = indices[0];
       working[i] = rollSymbol(ctx.weights, ctx.rng);
-      claimed[i] = true;
       break;
     }
   }

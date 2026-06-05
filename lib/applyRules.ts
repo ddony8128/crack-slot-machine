@@ -10,8 +10,10 @@ export type { ApplyCtx } from '@/lib/cascade';
  * `select` rule is auto-skipped (no pause). The interactive store path uses
  * beginCascade/advanceCascade/resolveSelection directly to PAUSE for input.
  *
- * MODEL: locks are PRE-ROLL HOLD; everything else is "upper wins" (first-claim).
- * See docs/RULESLOT_SPEC.md §5 for the full semantics.
+ * MODEL: locks are PRE-ROLL HOLD (absolute); every other rule applies top→bottom
+ * and a LATER rule overwrites whatever an earlier rule wrote (pure sequential —
+ * no first-claim). The only cells a rule may never touch are the pre-roll locked
+ * ones. See docs/RULESLOT_SPEC.md §5 for the full semantics.
  */
 export function applyRules(
   base: SymbolType[],

@@ -73,15 +73,16 @@ Evaluated after the round resolves:
 
 ## 4b. Interactive SELECT rules (resumable cascade)
 Three `select`-type rules (build `order`) PAUSE the cascade for player input,
-then RESUME. Selectable cells = currently UNCLAIMED cells (pre-roll holds + cells
-written by earlier first-claim rules are claimed and thus not selectable).
-- `select-copy` (SELECT COPY): player picks ONE unclaimed cell at index i≥1;
-  `cell[i] = cell[i-1]`; claim i. Eligible cells = unclaimed AND index ≥ 1.
+then RESUME. Selectable cells = any cell NOT frozen by a pre-roll lock (locked
+cells are absolute and off-limits). Cells an earlier rule already wrote ARE still
+selectable — the select rule simply OVERWRITES them (pure sequential model).
+- `select-copy` (SELECT COPY): player picks ONE non-locked cell at index i≥1;
+  `cell[i] = cell[i-1]`. Eligible cells = non-locked AND index ≥ 1.
   If none eligible → AUTO-SKIP (no pause; step "SELECT COPY (건너뜀)").
-- `select-swap` (SELECT SWAP): player picks TWO unclaimed cells a,b; swap their
-  symbols; claim both. Needs ≥ 2 unclaimed cells; fewer → AUTO-SKIP.
-- `select-reroll` (SELECT REROLL): player picks ONE unclaimed cell i; reroll via
-  `rollSymbol(weights, rng)`; claim i. Needs ≥ 1 unclaimed cell; none → AUTO-SKIP.
+- `select-swap` (SELECT SWAP): player picks TWO non-locked cells a,b; swap their
+  symbols. Needs ≥ 2 non-locked cells; fewer → AUTO-SKIP.
+- `select-reroll` (SELECT REROLL): player picks ONE non-locked cell i; reroll via
+  `rollSymbol(weights, rng)`. Needs ≥ 1 non-locked cell; none → AUTO-SKIP.
 When a select rule resolves (player picked, or it auto-skips) it pushes a
 `SpinLogStep` (label = rule name, or "{name} (건너뜀)" when skipped) like other
 cascade rules.
@@ -90,18 +91,19 @@ cascade rules.
 A single engine backs both the pure path and the interactive store path:
 - `beginCascade(base, rules, ctx, opts?)`: runs the PRE-ROLL HOLD pass, captures
   `baseResult`, returns a frame
-  `{ working, claimed, locked, steps, baseResult, slotIndex, pending, done, interactive }`
+  `{ working, locked, steps, baseResult, slotIndex, pending, done, interactive }`
   and immediately advances.
 - `advanceCascade(frame, rules, ctx, opts?)`: processes non-lock/weight/score
-  rules from `frame.slotIndex` (existing first-claim semantics). On a `select`
-  rule that needs input it sets `frame.pending = { kind, ruleName, selectable }`
-  and RETURNS (paused; slotIndex stays on that rule). Auto-skipped select rules
-  push their step and continue. When all slots are processed `frame.done = true`.
-  With `opts.autoSkipSelect`, select rules ALWAYS auto-skip (the pure path).
+  rules from `frame.slotIndex` (pure sequential — a later rule overwrites an
+  earlier one; only `locked` cells are off-limits). On a `select` rule that needs
+  input it sets `frame.pending = { kind, ruleName, selectable }` and RETURNS
+  (paused; slotIndex stays on that rule). Auto-skipped select rules push their
+  step and continue. When all slots are processed `frame.done = true`. With
+  `opts.autoSkipSelect`, select rules ALWAYS auto-skip (the pure path).
 - `resolveSelection(frame, rules, ctx, indices)`: applies the pending select rule
-  with the chosen indices (copy/swap/reroll), claims written cells, pushes a step,
-  sets `frame.interactive = true`, clears `pending`, advances past the rule, then
-  continues advancing to the next pause or completion.
+  with the chosen indices (copy/swap/reroll) — overwriting those cells — pushes a
+  step, sets `frame.interactive = true`, clears `pending`, advances past the rule,
+  then continues advancing to the next pause or completion.
 
 `applyRules` (lib/applyRules.ts) is a thin wrapper that runs
 `beginCascade(..., { autoSkipSelect: true })` to completion, so it stays pure &
@@ -126,7 +128,7 @@ Three phases:
   `last-lock` → cell[4] = previousResult[4], `fruit-freeze` → the leftmost TWO indices of
   `previousResult` whose symbol is a FRUIT (cherry/lemon/grape) are each held to that previous value
   (if fewer than two fruits exist, hold however many there are: 0, 1, or 2). A held cell is set
-  `claimed=true`, `locked=true`. A held
+  `locked=true`. A held
   cell **does not spin** and is **ABSOLUTE**: it is order-independent — no later reroll/transform/meta
   can ever change it regardless of slot position, and lock order among themselves is irrelevant
   (different cells). Locks push **no** `SpinLogStep`s. The `lock`-type rules are
@@ -137,36 +139,41 @@ Three phases:
   that is NOT `weight`, NOT `score`, and NOT `lock` (locks were already applied), apply its effect to
   the working array and push a `SpinLogStep { label, result: <copy>, locked: <copy> }`.
 
-**Conflict model — locks are absolute; non-lock rules use "upper wins" (first-claim).** Held (locked)
-cells are resolved pre-roll and can never be overwritten. Among the NON-lock rules maintain
-`claimed: boolean[5]` (held cells start `true`). The FIRST non-lock rule to WRITE a cell claims it;
-any later rule that would write the same cell is skipped. Reading a cell always reads its current
-value. Consequences:
-- A `lock` ALWAYS protects its cell, regardless of slot position — there is no "lock must be above"
-  requirement anymore; the hold is pre-roll and absolute.
-- Among non-lock rules the first-claim rule holds: the topmost rule touching a cell wins.
+**Conflict model — PURE SEQUENTIAL (top→bottom; a later rule overwrites the current board).** Held
+(locked) cells are resolved PRE-ROLL and are ABSOLUTE: a locked cell is frozen and NO rule may ever
+change it, regardless of slot position. Every OTHER (non-lock) rule applies in slot order to the
+working board and writes its target cell(s) FREELY — overwriting whatever an earlier rule wrote. The
+ONLY restriction on any reroll/transform/select/meta write is that it must never touch a `locked`
+cell. There is NO first-claim / "upper wins" anymore; the LATER rule wins. Reading a cell always
+reads its current (most-recently-written) value. Consequences:
+- A `lock` ALWAYS protects its cell, regardless of slot position — the hold is pre-roll and absolute.
+- Among non-lock rules ORDER MATTERS and the LOWER (later) rule wins. Example: `gem-fish` rerolls
+  cell1, then `left-pair` below it overwrites cell1 = cell0; if the order is reversed, `left-pair`
+  sets cell1 = cell0 first and `gem-fish` may then reroll it. A lower rule is never silently
+  no-op'd by an earlier write.
 
 `locked: boolean[5]` is set true for each cell frozen by a lock rule in the pre-roll hold pass (used
 by the UI to render frozen cells greyed-out for the WHOLE reveal — they never spin). Each
 `SpinLogStep` carries a `locked` snapshot; `applyRules` returns the final `locked` array too.
 
-"write a cell" = set it only if unclaimed, then mark it claimed. "reroll a cell" = write it via
-`rollSymbol(weights, rng)` (full active weights) unless a rule specifies a restricted set. Every
-reroll/transform/lock below targets only UNclaimed cells.
+"write a cell" = set it unless it is `locked` (then it overwrites the current value). "reroll a cell"
+= write it via `rollSymbol(weights, rng)` (full active weights) unless a rule specifies a restricted
+set. Every reroll/transform below targets only NON-locked cells; a "leftmost X" reroll finds the
+leftmost NON-locked cell matching X.
 
 Per-rule post-roll behavior (cell indices 0-based):
 - `four-shield` (reroll): every cell == four (and not locked) rerolled once. (Also applies a
   zero ×2 weight in the pre-roll weight phase — see above.)
-- `four-parry` (reroll, loop-until): the leftmost non-claimed cell == four is rerolled REPEATEDLY
-  (`rollSymbol`, full weights) until it is NOT a four, capped at **30** iterations, then the cell is
-  claimed. No-op if no such cell. (Mirrors the fruit-fish/gem-fish loop pattern.)
-- `gem-shuffle` (reroll, loop-until): the leftmost non-claimed GEM cell is rerolled REPEATEDLY
-  (`rollSymbol`, full weights) until it is NOT a gem, capped at **30** iterations, then the cell is
-  claimed. No-op if no such cell. [anti-gem]
-- `fruit-fish` (reroll, loop-until): the leftmost non-claimed NON-fruit cell (a number or gem) is
-  rerolled REPEATEDLY until it IS a fruit, capped at **30** iterations, then claimed. No-op if none.
-- `gem-fish` (reroll, loop-until): the leftmost non-claimed NON-gem cell (a number or fruit) is
-  rerolled REPEATEDLY until it IS a gem, capped at **30** iterations, then claimed. Symmetric to
+- `four-parry` (reroll, loop-until): the leftmost NON-locked cell == four is rerolled REPEATEDLY
+  (`rollSymbol`, full weights) until it is NOT a four, capped at **30** iterations. No-op if no such
+  cell. (Mirrors the fruit-fish/gem-fish loop pattern.)
+- `gem-shuffle` (reroll, loop-until): the leftmost NON-locked GEM cell is rerolled REPEATEDLY
+  (`rollSymbol`, full weights) until it is NOT a gem, capped at **30** iterations. No-op if no such
+  cell. [anti-gem]
+- `fruit-fish` (reroll, loop-until): the leftmost NON-locked NON-fruit cell (a number or gem) is
+  rerolled REPEATEDLY until it IS a fruit, capped at **30** iterations. No-op if none.
+- `gem-fish` (reroll, loop-until): the leftmost NON-locked NON-gem cell (a number or fruit) is
+  rerolled REPEATEDLY until it IS a gem, capped at **30** iterations. Symmetric to
   `fruit-fish`. No-op if none.
 - `number-spin` (weight): PRE-ROLL roll-restriction, NOT a post-roll cascade rule. It is handled in
   `rollBoard` during the roll (see §5) and produces NO step. It is skipped by the cascade.
@@ -174,11 +181,11 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `center-echo` (transform): cell[3] = cell[1].
 - `third-mirror` (transform): cell[2] = cell[4].
 - `first-cherry` (transform): cell[0] = 'cherry'.
-- `safe-convert` (transform): ALL non-claimed four → ruby (loops over every cell, respecting
-  `claimed`; no-op if none).
-- `zero-to-seven` (transform): ALL zero → seven.
-- `red-dye` (transform): ALL non-claimed lemon AND diamond → cherry (ruby is untouched).
-- `blue-dye` (transform): ALL non-claimed lemon AND diamond → sapphire.
+- `safe-convert` (transform): ALL NON-locked four → ruby (loops over every cell, skipping locked
+  cells; no-op if none).
+- `zero-to-seven` (transform): ALL zero → seven (NON-locked cells).
+- `red-dye` (transform): ALL NON-locked lemon AND diamond → cherry (ruby is untouched).
+- `blue-dye` (transform): ALL NON-locked lemon AND diamond → sapphire.
 - `center-lock` (lock): PRE-ROLL HOLD — cell[2] held at previousResult[2]; locked[2]=true. Resolved
   before the spin; the cell does not spin and is absolute (cannot be changed by any other rule).
 - `last-lock` (lock): PRE-ROLL HOLD — cell[4] held at previousResult[4]; locked[4]=true. Same as above.
@@ -191,7 +198,9 @@ Per-rule post-roll behavior (cell indices 0-based):
 - `copy-above` (meta): duplicates the EFFECT of the rule directly above (`slotRules[i-1]`), for
   ALL rule types:
   - post-roll cascade types (reroll/transform): the effect is re-applied once on the board in
-    applyRules, pushing a step `label: "COPY ABOVE → {above.name}"`.
+    applyRules (overwriting per the sequential model — e.g. a re-applied transform writes its target
+    again; a re-applied "leftmost X" reroll picks the now-leftmost matching NON-locked cell, which may
+    differ from the first pass), pushing a step `label: "COPY ABOVE → {above.name}"`.
   - `weight` rules: the multiplier is applied an extra time in `computeWeights` (via
     `expandRules`). No board change; the step is still labeled with the copied rule's name.
   - `score` rules (seven-double / bonus-77 / clean-bonus): counted an extra time in `scoreResult`

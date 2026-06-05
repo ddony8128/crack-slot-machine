@@ -96,7 +96,7 @@ type Initializer = (
 
 function buildInitializer(rng: Rng): Initializer {
   // The in-progress cascade frame is kept OUT of GameState (it carries the live
-  // working/claimed/locked arrays threaded across the pause). It only ever
+  // working/locked arrays threaded across the pause). It only ever
   // matters between spin() and selectCells()/finalize().
   let activeFrame: CascadeFrame | null = null;
   let activeCtx: ApplyCtx | null = null;

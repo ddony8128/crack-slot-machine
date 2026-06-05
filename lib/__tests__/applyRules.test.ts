@@ -73,10 +73,10 @@ describe('applyRules — transforms', () => {
     expect(finalResult).toEqual(['ruby', 'sapphire', 'sapphire', 'cherry', 'four']);
   });
 
-  it('safe-convert: ALL 4 => 🔴 (ruby)', () => {
+  it('safe-convert: ALL 0 and 4 => 🔴 (ruby)', () => {
     const base: SymbolType[] = ['cherry', 'four', 'zero', 'four', 'lemon'];
     const { finalResult } = applyRules(base, [RULES_BY_ID['safe-convert']], noCtx);
-    expect(finalResult).toEqual(['cherry', 'ruby', 'zero', 'ruby', 'lemon']);
+    expect(finalResult).toEqual(['cherry', 'ruby', 'ruby', 'ruby', 'lemon']);
   });
 
   it('weight & score rules are skipped (no steps)', () => {
@@ -185,9 +185,10 @@ function rngPoint(target: SymbolType): number {
 }
 
 describe('applyRules — copy-above', () => {
-  it('copy-above of four-shield is a no-op (cells already claimed by first pass)', () => {
-    // Upper-wins/first-claim: four-shield rerolls both fours and CLAIMS those cells.
-    // copy-above re-runs four-shield but the cells are claimed -> no second reroll.
+  it('copy-above of four-shield is a no-op (the first pass already removed every 4)', () => {
+    // Sequential model: four-shield rerolls both fours to grape (no 4s remain).
+    // copy-above re-runs four-shield, which now finds NO fours -> no second reroll,
+    // so only two draws are consumed and the board is stable.
     const base: SymbolType[] = ['four', 'cherry', 'four', 'diamond', 'lemon'];
     const rng = queuedRng([rngPoint('grape'), rngPoint('grape')]); // first pass only
     const rules: Rule[] = [RULES_BY_ID['four-shield'], RULES_BY_ID['copy-above']];
@@ -204,7 +205,8 @@ describe('applyRules — copy-above', () => {
   });
 
   it('copy-above of four-parry extends to the NEXT leftmost four', () => {
-    // four-parry claims only the leftmost four; copy-above re-runs it on the next one.
+    // four-parry rerolls only the leftmost four; copy-above re-runs it and the
+    // now-leftmost four is the next cell (sequential, leftmost-non-locked).
     const base: SymbolType[] = ['cherry', 'four', 'four', 'diamond', 'zero'];
     const rng = queuedRng([rngPoint('lemon'), rngPoint('grape')]);
     const rules: Rule[] = [RULES_BY_ID['four-parry'], RULES_BY_ID['copy-above']];

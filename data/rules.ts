@@ -192,7 +192,7 @@ export const RULES: Rule[] = [
     name: 'SAFE CONVERT',
     type: 'transform',
     build: 'safe',
-    description: '모든 4가 루비로 바뀐다.',
+    description: '모든 0과 4가 루비로 바뀐다.',
   },
   {
     id: 'gem-shuffle',
