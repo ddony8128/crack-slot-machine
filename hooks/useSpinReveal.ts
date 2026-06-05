@@ -10,7 +10,7 @@ const REEL_SYMBOLS = Object.keys(SYMBOL_EMOJI) as SymbolType[];
 // Timing (ms)
 const ROLL_DURATION = 800; // total roll before reels begin to stop
 const REEL_STAGGER = 110; // extra delay per reel as they stop left->right
-const STEP_INTERVAL = 620; // gap between each rule-step reveal
+const STEP_INTERVAL = 1000; // gap between each rule-step reveal (slower = clearer)
 const SETTLE_AFTER_FINAL = 360; // pause after final result before showing score
 
 export type SpinRevealState = {
@@ -126,10 +126,10 @@ export function useSpinReveal(
     // at their held value (baseResult[i] == previousResult[i]) for the whole reveal.
     const lockedSet = new Set(trueIndices(latestLog.lockedCells));
 
-    // Interactive spins (a `select` rule resolved with player clicks) were
-    // already watched live during 'awaiting-selection', so skip playback and
-    // jump straight to the final board + score, same as reduced-motion.
-    if (reduced || latestLog.interactive) {
+    // After all player selections resolve, replay the FULL cinematic reveal
+    // (roll -> rules incl. the select-rule results -> final) — interactive spins
+    // are no longer skipped, so the animation/연출 isn't lost.
+    if (reduced) {
       // Instant: jump straight to the final result + score.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRolling(false);

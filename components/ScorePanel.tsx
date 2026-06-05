@@ -46,24 +46,25 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
       </div>
 
       <dl className="space-y-1.5 text-sm">
-        <div className="flex justify-between">
-          <dt className="text-zinc-400">족보 {log.hand !== "No Hand" ? `(${log.hand})` : ""}</dt>
-          <dd className="font-mono text-emerald-300">{fmt(log.handScore)}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-zinc-400">7 점수</dt>
-          <dd className="font-mono text-amber-300">{fmt(log.sevenScore)}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-zinc-400">보너스</dt>
-          <dd className="font-mono text-emerald-300">{fmt(log.bonusScore)}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-zinc-400">페널티</dt>
-          <dd className="font-mono text-rose-400">
-            {log.penalty > 0 ? `-${log.penalty}` : "0"}
-          </dd>
-        </div>
+        {/* Itemized breakdown: exactly why each point was earned/lost. */}
+        {log.scoreItems.length === 0 && (
+          <div className="flex justify-between">
+            <dt className="text-zinc-500">획득 점수 없음</dt>
+            <dd className="font-mono text-zinc-500">0</dd>
+          </div>
+        )}
+        {log.scoreItems.map((it, i) => (
+          <div key={i} className="flex justify-between">
+            <dt className="text-zinc-300">{it.label}</dt>
+            <dd
+              className={`font-mono ${
+                it.points >= 0 ? "text-emerald-300" : "text-rose-400"
+              }`}
+            >
+              {fmt(it.points)}
+            </dd>
+          </div>
+        ))}
 
         {multiplied && (
           <div className="flex justify-between border-t border-zinc-800 pt-1.5">

@@ -176,13 +176,17 @@ const SELECT_KIND: Record<string, SelectKind> = {
   'select-reroll': 'reroll',
 };
 
-/** Cells the player may pick for the given select rule, per the constraints. */
-function selectableFor(kind: SelectKind, claimed: boolean[]): boolean[] {
-  const out = claimed.map((c) => !c);
-  if (kind === 'copy') {
-    // eligible = unclaimed AND index >= 1 (cell[i] = cell[i-1]).
-    out[0] = false;
-  }
+/**
+ * Cells the player may pick for the given select rule. The player can act on ANY
+ * cell that is not FROZEN by a lock rule — NOT limited to "unclaimed" cells. This
+ * gives the interactive rule real agency (it can rearrange cells earlier auto
+ * rules already touched) and makes the disabled criterion obvious: only the
+ * greyed/🔒 locked cells are off-limits. (`select-copy` also excludes index 0,
+ * which has no left neighbour to copy.)
+ */
+function selectableFor(kind: SelectKind, locked: boolean[]): boolean[] {
+  const out = locked.map((l) => !l);
+  if (kind === 'copy') out[0] = false;
   return out;
 }
 
@@ -283,7 +287,7 @@ export function advanceCascade(
 
     if (rule.type === 'select') {
       const kind = SELECT_KIND[rule.id];
-      const selectable = selectableFor(kind, claimed);
+      const selectable = selectableFor(kind, locked);
       // The non-interactive (pure) path can never prompt: always auto-skip a
       // select rule there so applyRules stays pure & total.
       if (opts.autoSkipSelect || !isApplicable(kind, selectable)) {

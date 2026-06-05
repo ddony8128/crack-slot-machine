@@ -10,7 +10,6 @@ import SlotMachine from "@/components/SlotMachine";
 import SpinStage from "@/components/SpinStage";
 import ScorePanel from "@/components/ScorePanel";
 import SpinResultLog from "@/components/SpinResultLog";
-import ScoreBreakdown from "@/components/ScoreBreakdown";
 import {
   JackpotCelebration,
   ExtraRuleCelebration,
@@ -153,7 +152,6 @@ export default function GameScreen() {
         <>
           <ScorePanel log={latestLog} />
           {latestLog.steps.length > 0 && <SpinResultLog log={latestLog} />}
-          <ScoreBreakdown log={latestLog} />
         </>
       )}
 
