@@ -41,7 +41,7 @@ export default function StartScreen() {
           <span className="text-amber-300">SLOT</span>
         </h1>
         <p className="mt-3 text-sm text-zinc-400 sm:text-base">
-          규칙을 위→아래 순서로 배치하고, 7번의 스핀으로 최고 점수를 노려라.
+          규칙을 조작하고 레버를 당겨 최고 점수를 노려라.
         </p>
       </header>
 
