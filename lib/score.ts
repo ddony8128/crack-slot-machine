@@ -16,6 +16,7 @@ import {
   BONUS_ALL_BLUE,
   BONUS_ALL_RED,
   FOUR_PENALTY_PER,
+  FOUR_FORTUNE_PER,
   BONUS_77,
   CLEAN_BONUS,
 } from '@/data/scoreTable';
@@ -143,7 +144,14 @@ export function scoreItems(
     items.push({ label: clean > 1 ? `CLEAN SWEEP ×${clean}` : 'CLEAN SWEEP', points: CLEAN_BONUS * clean });
 
   const fours = countFours(result);
-  if (fours > 0) items.push({ label: `4 페널티 (${fours}개)`, points: -(fours * FOUR_PENALTY_PER) });
+  const fortune = countRule(expanded, 'four-fortune');
+  if (fours > 0) {
+    if (fortune > 0) {
+      items.push({ label: `4 보너스 (${fours}개)`, points: fours * FOUR_FORTUNE_PER * fortune });
+    } else {
+      items.push({ label: `4 페널티 (${fours}개)`, points: -(fours * FOUR_PENALTY_PER) });
+    }
+  }
 
   return items;
 }
@@ -175,7 +183,17 @@ export function scoreResult(
     bonusScore += CLEAN_BONUS * countRule(expanded, 'clean-bonus');
   }
 
-  const penalty = countFours(result) * FOUR_PENALTY_PER;
+  // FOUR FORTUNE: while active, each 4 scores +FOUR_FORTUNE_PER (×count via
+  // copy-above) instead of incurring the normal penalty.
+  const fours = countFours(result);
+  const fortune = countRule(expanded, 'four-fortune');
+  let penalty: number;
+  if (fortune > 0) {
+    bonusScore += fours * FOUR_FORTUNE_PER * fortune;
+    penalty = 0;
+  } else {
+    penalty = fours * FOUR_PENALTY_PER;
+  }
   const baseRoundScore = sevenPts + handScore + bonusScore - penalty;
 
   return {

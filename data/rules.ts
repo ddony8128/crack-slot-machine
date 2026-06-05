@@ -217,6 +217,13 @@ export const RULES: Rule[] = [
     build: 'score',
     description: '보드에 4가 하나도 없으면 120점을 더 얻는다.',
   },
+  {
+    id: 'four-fortune',
+    name: 'FOUR FORTUNE',
+    type: 'score',
+    build: 'score',
+    description: '4가 나올 확률이 네 배가 되고, 4 하나당 +20점이 된다.',
+  },
 ];
 
 export const RULES_BY_ID: Record<string, Rule> = Object.fromEntries(

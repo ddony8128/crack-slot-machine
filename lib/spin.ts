@@ -21,6 +21,11 @@ export function computeWeights(
       weights.zero *= 2;
       continue;
     }
+    // four-fortune is a score rule, but it ALSO quadruples the 4 weight pre-roll.
+    if (rule.id === 'four-fortune') {
+      weights.four *= 4;
+      continue;
+    }
 
     if (rule.type !== 'weight') continue;
 

@@ -252,3 +252,25 @@ describe('copy-above duplicates score rules', () => {
     expect(dup.sevenScore).toBe(150 * 4); // 150 -> x2 -> x2
   });
 });
+
+describe('four-fortune (4 weight x4 + each 4 = +20)', () => {
+  const sum = (items: { points: number }[]) =>
+    items.reduce((a, it) => a + it.points, 0);
+
+  it('each 4 scores +20 and the penalty is removed', () => {
+    const r: SymbolType[] = ['four', 'four', 'cherry', 'cherry', 'zero'];
+    const base = scoreResult(r, []);
+    const ff = scoreResult(r, [RULES_BY_ID['four-fortune']]);
+    expect(base.penalty).toBe(40); // 2 fours * 20
+    expect(ff.penalty).toBe(0);
+    // remove the -40 penalty AND add +40 bonus.
+    expect(ff.baseRoundScore).toBe(base.baseRoundScore + 40 + 40);
+  });
+
+  it('scoreItems shows a positive "4 보너스" and sums to baseRoundScore', () => {
+    const r: SymbolType[] = ['four', 'four', 'cherry', 'cherry', 'zero'];
+    const items = scoreItems(r, [RULES_BY_ID['four-fortune']]);
+    expect(items).toContainEqual({ label: '4 보너스 (2개)', points: 40 });
+    expect(sum(items)).toBe(scoreResult(r, [RULES_BY_ID['four-fortune']]).baseRoundScore);
+  });
+});

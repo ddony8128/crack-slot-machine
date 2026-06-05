@@ -43,6 +43,12 @@ describe('computeWeights', () => {
     expect(w.zero).toBe(0);
   });
 
+  it('four-fortune quadruples the four weight (score rule, weight side-effect)', () => {
+    const w = computeWeights([RULES_BY_ID['four-fortune']], BASE_WEIGHTS);
+    expect(w.four).toBe(BASE_WEIGHTS.four * 4);
+    expect(w.zero).toBe(BASE_WEIGHTS.zero);
+  });
+
   it('diamond-cut sets diamond and sapphire weights to 0 (other weights untouched)', () => {
     const w = computeWeights([RULES_BY_ID['diamond-cut']], BASE_WEIGHTS);
     expect(w.diamond).toBe(0);

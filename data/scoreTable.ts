@@ -27,6 +27,8 @@ export const BONUS_ALL_RED = 250;         // all 5 cells in RED set
 
 // Four penalty per four.
 export const FOUR_PENALTY_PER = 20;
+// FOUR FORTUNE rule: each 4 scores +this instead of the penalty.
+export const FOUR_FORTUNE_PER = 20;
 
 // Score-rule bonuses.
 export const BONUS_77 = 77;
