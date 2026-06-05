@@ -215,7 +215,7 @@ function buildInitializer(rng: Rng): Initializer {
 
       const weights = computeWeights(ruleSlots, BASE_WEIGHTS);
       const base = baseSpin(weights, rng);
-      const { finalResult, steps } = applyRules(base, ruleSlots, {
+      const { finalResult, steps, locked } = applyRules(base, ruleSlots, {
         previousResult,
         weights,
         rng,
@@ -240,6 +240,7 @@ function buildInitializer(rng: Rng): Initializer {
         roundScore,
         zeroDraw: specials.zeroDraw,
         multiplierSet: specials.nextMultiplier,
+        lockedCells: locked,
       };
 
       set({

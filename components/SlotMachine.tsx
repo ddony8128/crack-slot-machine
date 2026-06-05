@@ -15,6 +15,8 @@ type SlotMachineProps = {
   landIndices?: number[];
   /** Floating rule-step label to overlay, or null. */
   stepLabel?: string | null;
+  /** Cells frozen by a lock rule — rendered greyed with a lock badge. */
+  lockedIndices?: number[];
   /** True while the reveal sequence runs — hides the SPIN button. */
   revealing?: boolean;
 };
@@ -25,6 +27,7 @@ export default function SlotMachine({
   flashIndices = [],
   landIndices = [],
   stepLabel = null,
+  lockedIndices = [],
   revealing = false,
 }: SlotMachineProps) {
   const currentResult = useGameStore((s) => s.currentResult);
@@ -37,6 +40,7 @@ export default function SlotMachine({
 
   const flashSet = new Set(flashIndices);
   const landSet = new Set(landIndices);
+  const lockedSet = new Set(lockedIndices);
 
   return (
     <section className="space-y-4 fade-rise">
@@ -65,16 +69,27 @@ export default function SlotMachine({
             const rolling = reelRolling[i];
             const flashing = flashSet.has(i);
             const landed = landSet.has(i);
+            const isLocked = !rolling && lockedSet.has(i);
             const motion = [
               rolling ? "reel-rolling" : "",
               flashing ? "reel-flash" : "",
               !rolling && landed ? "reel-land" : "",
+              isLocked ? "reel-locked" : "",
             ]
               .filter(Boolean)
               .join(" ");
             return (
               <div key={i} data-reel-index={i} className="relative">
                 <SymbolView symbol={symbol} size="lg" className={motion} />
+                {isLocked && (
+                  <span
+                    aria-label="고정됨"
+                    title="고정됨"
+                    className="pointer-events-none absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-700 text-[11px] text-zinc-200 shadow ring-1 ring-zinc-500"
+                  >
+                    🔒
+                  </span>
+                )}
               </div>
             );
           })}

@@ -12,13 +12,27 @@ const FRUIT_SET = new Set<SymbolType>(FRUITS);
 const GEM_SET = new Set<SymbolType>(GEMS);
 const NUMBERS: SymbolType[] = ['seven', 'zero', 'four'];
 
+/**
+ * Apply equipped slot rules to a freshly-rolled board.
+ *
+ * MODEL: "upper wins" (first-claim). Rules are applied top -> bottom (slot 0..4).
+ * The FIRST rule to write a cell "claims" it; any later rule that would write the
+ * same cell is skipped. So a `lock` only protects a cell when placed ABOVE the
+ * reroll/transform it wants to block (the lock claims the cell first). Conversely
+ * a reroll/transform placed above a lock claims the cell, and the lock then skips.
+ *
+ * `weight` and `score` rules have no post-roll effect here. `claimed[]` tracks the
+ * first-claim state; `locked[]` tracks only cells frozen by an actual lock rule
+ * (used by the UI to render them greyed-out as the reveal cascades down).
+ */
 export function applyRules(
   base: SymbolType[],
   rules: (Rule | null)[],
-  ctx: { previousResult: SymbolType[]; weights: Record<SymbolType, number>; rng: Rng },
-): { finalResult: SymbolType[]; steps: SpinLogStep[] } {
+  ctx: ApplyCtx,
+): { finalResult: SymbolType[]; steps: SpinLogStep[]; locked: boolean[] } {
   const working: SymbolType[] = [...base];
   const steps: SpinLogStep[] = [];
+  const claimed: boolean[] = [false, false, false, false, false];
   const locked: boolean[] = [false, false, false, false, false];
 
   for (let slotIndex = 0; slotIndex < rules.length; slotIndex++) {
@@ -33,138 +47,143 @@ export function applyRules(
         above.type === 'score' ||
         above.id === 'copy-above'
       ) {
-        // no-op: nothing applicable above; still push a step noting no effect.
-        steps.push({ label: 'COPY ABOVE → (none)', result: [...working] });
+        steps.push({ label: 'COPY ABOVE → (none)', result: [...working], locked: [...locked] });
       } else {
-        applyOne(above, working, locked, ctx);
-        steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working] });
+        applyOne(above, working, claimed, locked, ctx);
+        steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
       }
       continue;
     }
 
-    applyOne(rule, working, locked, ctx);
-    steps.push({ label: rule.name, result: [...working] });
+    applyOne(rule, working, claimed, locked, ctx);
+    steps.push({ label: rule.name, result: [...working], locked: [...locked] });
   }
 
-  return { finalResult: [...working], steps };
+  return { finalResult: [...working], steps, locked };
+}
+
+/** Write a cell only if unclaimed; returns true if it actually wrote (and claimed). */
+function write(
+  working: SymbolType[],
+  claimed: boolean[],
+  i: number,
+  value: SymbolType,
+): boolean {
+  if (claimed[i]) return false;
+  working[i] = value;
+  claimed[i] = true;
+  return true;
 }
 
 function applyOne(
   rule: Rule,
   working: SymbolType[],
+  claimed: boolean[],
   locked: boolean[],
   ctx: ApplyCtx,
 ): void {
+  const { weights, rng, previousResult } = ctx;
   switch (rule.id) {
     // ---- reroll ----
     case 'four-shield':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'four' && !locked[i]) {
-          working[i] = rollSymbol(ctx.weights, ctx.rng);
-        }
+        if (working[i] === 'four' && !claimed[i]) write(working, claimed, i, rollSymbol(weights, rng));
       }
       break;
     case 'zero-break':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'zero' && !locked[i]) {
-          working[i] = rollSymbol(ctx.weights, ctx.rng);
-        }
+        if (working[i] === 'zero' && !claimed[i]) write(working, claimed, i, rollSymbol(weights, rng));
       }
       break;
     case 'four-parry': {
-      const idx = working.findIndex((s, i) => s === 'four' && !locked[i]);
-      if (idx !== -1) working[idx] = rollSymbol(ctx.weights, ctx.rng);
+      const idx = working.findIndex((s, i) => s === 'four' && !claimed[i]);
+      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
       break;
     }
     case 'gem-shuffle': {
-      const idx = working.findIndex((s, i) => GEM_SET.has(s) && !locked[i]);
-      if (idx !== -1) working[idx] = rollSymbol(ctx.weights, ctx.rng);
+      const idx = working.findIndex((s, i) => GEM_SET.has(s) && !claimed[i]);
+      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
       break;
     }
     case 'fruit-fish': {
-      const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !locked[i]);
-      if (idx !== -1) working[idx] = rollSymbol(ctx.weights, ctx.rng);
+      const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !claimed[i]);
+      if (idx !== -1) write(working, claimed, idx, rollSymbol(weights, rng));
       break;
     }
     case 'number-spin':
       for (let i = 0; i < working.length; i++) {
-        if (!locked[i] && (working[i] === 'seven' || working[i] === 'zero' || working[i] === 'four')) {
-          working[i] = rollSymbolFrom(NUMBERS, ctx.weights, ctx.rng);
+        if (!claimed[i] && (working[i] === 'seven' || working[i] === 'zero' || working[i] === 'four')) {
+          write(working, claimed, i, rollSymbolFrom(NUMBERS, weights, rng));
         }
       }
       break;
     case 'unique-second': {
-      if (locked[1]) break;
+      if (claimed[1]) break;
       let iter = 0;
-      while (
-        iter < 30 &&
-        working.some((s, i) => i !== 1 && s === working[1])
-      ) {
-        working[1] = rollSymbol(ctx.weights, ctx.rng);
+      while (iter < 30 && working.some((s, i) => i !== 1 && s === working[1])) {
+        working[1] = rollSymbol(weights, rng);
         iter += 1;
       }
+      claimed[1] = true;
       break;
     }
 
     // ---- transform ----
     case 'edge-mirror':
-      working[4] = working[0];
+      write(working, claimed, 4, working[0]);
       break;
     case 'left-pair':
-      working[1] = working[0];
+      write(working, claimed, 1, working[0]);
       break;
     case 'center-echo':
-      working[3] = working[1];
+      write(working, claimed, 3, working[1]);
       break;
     case 'third-first':
-      working[2] = working[0];
+      write(working, claimed, 2, working[0]);
       break;
     case 'first-cherry':
-      working[0] = 'cherry';
+      write(working, claimed, 0, 'cherry');
       break;
     case 'lucky-convert': {
-      const idx = working.indexOf('zero');
-      if (idx !== -1) working[idx] = 'seven';
+      const idx = working.findIndex((s, i) => s === 'zero' && !claimed[i]);
+      if (idx !== -1) write(working, claimed, idx, 'seven');
       break;
     }
     case 'safe-convert': {
-      const idx = working.indexOf('four');
-      if (idx !== -1) working[idx] = 'zero';
+      const idx = working.findIndex((s, i) => s === 'four' && !claimed[i]);
+      if (idx !== -1) write(working, claimed, idx, 'zero');
       break;
     }
     case 'zero-to-seven':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'zero') working[i] = 'seven';
+        if (working[i] === 'zero' && !claimed[i]) write(working, claimed, i, 'seven');
       }
       break;
     case 'diamond-to-lemon':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'diamond') working[i] = 'lemon';
+        if (working[i] === 'diamond' && !claimed[i]) write(working, claimed, i, 'lemon');
       }
       break;
     case 'grape-to-sapphire':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'grape') working[i] = 'sapphire';
+        if (working[i] === 'grape' && !claimed[i]) write(working, claimed, i, 'sapphire');
       }
       break;
     case 'red-dye':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'ruby') working[i] = 'cherry';
+        if (working[i] === 'ruby' && !claimed[i]) write(working, claimed, i, 'cherry');
       }
       break;
 
-    // ---- lock ----
+    // ---- lock (claims the cell only if not already claimed = must be ABOVE to win) ----
     case 'center-lock':
-      working[2] = ctx.previousResult[2];
-      locked[2] = true;
+      if (write(working, claimed, 2, previousResult[2])) locked[2] = true;
       break;
     case 'fourth-lock':
-      working[3] = ctx.previousResult[3];
-      locked[3] = true;
+      if (write(working, claimed, 3, previousResult[3])) locked[3] = true;
       break;
     case 'last-lock':
-      working[4] = ctx.previousResult[4];
-      locked[4] = true;
+      if (write(working, claimed, 4, previousResult[4])) locked[4] = true;
       break;
 
     default:

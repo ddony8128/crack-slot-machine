@@ -79,11 +79,22 @@ Two phases:
   NOT `weight` and NOT `score` type, apply its effect to the working array and push a
   `SpinLogStep { label: rule.name, result: <copy> }`.
 
-Maintain `locked: boolean[5]`, all false initially. A `lock` rule sets `locked[i]=true` for its cell.
-**Reroll rules skip locked cells** ("고정되지 않은"). Transforms act regardless of lock (player controls order).
+**Conflict model — "upper wins" (first-claim).** Maintain `claimed: boolean[5]` (all false). The
+FIRST rule to WRITE a cell claims it; any later rule that would write the same cell is skipped.
+Reading a cell always reads its current value. Consequences:
+- A `lock` only protects a cell when placed ABOVE the reroll/transform it wants to block (the lock
+  claims the cell first, so later rules skip it).
+- A reroll/transform placed ABOVE a lock claims the cell first, so the lock then finds it claimed
+  and FAILS (the cell is not frozen). i.e. "고정이 굴림/변환보다 위에 있어야 적용된다."
+- Among non-lock rules the same first-claim rule holds: the topmost rule touching a cell wins.
 
-"reroll a cell" = replace it via `rollSymbol(weights, rng)` (full active weights) unless a rule
-specifies a restricted set.
+Also maintain `locked: boolean[5]` set true ONLY when a `lock` rule successfully claims its cell
+(used by the UI to render frozen cells greyed-out as the reveal cascades top→bottom). Each
+`SpinLogStep` carries a `locked` snapshot; `applyRules` returns the final `locked` array too.
+
+"write a cell" = set it only if unclaimed, then mark it claimed. "reroll a cell" = write it via
+`rollSymbol(weights, rng)` (full active weights) unless a rule specifies a restricted set. Every
+reroll/transform/lock below targets only UNclaimed cells.
 
 Per-rule post-roll behavior (cell indices 0-based):
 - `four-shield` (reroll): every cell == four (and not locked) rerolled once.

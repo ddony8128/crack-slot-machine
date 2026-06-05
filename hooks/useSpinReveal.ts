@@ -26,6 +26,8 @@ export type SpinRevealState = {
   landIndices: number[];
   /** Floating label of the rule step currently being applied, or null. */
   stepLabel: string | null;
+  /** Cells frozen by a lock rule so far (rendered greyed-out). */
+  lockedIndices: number[];
   /** True from the moment a spin starts until the score is revealed. */
   revealing: boolean;
   /** True once the reveal finished and the score should be shown. */
@@ -44,6 +46,13 @@ function diffIndices(a: SymbolType[], b: SymbolType[]): number[] {
   for (let i = 0; i < b.length; i++) {
     if (a[i] !== b[i]) out.push(i);
   }
+  return out;
+}
+
+function trueIndices(b?: boolean[]): number[] {
+  if (!b) return [];
+  const out: number[] = [];
+  for (let i = 0; i < b.length; i++) if (b[i]) out.push(i);
   return out;
 }
 
@@ -71,6 +80,7 @@ export function useSpinReveal(
   const [flashIndices, setFlashIndices] = useState<number[]>([]);
   const [landIndices, setLandIndices] = useState<number[]>([]);
   const [stepLabel, setStepLabel] = useState<string | null>(null);
+  const [lockedIndices, setLockedIndices] = useState<number[]>([]);
   const [revealing, setRevealing] = useState(false);
   const [scoreReady, setScoreReady] = useState(false);
 
@@ -83,9 +93,10 @@ export function useSpinReveal(
     if (!revealing) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSymbols(idleResult);
+      setLockedIndices(trueIndices(latestLog?.lockedCells));
     }
     // idleResult identity changes each spin via the store.
-  }, [idleResult, revealing]);
+  }, [idleResult, revealing, latestLog]);
 
   useEffect(() => {
     if (!latestLog) return;
@@ -117,6 +128,7 @@ export function useSpinReveal(
       setFlashIndices([]);
       setLandIndices([]);
       setStepLabel(null);
+      setLockedIndices(trueIndices(latestLog.lockedCells));
       setSymbols(latestLog.finalResult);
       setRevealing(false);
       setScoreReady(true);
@@ -131,6 +143,7 @@ export function useSpinReveal(
     setFlashIndices([]);
     setLandIndices([]);
     setStepLabel(null);
+    setLockedIndices([]);
 
     rollInterval.current = setInterval(() => {
       setSymbols(randomReels(len));
@@ -171,10 +184,12 @@ export function useSpinReveal(
       const changed = diffIndices(prevResult, step.result);
       const resultSnapshot = step.result;
       const labelSnapshot = step.label;
+      const lockedSnapshot = trueIndices(step.locked);
       at(cursor, () => {
         setStepLabel(labelSnapshot);
         setSymbols(resultSnapshot.slice());
         setFlashIndices(changed);
+        setLockedIndices(lockedSnapshot);
         at(STEP_INTERVAL - 80, () => {
           setFlashIndices([]);
           setStepLabel(null);
@@ -189,6 +204,7 @@ export function useSpinReveal(
       setSymbols(latestLog.finalResult.slice());
       setStepLabel(null);
       setFlashIndices([]);
+      setLockedIndices(trueIndices(latestLog.lockedCells));
     });
     at(cursor + SETTLE_AFTER_FINAL, () => {
       setRevealing(false);
@@ -213,6 +229,7 @@ export function useSpinReveal(
     flashIndices,
     landIndices,
     stepLabel,
+    lockedIndices,
     revealing,
     scoreReady,
   };

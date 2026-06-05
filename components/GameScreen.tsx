@@ -79,6 +79,7 @@ export default function GameScreen() {
           flashIndices={reveal.flashIndices}
           landIndices={reveal.landIndices}
           stepLabel={reveal.stepLabel}
+          lockedIndices={reveal.lockedIndices}
           revealing={reveal.revealing}
         />
       )}

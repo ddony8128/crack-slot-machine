@@ -181,18 +181,11 @@ function rngPoint(target: SymbolType): number {
 }
 
 describe('applyRules — copy-above', () => {
-  it('copy-above re-applies the rule directly above (four-shield triggers a second reroll pass)', () => {
-    // base has two fours. four-shield rerolls both -> we force them to 'four' again
-    // on the first pass, then copy-above re-runs four-shield -> reroll to lemon.
+  it('copy-above of four-shield is a no-op (cells already claimed by first pass)', () => {
+    // Upper-wins/first-claim: four-shield rerolls both fours and CLAIMS those cells.
+    // copy-above re-runs four-shield but the cells are claimed -> no second reroll.
     const base: SymbolType[] = ['four', 'cherry', 'four', 'diamond', 'lemon'];
-    // four-shield pass 1: cell0,cell2 are four -> reroll. Feed 'four','four' (still fours).
-    // copy-above re-applies four-shield: cell0,cell2 are four -> reroll. Feed 'grape','grape'.
-    const rng = queuedRng([
-      rngPoint('four'),
-      rngPoint('four'),
-      rngPoint('grape'),
-      rngPoint('grape'),
-    ]);
+    const rng = queuedRng([rngPoint('grape'), rngPoint('grape')]); // first pass only
     const rules: Rule[] = [RULES_BY_ID['four-shield'], RULES_BY_ID['copy-above']];
     const { finalResult, steps } = applyRules(base, rules, {
       previousResult: noCtx.previousResult,
@@ -200,10 +193,24 @@ describe('applyRules — copy-above', () => {
       rng,
     });
     expect(steps).toHaveLength(2);
-    expect(steps[0].label).toBe('FOUR SHIELD');
     expect(steps[1].label).toBe('COPY ABOVE → FOUR SHIELD');
     expect(finalResult[0]).toBe('grape');
     expect(finalResult[2]).toBe('grape');
+    // exactly two draws were consumed (no second pass) — value is stable
+  });
+
+  it('copy-above of four-parry extends to the NEXT leftmost four', () => {
+    // four-parry claims only the leftmost four; copy-above re-runs it on the next one.
+    const base: SymbolType[] = ['cherry', 'four', 'four', 'diamond', 'zero'];
+    const rng = queuedRng([rngPoint('lemon'), rngPoint('grape')]);
+    const rules: Rule[] = [RULES_BY_ID['four-parry'], RULES_BY_ID['copy-above']];
+    const { finalResult } = applyRules(base, rules, {
+      previousResult: noCtx.previousResult,
+      weights: BASE_WEIGHTS,
+      rng,
+    });
+    expect(finalResult[1]).toBe('lemon'); // first four-parry
+    expect(finalResult[2]).toBe('grape'); // copy-above hits the next four
   });
 
   it('copy-above with left-pair above is a no-op second application', () => {
@@ -230,5 +237,37 @@ describe('applyRules — copy-above', () => {
     // weight rule produced no step; copy-above is the only step.
     expect(steps).toHaveLength(1);
     expect(steps[0].label).toBe('COPY ABOVE → (none)');
+  });
+});
+
+describe('applyRules — upper-wins ordering (lock must be ABOVE to win)', () => {
+  it('lock ABOVE reroll: lock wins and the cell is reported locked', () => {
+    // center-lock (slot0) freezes cell2; zero-break (slot1) cannot touch it.
+    const base: SymbolType[] = ['zero', 'cherry', 'zero', 'cherry', 'cherry'];
+    const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['zero-break']];
+    const { finalResult, locked, steps } = applyRules(base, rules, {
+      previousResult: ['a', 'a', 'zero', 'a', 'a'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: rngForSymbol('lemon'),
+    });
+    expect(finalResult[2]).toBe('zero'); // locked, not rerolled
+    expect(finalResult[0]).toBe('lemon'); // other zero still rerolled
+    expect(locked[2]).toBe(true);
+    // per-step locked snapshot is present for the reveal
+    expect(steps[0].locked[2]).toBe(true);
+  });
+
+  it('reroll ABOVE lock: reroll wins, the lock FAILS (cell not locked)', () => {
+    // four-shield (slot0) rerolls + claims cell of the four; last-lock (slot1) is below
+    // and finds the cell already claimed -> it cannot freeze it.
+    const base: SymbolType[] = ['cherry', 'cherry', 'cherry', 'cherry', 'four'];
+    const rules: Rule[] = [RULES_BY_ID['four-shield'], RULES_BY_ID['last-lock']];
+    const { finalResult, locked } = applyRules(base, rules, {
+      previousResult: ['a', 'a', 'a', 'a', 'ruby'] as SymbolType[],
+      weights: BASE_WEIGHTS,
+      rng: rngForSymbol('lemon'),
+    });
+    expect(finalResult[4]).toBe('lemon'); // reroll won (lock was below)
+    expect(locked[4]).toBe(false); // lock did not take effect
   });
 });

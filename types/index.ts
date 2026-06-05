@@ -13,7 +13,11 @@ export type Rule = {
   build?: string;        // build tag (e.g. '7', 'fruit', 'gem', 'order', 'safe')
 };
 
-export type SpinLogStep = { label: string; result: SymbolType[] };  // one applied-rule snapshot
+export type SpinLogStep = {
+  label: string;
+  result: SymbolType[];   // board snapshot after this rule
+  locked: boolean[];      // cells frozen by a lock rule so far (for the greyed-out reveal)
+};
 
 export type SpinLog = {
   spinIndex: number;        // 0-based
@@ -30,6 +34,7 @@ export type SpinLog = {
   roundScore: number;       // baseRoundScore * multiplier
   zeroDraw: boolean;        // zeros>=3 triggered extra rule pick
   multiplierSet: number;    // multiplier granted to next spin (1 if none)
+  lockedCells: boolean[];   // final cells frozen by lock rules (greyed in UI)
 };
 
 export type GameStatus =
