@@ -11,6 +11,7 @@ import {
   createAdminEvent,
   fetchAdminEvents,
   setAdminEventActive,
+  updateAdminEvent,
 } from "@/lib/client/adminApi";
 
 /** Map a server error code to Korean copy for the create form. */
@@ -48,6 +49,13 @@ export default function AdminDashboard() {
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
+  // Inline edit state (one row at a time).
+  const [editingSlug, setEditingSlug] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const rows = await fetchAdminEvents();
@@ -79,6 +87,50 @@ export default function AdminDashboard() {
       setListError("상태 변경에 실패했습니다.");
     } finally {
       setPendingSlug(null);
+    }
+  }
+
+  function startEdit(row: EventRow) {
+    setEditingSlug(row.slug);
+    setEditTitle(row.title);
+    setEditDesc(row.description ?? "");
+    setEditError(null);
+  }
+
+  function cancelEdit() {
+    setEditingSlug(null);
+    setEditError(null);
+  }
+
+  async function saveEdit(row: EventRow) {
+    if (savingEdit) return;
+    const t = editTitle.trim();
+    if (t.length === 0) {
+      setEditError("제목을 입력해 주세요.");
+      return;
+    }
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      await updateAdminEvent(row.slug, {
+        title: t,
+        description: editDesc.trim(),
+      });
+      setEditingSlug(null);
+      await load();
+    } catch (err) {
+      const code = err instanceof AdminApiError ? err.code : "unknown";
+      if (code === "unauthorized") {
+        router.refresh();
+        return;
+      }
+      setEditError(
+        code === "title_required"
+          ? "제목을 입력해 주세요."
+          : "수정에 실패했습니다.",
+      );
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -215,6 +267,63 @@ export default function AdminDashboard() {
             {events.map((row) => {
               const isTotal = row.slug === TOTAL_SLUG;
               const busy = pendingSlug === row.slug;
+              const editing = editingSlug === row.slug;
+
+              if (editing) {
+                return (
+                  <li
+                    key={row.id}
+                    className="flex flex-col gap-3 rounded-xl border border-emerald-700/50 bg-zinc-900/60 p-4"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full border border-zinc-700 px-2 py-0.5 font-mono text-[11px] text-zinc-400">
+                        {row.slug}
+                      </span>
+                      <span className="text-xs text-zinc-500">
+                        slug은 변경할 수 없습니다
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder="제목"
+                      maxLength={120}
+                      className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-emerald-400"
+                    />
+                    <input
+                      type="text"
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                      placeholder="설명 (선택)"
+                      maxLength={500}
+                      className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-emerald-400"
+                    />
+                    {editError && (
+                      <p className="text-sm text-rose-400">{editError}</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => saveEdit(row)}
+                        disabled={savingEdit}
+                        className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+                      >
+                        {savingEdit ? "저장 중…" : "저장"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        disabled={savingEdit}
+                        className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800/60 disabled:opacity-50"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </li>
+                );
+              }
+
               return (
                 <li
                   key={row.id}
@@ -238,6 +347,11 @@ export default function AdminDashboard() {
                         </span>
                       )}
                     </div>
+                    {row.description && (
+                      <p className="mt-1 truncate text-sm text-zinc-300">
+                        {row.description}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-zinc-500">
                       생성: {formatDate(row.createdAt)} · 종료:{" "}
                       {formatDate(row.disabledAt)}
@@ -251,6 +365,13 @@ export default function AdminDashboard() {
                     >
                       랭킹 보기
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(row)}
+                      className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+                    >
+                      수정
+                    </button>
                     {isTotal ? (
                       <span className="rounded-lg border border-amber-700/50 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300">
                         고정

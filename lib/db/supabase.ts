@@ -116,6 +116,24 @@ export class SupabaseDb implements Db {
     return data ? toEvent(data) : null;
   }
 
+  async updateEvent(
+    slug: string,
+    input: { title?: string; description?: string | null },
+  ): Promise<EventRow | null> {
+    const patch: Record<string, unknown> = {};
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.description !== undefined) patch.description = input.description;
+    if (Object.keys(patch).length === 0) return this.getEventBySlug(slug);
+    const { data, error } = await this.sb
+      .from('events')
+      .update(patch)
+      .eq('slug', slug)
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toEvent(data) : null;
+  }
+
   async createRun(input: CreateRunInput): Promise<RunRow> {
     const { data, error } = await this.sb
       .from('game_runs')

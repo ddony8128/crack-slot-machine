@@ -57,6 +57,25 @@ describe('MemoryDb events', () => {
     expect(off?.disabledAt).not.toBeNull();
     await expect(db.createEvent({ slug: 'party', title: 'dup' })).rejects.toThrow();
   });
+
+  it('updates title/description and leaves slug + others intact', async () => {
+    const db = new MemoryDb();
+    await db.createEvent({ slug: 'party', title: 'Party', description: 'old' });
+    const updated = await db.updateEvent('party', {
+      title: 'New Party',
+      description: 'fresh',
+    });
+    expect(updated?.slug).toBe('party');
+    expect(updated?.title).toBe('New Party');
+    expect(updated?.description).toBe('fresh');
+
+    // partial update: only description; can clear to null
+    const cleared = await db.updateEvent('party', { description: null });
+    expect(cleared?.title).toBe('New Party'); // unchanged
+    expect(cleared?.description).toBeNull();
+
+    expect(await db.updateEvent('missing', { title: 'x' })).toBeNull();
+  });
 });
 
 describe('MemoryDb leaderboard', () => {

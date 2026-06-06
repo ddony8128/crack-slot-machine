@@ -53,6 +53,21 @@ export async function createAdminEvent(input: {
   return body.event;
 }
 
+/** PATCH /api/admin/events/[slug] — edit title/description. */
+export async function updateAdminEvent(
+  slug: string,
+  input: { title?: string; description?: string | null },
+): Promise<EventRow> {
+  const res = await fetch(`/api/admin/events/${encodeURIComponent(slug)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new AdminApiError(await errorCode(res));
+  const body = (await res.json()) as { event: EventRow };
+  return body.event;
+}
+
 /** POST /api/admin/events/[slug]/active — toggle active state. */
 export async function setAdminEventActive(
   slug: string,

@@ -91,6 +91,10 @@ export interface Db {
     description?: string | null;
   }): Promise<EventRow>;
   setEventActive(slug: string, active: boolean): Promise<EventRow | null>;
+  updateEvent(
+    slug: string,
+    input: { title?: string; description?: string | null },
+  ): Promise<EventRow | null>;
 
   createRun(input: CreateRunInput): Promise<RunRow>;
   getRun(runId: string): Promise<RunRow | null>;

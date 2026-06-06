@@ -78,6 +78,17 @@ export class MemoryDb implements Db {
     return row;
   }
 
+  async updateEvent(
+    slug: string,
+    input: { title?: string; description?: string | null },
+  ): Promise<EventRow | null> {
+    const row = this.events.find((e) => e.slug === slug);
+    if (!row) return null;
+    if (input.title !== undefined) row.title = input.title;
+    if (input.description !== undefined) row.description = input.description;
+    return row;
+  }
+
   async createRun(input: CreateRunInput): Promise<RunRow> {
     const row: RunRow = {
       id: this.id('run'),
