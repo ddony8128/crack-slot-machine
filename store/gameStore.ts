@@ -109,6 +109,7 @@ function freshState(nickname: string): GameState {
     offeredRules: [],
     pendingRule: null,
     extraRulePickCount: 0,
+    picksLeft: 0,
     spinLogs: [],
     status: 'start',
     pendingSelection: null,
@@ -243,6 +244,7 @@ function buildInitializer(initialRng: Rng): Initializer {
         ruleSlots,
         bag,
         extraRulePickCount: 0,
+        picksLeft: 1,
         pendingRule: null,
         spinLogs: [],
         offeredRules: offerRules(rng, ruleSlots, bag),
@@ -266,34 +268,46 @@ function buildInitializer(initialRng: Rng): Initializer {
     },
 
     placePending: (target: PlaceTarget) => {
-      const { pendingRule, ruleSlots, bag } = get();
+      const { pendingRule, ruleSlots, bag, picksLeft } = get();
       if (pendingRule == null) return;
 
+      let nextSlots = ruleSlots;
+      let nextBag = bag;
+
       if (target.type === 'bag') {
-        record({ type: 'placePending', target });
-        set({
-          bag: [...bag, pendingRule],
-          pendingRule: null,
-          status: 'ready-to-spin',
-        });
-        return;
+        nextBag = [...bag, pendingRule];
+      } else {
+        const { index } = target;
+        if (index < 0 || index >= SLOT_COUNT) return;
+        nextSlots = ruleSlots.slice();
+        const displaced = nextSlots[index];
+        nextSlots[index] = pendingRule;
+        nextBag = displaced != null ? [...bag, displaced] : bag;
       }
 
-      const { index } = target;
-      if (index < 0 || index >= SLOT_COUNT) return;
-
-      const nextSlots = ruleSlots.slice();
-      const displaced = nextSlots[index];
-      nextSlots[index] = pendingRule;
-      const nextBag = displaced != null ? [...bag, displaced] : [...bag];
-
       record({ type: 'placePending', target });
-      set({
-        ruleSlots: nextSlots,
-        bag: nextBag,
-        pendingRule: null,
-        status: 'ready-to-spin',
-      });
+
+      const remaining = picksLeft - 1;
+      if (remaining > 0) {
+        // Zero-draw bonus: more rules to place this turn. Offer a fresh card and
+        // stay in the choosing phase (no extra spin — still one spin per turn).
+        set({
+          ruleSlots: nextSlots,
+          bag: nextBag,
+          pendingRule: null,
+          picksLeft: remaining,
+          offeredRules: offerRules(rng, nextSlots, nextBag),
+          status: 'choosing-rule',
+        });
+      } else {
+        set({
+          ruleSlots: nextSlots,
+          bag: nextBag,
+          pendingRule: null,
+          picksLeft: 0,
+          status: 'ready-to-spin',
+        });
+      }
     },
 
     moveRule: (from: RuleLocation, to: RuleLocation) => {
@@ -470,24 +484,18 @@ function buildInitializer(initialRng: Rng): Initializer {
       if (state.status !== 'spin-result') return;
       record({ type: 'next' });
 
-      if (state.extraRulePickCount > 0) {
-        // Extra rule pick is consumed BEFORE advancing the spin counter.
-        set({
-          extraRulePickCount: state.extraRulePickCount - 1,
-          offeredRules: offerRules(rng, state.ruleSlots, state.bag),
-          pendingRule: null,
-          status: 'choosing-rule',
-        });
-        return;
-      }
-
       const nextSpinIndex = state.spinIndex + 1;
       if (nextSpinIndex >= state.maxSpins) {
         set({ spinIndex: nextSpinIndex, status: 'finished' });
         return;
       }
+
+      // Advance the turn. A zero-draw from the spin just finished grants extra
+      // rule placements THIS upcoming turn (still a single spin for the turn).
       set({
         spinIndex: nextSpinIndex,
+        picksLeft: 1 + state.extraRulePickCount,
+        extraRulePickCount: 0,
         offeredRules: offerRules(rng, state.ruleSlots, state.bag),
         pendingRule: null,
         status: 'choosing-rule',

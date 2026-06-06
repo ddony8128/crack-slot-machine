@@ -89,7 +89,11 @@ export type GameState = {
   bag: Rule[];                   // inactive holding area
   offeredRules: Rule[];          // 3
   pendingRule: Rule | null;      // chosen card not yet placed
+  // Extra rule picks OWED to the next turn (accumulated from zeros>=3 specials).
   extraRulePickCount: number;
+  // Rule placements remaining in the CURRENT choosing phase before the spin is
+  // allowed. 1 on a normal turn; >1 when a zero-draw bonus added picks.
+  picksLeft: number;
   spinLogs: SpinLog[];
   status: GameStatus;
   pendingSelection: PendingSelection | null; // set while status === 'awaiting-selection'

@@ -5,15 +5,15 @@ import { useGameStore } from "@/store/gameStore";
 export default function RulePicker() {
   const offeredRules = useGameStore((s) => s.offeredRules);
   const selectRule = useGameStore((s) => s.selectRule);
-  const extraRulePickCount = useGameStore((s) => s.extraRulePickCount);
+  const picksLeft = useGameStore((s) => s.picksLeft);
 
   return (
     <section className="fade-rise space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">장착할 규칙을 선택하세요</h2>
-        {extraRulePickCount > 0 && (
+        {picksLeft > 1 && (
           <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300 ring-1 ring-emerald-400/40">
-            추가 선택 ×{extraRulePickCount}
+            🎁 0 보너스 · 이번 턴 {picksLeft}장 선택
           </span>
         )}
       </div>

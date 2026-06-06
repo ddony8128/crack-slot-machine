@@ -204,29 +204,67 @@ describe('spin', () => {
     expect(log.lockedCells[4]).toBe(true);
   });
 
-  it('detects zeros>=3 -> extraRulePickCount, consumed by next() w/o advancing spinIndex', () => {
+  it('zeros>=3 -> next() ADVANCES the turn and grants an extra rule pick (no bonus spin)', () => {
     // Empty slots: spin draws 5 zeros, no post-roll rules -> zeroDraw, mult 1.
     const store = createGameStore(loopingRng([RNG_ZERO]));
-    store.getState().setNickname('frank');
-    store.getState().startGame();
-    const rule = store.getState().offeredRules[0];
-    store.getState().selectRule(rule);
-    store.getState().placePending({ type: 'bag' });
+    const s = () => store.getState();
+    s().setNickname('frank');
+    s().startGame();
+    s().selectRule(s().offeredRules[0]);
+    s().placePending({ type: 'bag' });
 
-    store.getState().spin();
-    const afterSpin = store.getState();
-    const log = afterSpin.spinLogs[0];
-    expect(log.finalResult.filter((c) => c === 'zero')).toHaveLength(5);
-    expect(log.zeroDraw).toBe(true);
+    s().spin();
+    const afterSpin = s();
+    expect(afterSpin.spinLogs[0].finalResult.filter((c) => c === 'zero')).toHaveLength(5);
+    expect(afterSpin.spinLogs[0].zeroDraw).toBe(true);
     expect(afterSpin.extraRulePickCount).toBe(1);
-    expect(afterSpin.nextMultiplier).toBe(1);
+    const turnBefore = afterSpin.spinIndex;
 
-    const spinIndexBefore = afterSpin.spinIndex;
-    store.getState().next();
-    const afterNext = store.getState();
+    s().next();
+    const afterNext = s();
+    expect(afterNext.spinIndex).toBe(turnBefore + 1); // turn ADVANCES
     expect(afterNext.extraRulePickCount).toBe(0);
-    expect(afterNext.spinIndex).toBe(spinIndexBefore);
+    expect(afterNext.picksLeft).toBe(2); // base 1 + bonus 1
     expect(afterNext.status).toBe('choosing-rule');
+
+    // First placement keeps us choosing (one pick left)...
+    s().selectRule(s().offeredRules[0]);
+    s().placePending({ type: 'bag' });
+    expect(s().status).toBe('choosing-rule');
+    expect(s().picksLeft).toBe(1);
+
+    // ...second (bonus) placement -> ready to spin (still ONE spin per turn).
+    s().selectRule(s().offeredRules[0]);
+    s().placePending({ type: 'bag' });
+    expect(s().status).toBe('ready-to-spin');
+    expect(s().picksLeft).toBe(0);
+  });
+
+  it('zeros>=3 on the final (7th) turn ends cleanly — exactly 7 spins, no extra turn', () => {
+    const store = createGameStore(loopingRng([RNG_ZERO])); // every spin = 5 zeros
+    const s = () => store.getState();
+    s().setNickname('grace');
+    s().startGame();
+
+    for (let turn = 0; turn < 7; turn++) {
+      expect(s().status).toBe('choosing-rule');
+      expect(s().spinIndex).toBe(turn);
+      // Place however many rules this turn allows (bonus picks from prior zeroDraw).
+      while (s().status === 'choosing-rule') {
+        s().selectRule(s().offeredRules[0]);
+        s().placePending({ type: 'bag' });
+      }
+      expect(s().status).toBe('ready-to-spin');
+      s().spin();
+      expect(s().status).toBe('spin-result');
+      expect(s().spinLogs[s().spinLogs.length - 1].zeroDraw).toBe(true);
+      s().next();
+    }
+
+    // 7th turn's zeroDraw bonus has no next turn to apply to: clean finish.
+    expect(s().status).toBe('finished');
+    expect(s().spinIndex).toBe(7);
+    expect(s().spinLogs).toHaveLength(7); // no bonus spins were ever inserted
   });
 });
 
