@@ -78,16 +78,10 @@ export default function StartScreen({
         )}
       </form>
 
-      <section className="grid w-full max-w-sm grid-cols-2 gap-3">
+      <section className="w-full max-w-sm">
         <Link
           href={`/e/${slug}/leaderboard`}
-          className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
-        >
-          이 이벤트 랭킹
-        </Link>
-        <Link
-          href="/e/total/leaderboard"
-          className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
         >
           전체 랭킹 보기
         </Link>
