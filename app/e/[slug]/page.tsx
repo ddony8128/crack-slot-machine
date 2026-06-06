@@ -6,6 +6,10 @@ import EventClient from "@/components/EventClient";
 
 type Params = { params: Promise<{ slug: string }> };
 
+// Always read the event's live state (incl. isActive) from the DB per request —
+// never serve a cached/stale snapshot after an admin toggles the event.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   if (!isValidSlug(slug)) return { title: "RULE SLOT" };
@@ -21,7 +25,5 @@ export default async function EventPage({ params }: Params) {
   const event = await getDb().getEventBySlug(slug);
   if (!event) notFound();
 
-  return (
-    <EventClient slug={event.slug} title={event.title} isActive={event.isActive} />
-  );
+  return <EventClient slug={event.slug} isActive={event.isActive} />;
 }

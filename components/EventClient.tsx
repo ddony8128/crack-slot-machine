@@ -8,7 +8,7 @@ import GameScreen from "@/components/GameScreen";
 import ResultScreen from "@/components/ResultScreen";
 import IntroModal from "@/components/IntroModal";
 
-type Props = { slug: string; title: string; isActive: boolean };
+type Props = { slug: string; isActive: boolean };
 
 function startErrorMessage(code: string): string {
   if (code === "event_inactive") return "비활성화된 이벤트입니다.";
@@ -16,7 +16,7 @@ function startErrorMessage(code: string): string {
   return "게임을 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.";
 }
 
-export default function EventClient({ slug, title, isActive }: Props) {
+export default function EventClient({ slug, isActive }: Props) {
   const status = useGameStore((s) => s.status);
   const beginRun = useGameStore((s) => s.beginRun);
   const startGame = useGameStore((s) => s.startGame);
@@ -60,7 +60,6 @@ export default function EventClient({ slug, title, isActive }: Props) {
     return (
       <StartScreen
         slug={slug}
-        title={title}
         isActive={isActive}
         starting={starting}
         startError={startError}

@@ -9,7 +9,6 @@ import SymbolView from "@/components/SymbolView";
 
 type Props = {
   slug: string;
-  title: string;
   isActive: boolean;
   starting: boolean;
   startError: string | null;
@@ -18,7 +17,6 @@ type Props = {
 
 export default function StartScreen({
   slug,
-  title,
   isActive,
   starting,
   startError,
@@ -39,9 +37,6 @@ export default function StartScreen({
         </h1>
         <p className="mt-3 text-sm text-zinc-400 sm:text-base">
           규칙을 조작하고 레버를 당겨라.
-        </p>
-        <p className="mt-2 inline-block rounded-full border border-zinc-700 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-zinc-300">
-          이벤트: {title}
         </p>
       </header>
 
