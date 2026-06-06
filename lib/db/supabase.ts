@@ -65,6 +65,16 @@ export class SupabaseDb implements Db {
     return data ? toEvent(data) : null;
   }
 
+  async getEventById(id: string): Promise<EventRow | null> {
+    const { data, error } = await this.sb
+      .from('events')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toEvent(data) : null;
+  }
+
   async listEvents(): Promise<EventRow[]> {
     const { data, error } = await this.sb
       .from('events')

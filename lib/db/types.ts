@@ -83,6 +83,7 @@ export type FinalizeRunInput = {
  */
 export interface Db {
   getEventBySlug(slug: string): Promise<EventRow | null>;
+  getEventById(id: string): Promise<EventRow | null>;
   listEvents(): Promise<EventRow[]>;
   createEvent(input: {
     slug: string;

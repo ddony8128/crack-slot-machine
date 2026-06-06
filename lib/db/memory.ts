@@ -41,6 +41,10 @@ export class MemoryDb implements Db {
     return this.events.find((e) => e.slug === slug) ?? null;
   }
 
+  async getEventById(id: string): Promise<EventRow | null> {
+    return this.events.find((e) => e.id === id) ?? null;
+  }
+
   async listEvents(): Promise<EventRow[]> {
     return [...this.events].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }
