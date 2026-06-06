@@ -112,6 +112,15 @@ describe('computeWeights', () => {
     expect(w.seven).toBe(BASE_WEIGHTS.seven * 9);
   });
 
+  it('number-spin changes NO weights (it only restricts the first roll, never rerolls)', () => {
+    // number-spin is a first-roll pool restriction in rollBoard, not a weight
+    // change. Reroll rules (four-shield/parry, fish, shuffle, select-reroll) roll
+    // via rollSymbol(weights), so leaving weights untouched proves they are never
+    // number-restricted by number-spin.
+    const w = computeWeights([RULES_BY_ID['number-spin']], BASE_WEIGHTS);
+    expect(w).toEqual(BASE_WEIGHTS);
+  });
+
   it('does not mutate the base weights', () => {
     const before = BASE_WEIGHTS.cherry;
     computeWeights([RULES_BY_ID['fruit-surge']], BASE_WEIGHTS);

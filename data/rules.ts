@@ -28,7 +28,8 @@ export const RULES: Rule[] = [
     name: 'NUMBER SPIN',
     type: 'weight',
     build: '7',
-    description: '시작할 때 숫자였던 칸은 다시 숫자가 된다.',
+    description:
+      '직전 결과가 숫자(7·0·4)였던 칸은 첫 굴림에서 다시 숫자가 나온다.',
   },
 
   // ---- fruit ----
