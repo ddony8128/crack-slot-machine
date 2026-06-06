@@ -22,6 +22,22 @@ const ZERO_RESULT: SymbolType[] = ['zero', 'zero', 'zero', 'zero', 'zero'];
 export type PlaceTarget = { type: 'slot'; index: number } | { type: 'bag' };
 export type RuleLocation = { zone: 'slot'; index: number } | { zone: 'bag'; index: number };
 
+/**
+ * A serializable log of every outcome-affecting action the player took, in order.
+ * Replaying these against a fresh store seeded with the same rng reproduces the
+ * exact same boards and score — the basis for server-side anti-cheat
+ * verification. cancelSelection is intentionally NOT recorded: only the last
+ * selectRule before a placePending matters, and each recorded selectRule
+ * overwrites pendingRule, so replay is faithful without it.
+ */
+export type RecordedAction =
+  | { type: 'selectRule'; ruleId: string }
+  | { type: 'placePending'; target: PlaceTarget }
+  | { type: 'moveRule'; from: RuleLocation; to: RuleLocation }
+  | { type: 'spin' }
+  | { type: 'selectCells'; indices: number[] }
+  | { type: 'next' };
+
 export type GameActions = {
   setNickname: (name: string) => void;
   startGame: () => void;
@@ -33,6 +49,8 @@ export type GameActions = {
   selectCells: (indices: number[]) => void;
   next: () => void;
   reset: () => void;
+  /** The ordered action log for this run (for replay / score submission). */
+  getActions: () => RecordedAction[];
 };
 
 export type GameStore = GameState & GameActions;
@@ -106,6 +124,14 @@ function buildInitializer(rng: Rng): Initializer {
   // spin gaining more steps after a selection (same id → continue, no replay).
   let revealId = 0;
   const nextId = () => (revealId += 1);
+
+  // Ordered, serializable log of outcome-affecting actions. Reset on
+  // startGame()/reset(); appended to by each committing action. Read via
+  // getActions() to build a replayable run for server verification.
+  let recorded: RecordedAction[] = [];
+  const record = (a: RecordedAction) => {
+    recorded.push(a);
+  };
 
   return (set, get) => {
     /**
@@ -183,6 +209,7 @@ function buildInitializer(rng: Rng): Initializer {
     startGame: () => {
       const { nickname } = get();
       if (!nickname || nickname.trim().length === 0) return;
+      recorded = [];
       const ruleSlots = emptySlots();
       const bag: Rule[] = [];
       set({
@@ -204,6 +231,7 @@ function buildInitializer(rng: Rng): Initializer {
 
     selectRule: (rule: Rule) => {
       if (get().status !== 'choosing-rule') return;
+      record({ type: 'selectRule', ruleId: rule.id });
       set({ pendingRule: rule, status: 'placing' });
     },
 
@@ -217,6 +245,7 @@ function buildInitializer(rng: Rng): Initializer {
       if (pendingRule == null) return;
 
       if (target.type === 'bag') {
+        record({ type: 'placePending', target });
         set({
           bag: [...bag, pendingRule],
           pendingRule: null,
@@ -233,6 +262,7 @@ function buildInitializer(rng: Rng): Initializer {
       nextSlots[index] = pendingRule;
       const nextBag = displaced != null ? [...bag, displaced] : [...bag];
 
+      record({ type: 'placePending', target });
       set({
         ruleSlots: nextSlots,
         bag: nextBag,
@@ -251,6 +281,10 @@ function buildInitializer(rng: Rng): Initializer {
         state.status === 'ready-to-spin' ||
         state.status === 'spin-result';
       if (!canArrange) return;
+
+      // Record at the top: replay reconstructs the identical state, so the same
+      // (from,to) yields the same commit-or-no-op outcome as the original.
+      record({ type: 'moveRule', from, to });
 
       const slots = state.ruleSlots.slice();
       const bag = state.bag.slice();
@@ -305,6 +339,7 @@ function buildInitializer(rng: Rng): Initializer {
     spin: () => {
       const state = get();
       if (state.status !== 'ready-to-spin') return;
+      record({ type: 'spin' });
 
       const { ruleSlots, previousResult } = state;
 
@@ -367,6 +402,7 @@ function buildInitializer(rng: Rng): Initializer {
         seen.add(i);
       }
 
+      record({ type: 'selectCells', indices: [...indices] });
       const frame = resolveSelection(activeFrame, ruleSlots, activeCtx, indices);
       activeFrame = frame;
 
@@ -407,6 +443,7 @@ function buildInitializer(rng: Rng): Initializer {
     next: () => {
       const state = get();
       if (state.status !== 'spin-result') return;
+      record({ type: 'next' });
 
       if (state.extraRulePickCount > 0) {
         // Extra rule pick is consumed BEFORE advancing the spin counter.
@@ -436,8 +473,11 @@ function buildInitializer(rng: Rng): Initializer {
       const { nickname } = get();
       activeFrame = null;
       activeCtx = null;
+      recorded = [];
       set({ ...freshState(nickname) });
     },
+
+    getActions: () => [...recorded],
     };
   };
 }
