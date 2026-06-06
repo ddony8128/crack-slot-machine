@@ -52,7 +52,34 @@ export default function ResultScreen({ slug }: Props) {
   }, []);
 
   const rejected = state.phase === "done" && state.result.status === "rejected";
+  const rejectReason =
+    state.phase === "done" && state.result.status === "rejected"
+      ? state.result.reason
+      : null;
+  // A version mismatch means the player loaded an old build (e.g. a tab left open
+  // across a deploy) — NOT cheating. Show a refresh prompt instead of accusing them.
+  const staleVersion = rejectReason === "version_mismatch";
   const animatedScore = useCountUp(rejected ? 0 : totalScore, 900, 0);
+
+  if (staleVersion) {
+    return (
+      <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
+        <h1 className="text-2xl font-black tracking-tight text-amber-300 sm:text-3xl">
+          새 버전이 배포되었어요
+        </h1>
+        <p className="text-zinc-300">
+          페이지를 새로고침한 뒤 다시 플레이해 주세요. (이번 기록은 등록되지 않았습니다)
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+        >
+          새로고침
+        </button>
+      </main>
+    );
+  }
 
   if (rejected) {
     return (
