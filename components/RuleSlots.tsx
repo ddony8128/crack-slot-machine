@@ -5,7 +5,7 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useDraggable,
   useDroppable,
@@ -55,7 +55,7 @@ function DraggableRule({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`outline-none ${
+      className={`select-none outline-none ${
         disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing"
       } ${isDragging ? "opacity-30" : ""}`}
     >
@@ -282,10 +282,14 @@ export default function RuleSlots() {
   };
   const cancelPlace = () => setConfirmTarget(null);
 
+  // Separate sensors per input so mobile touch and desktop mouse don't fight:
+  // MouseSensor handles desktop (small drag threshold); TouchSensor uses a
+  // long-press so a quick swipe still scrolls the page and a hold starts a drag.
+  // (A single PointerSensor + TouchSensor double-handled touch and broke mobile.)
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 6 },
+      activationConstraint: { delay: 200, tolerance: 8 },
     }),
     useSensor(KeyboardSensor),
   );
@@ -320,7 +324,7 @@ export default function RuleSlots() {
             <span aria-hidden>▼</span> 위 → 아래 순서로 적용
           </span>
           <span className="text-xs text-zinc-500">
-            드래그해서 순서를 바꿀 수 있어요
+            드래그(모바일은 꾹 눌러)로 순서를 바꿀 수 있어요
           </span>
         </div>
 
