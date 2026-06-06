@@ -17,5 +17,14 @@ export async function GET() {
   } catch (e) {
     dbError = e instanceof Error ? e.message : "db_error";
   }
-  return Response.json({ supabaseEnv: hasSupabaseEnv(), events, dbError });
+  // Presence-only booleans (NEVER the values) to pinpoint which env var the
+  // running deployment can actually see.
+  const env = {
+    hasUrl: Boolean(process.env.SUPABASE_URL),
+    hasServiceKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    hasAdminPassword: Boolean(process.env.ADMIN_PASSWORD),
+    hasAdminSecret: Boolean(process.env.ADMIN_SESSION_SECRET),
+    hasSiteUrl: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
+  };
+  return Response.json({ supabaseEnv: hasSupabaseEnv(), env, events, dbError });
 }
