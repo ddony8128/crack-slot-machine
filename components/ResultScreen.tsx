@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useGameStore } from "@/store/gameStore";
-import RankingPanel from "@/components/RankingPanel";
-import { addRankingFromGame, bestSpinScore, getRank } from "@/lib/ranking";
-import type { RankingRecord } from "@/types";
+import { submitRun, type SubmitResponse } from "@/lib/client/api";
+import { buildClientResults } from "@/lib/clientResults";
 import { useCountUp } from "@/hooks/useCountUp";
+
+type Props = { slug: string };
+
+type SubmitState =
+  | { phase: "submitting" }
+  | { phase: "done"; result: SubmitResponse }
+  | { phase: "error" };
 
 function tierMessage(score: number): string {
   if (score < 0) return "규칙이 당신을 버렸습니다";
@@ -15,44 +22,55 @@ function tierMessage(score: number): string {
   return "JACKPOT CONTENDER";
 }
 
-export default function ResultScreen() {
+export default function ResultScreen({ slug }: Props) {
   const nickname = useGameStore((s) => s.nickname);
   const totalScore = useGameStore((s) => s.totalScore);
   const spinLogs = useGameStore((s) => s.spinLogs);
-  const ruleSlots = useGameStore((s) => s.ruleSlots);
+  const runId = useGameStore((s) => s.runId);
+  const getActions = useGameStore((s) => s.getActions);
   const reset = useGameStore((s) => s.reset);
 
-  const [rankings, setRankings] = useState<RankingRecord[]>([]);
-  const [recordId, setRecordId] = useState<string>("");
-  const registeredRef = useRef(false);
+  const [state, setState] = useState<SubmitState>({ phase: "submitting" });
+  const submittedRef = useRef(false);
 
   useEffect(() => {
-    // Guard against React StrictMode double-invoke in dev.
-    if (registeredRef.current) return;
-    registeredRef.current = true;
+    if (submittedRef.current) return;
+    submittedRef.current = true;
 
-    const best = bestSpinScore(spinLogs.map((log) => log.roundScore));
-    const finalRules = ruleSlots
-      .filter((r): r is NonNullable<typeof r> => r != null)
-      .map((r) => r.name);
+    if (!runId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setState({ phase: "error" });
+      return;
+    }
 
-    const updated = addRankingFromGame({
-      nickname,
-      score: totalScore,
-      bestSpinScore: best,
-      finalRules,
-    });
-    const newest = updated.find(
-      (r) => r.score === totalScore && r.nickname === nickname,
-    );
-    setRankings(updated);
-    setRecordId(newest?.id ?? "");
-    // Intentionally run once on mount.
+    const clientResults = buildClientResults(spinLogs, totalScore);
+    submitRun(runId, { nickname, actions: getActions(), clientResults })
+      .then((result) => setState({ phase: "done", result }))
+      .catch(() => setState({ phase: "error" }));
+    // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const rank = recordId ? getRank(rankings, recordId) : -1;
-  const animatedScore = useCountUp(totalScore, 900, 0);
+  const rejected = state.phase === "done" && state.result.status === "rejected";
+  const animatedScore = useCountUp(rejected ? 0 : totalScore, 900, 0);
+
+  if (rejected) {
+    return (
+      <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
+        <h1 className="text-3xl font-black tracking-tight text-rose-400 sm:text-4xl">
+          치팅이 감지되었습니다
+        </h1>
+        <p className="text-zinc-300">기록이 등록되지 않았습니다.</p>
+        <button
+          type="button"
+          onClick={reset}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+        >
+          다시 플레이하기
+        </button>
+      </main>
+    );
+  }
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
@@ -79,18 +97,28 @@ export default function ResultScreen() {
           {tierMessage(totalScore)}
         </p>
 
-        {rank > 0 && (
-          <p className="celebrate-pop text-2xl font-black text-emerald-300">
-            랭킹 {rank}위!
-          </p>
-        )}
+        <p className="text-sm text-zinc-400">
+          {state.phase === "submitting" && "기록 등록 중…"}
+          {state.phase === "done" &&
+            state.result.status === "submitted" &&
+            "랭킹에 등록되었습니다!"}
+          {state.phase === "error" && "기록 등록에 실패했습니다."}
+        </p>
       </div>
 
-      <section className="w-full">
-        <h2 className="mb-2 text-center text-sm font-semibold tracking-wide text-zinc-400">
-          RANKING
-        </h2>
-        <RankingPanel records={rankings} highlightId={recordId} limit={10} />
+      <section className="grid w-full grid-cols-2 gap-3">
+        <Link
+          href={`/e/${slug}/leaderboard`}
+          className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+        >
+          이 이벤트 랭킹
+        </Link>
+        <Link
+          href="/e/total/leaderboard"
+          className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+        >
+          전체 랭킹 보기
+        </Link>
       </section>
 
       <button

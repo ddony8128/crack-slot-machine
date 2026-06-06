@@ -76,6 +76,9 @@ export type RevealStream = {
 
 export type GameState = {
   nickname: string;
+  // Server-issued run identity for score submission (null until a run starts).
+  runId: string | null;
+  eventSlug: string | null;
   spinIndex: number;        // 0-based, 0..6; == maxSpins when finished
   maxSpins: number;         // 7
   totalScore: number;
@@ -93,13 +96,4 @@ export type GameState = {
   // Incremental reveal feed for the UI; null when idle. Updated as the cascade
   // progresses (spin → selectCells → finalize) so the reveal plays once.
   revealStream: RevealStream | null;
-};
-
-export type RankingRecord = {
-  id: string;
-  nickname: string;
-  score: number;
-  createdAt: string;
-  bestSpinScore: number;
-  finalRules: string[];
 };

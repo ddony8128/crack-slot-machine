@@ -16,6 +16,7 @@ import {
   MultiplierCelebration,
 } from "@/components/Celebrations";
 import { useSpinReveal } from "@/hooks/useSpinReveal";
+import { play as playSound } from "@/lib/sound";
 
 const CELEBRATION_MS = 2200;
 
@@ -145,6 +146,46 @@ export default function GameScreen() {
   // fully finished (done + animation settled → scoreReady). The inline reels
   // hide behind it.
   const stageActive = revealStream != null && !reveal.scoreReady;
+
+  // --- Sound triggers (refs guard against duplicate plays on re-render) ---
+  // 'rule': once per rule-application step, as each new non-null stepLabel shows.
+  const lastStepLabelRef = useRef<string | null>(null);
+  useEffect(() => {
+    const label = reveal.stepLabel;
+    if (label && label !== lastStepLabelRef.current) {
+      lastStepLabelRef.current = label;
+      playSound("rule");
+    } else if (!label) {
+      // Reset between steps so a repeated label on the next step still fires.
+      lastStepLabelRef.current = null;
+    }
+  }, [reveal.stepLabel]);
+
+  // 'score': when the score panel first becomes visible for a spin.
+  const scorePlayedRef = useRef(false);
+  useEffect(() => {
+    if (showScore) {
+      if (!scorePlayedRef.current) {
+        scorePlayedRef.current = true;
+        playSound("score");
+      }
+    } else {
+      scorePlayedRef.current = false;
+    }
+  }, [showScore]);
+
+  // 'jackpot': when a jackpot celebration fires.
+  const jackpotPlayedRef = useRef(false);
+  useEffect(() => {
+    if (celebration?.kind === "jackpot") {
+      if (!jackpotPlayedRef.current) {
+        jackpotPlayedRef.current = true;
+        playSound("jackpot");
+      }
+    } else {
+      jackpotPlayedRef.current = false;
+    }
+  }, [celebration]);
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-6">

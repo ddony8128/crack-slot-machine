@@ -19,6 +19,8 @@ import { useGameStore } from "@/store/gameStore";
 import type { RuleLocation } from "@/store/gameStore";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import RuleCard from "@/components/RuleCard";
+import ConfirmModal from "@/components/ConfirmModal";
+import type { PlaceTarget } from "@/store/gameStore";
 
 type DragData = { loc: RuleLocation; rule: Rule };
 type DropData = { loc: RuleLocation };
@@ -245,6 +247,40 @@ export default function RuleSlots() {
     status === "choosing-rule";
 
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
+  // Pending placement awaiting confirmation. Set when the player clicks a slot
+  // or the bag during 'placing'; committed via placePending on confirm.
+  const [confirmTarget, setConfirmTarget] = useState<PlaceTarget | null>(null);
+
+  // Build the confirmation copy for the pending target. Only the
+  // newly-chosen-rule placement path is confirmed (NOT drag reordering).
+  const ruleName = pendingRule?.name ?? "";
+  let confirmMessage: string | null = null;
+  let confirmLabel = "장착하기";
+  if (confirmTarget && pendingRule) {
+    if (confirmTarget.type === "bag") {
+      confirmMessage = `${ruleName} 규칙을 가방에 보관하여 비활성화하시겠습니까?`;
+      confirmLabel = "보관하기";
+    } else {
+      const occupant = ruleSlots[confirmTarget.index];
+      if (occupant) {
+        confirmMessage = `${confirmTarget.index + 1}번 슬롯의 ${occupant.name}을(를) 가방으로 옮겨 비활성화하고 ${ruleName} 규칙을 장착하시겠습니까?`;
+        confirmLabel = "교체하기";
+      } else {
+        confirmMessage = `${ruleName} 규칙을 ${confirmTarget.index + 1}번 슬롯에 장착하시겠습니까?`;
+        confirmLabel = "장착하기";
+      }
+    }
+  }
+
+  const requestPlace = (target: PlaceTarget) => {
+    if (!pendingRule) return;
+    setConfirmTarget(target);
+  };
+  const confirmPlace = () => {
+    if (confirmTarget) placePending(confirmTarget);
+    setConfirmTarget(null);
+  };
+  const cancelPlace = () => setConfirmTarget(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -316,7 +352,7 @@ export default function RuleSlots() {
               active={arranging}
               placing={placing}
               draggable={arranging}
-              onPlace={() => placePending({ type: "slot", index: i })}
+              onPlace={() => requestPlace({ type: "slot", index: i })}
             />
           ))}
         </div>
@@ -332,7 +368,7 @@ export default function RuleSlots() {
             placing={placing}
             draggable={arranging}
             emphasize={emphasizeBag}
-            onPlace={() => placePending({ type: "bag" })}
+            onPlace={() => requestPlace({ type: "bag" })}
           />
         </div>
       </section>
@@ -344,6 +380,15 @@ export default function RuleSlots() {
           </div>
         ) : null}
       </DragOverlay>
+
+      <ConfirmModal
+        open={confirmMessage != null}
+        message={confirmMessage}
+        confirmLabel={confirmLabel}
+        cancelLabel="취소"
+        onConfirm={confirmPlace}
+        onCancel={cancelPlace}
+      />
     </DndContext>
   );
 }
