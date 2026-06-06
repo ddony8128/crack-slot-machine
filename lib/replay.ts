@@ -39,6 +39,9 @@ function dispatch(store: StoreApi<GameStore>, action: RecordedAction): void {
       s.selectRule(rule);
       return;
     }
+    case 'cancelSelection':
+      s.cancelSelection();
+      return;
     case 'placePending':
       s.placePending(action.target);
       return;

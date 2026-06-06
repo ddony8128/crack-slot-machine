@@ -32,6 +32,7 @@ export type RuleLocation = { zone: 'slot'; index: number } | { zone: 'bag'; inde
  */
 export type RecordedAction =
   | { type: 'selectRule'; ruleId: string }
+  | { type: 'cancelSelection' }
   | { type: 'placePending'; target: PlaceTarget }
   | { type: 'moveRule'; from: RuleLocation; to: RuleLocation }
   | { type: 'spin' }
@@ -257,6 +258,10 @@ function buildInitializer(initialRng: Rng): Initializer {
 
     cancelSelection: () => {
       if (get().status !== 'placing') return;
+      // Must be recorded: RulePicker is hidden during 'placing', so re-picking a
+      // rule REQUIRES cancelling first. Without this, replay would keep the first
+      // pendingRule (the second selectRule no-ops in 'placing') and diverge.
+      record({ type: 'cancelSelection' });
       set({ pendingRule: null, status: 'choosing-rule' });
     },
 
