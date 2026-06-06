@@ -15,7 +15,15 @@ export async function GET() {
       isActive: e.isActive,
     }));
   } catch (e) {
-    dbError = e instanceof Error ? e.message : "db_error";
+    // Surface the real cause: supabase-js throws a PostgrestError (not an Error
+    // instance) with message/code/details/hint.
+    if (e instanceof Error) dbError = e.message;
+    else if (e && typeof e === "object") {
+      const pg = e as { message?: string; code?: string; details?: string; hint?: string };
+      dbError = JSON.stringify({ message: pg.message, code: pg.code, details: pg.details, hint: pg.hint });
+    } else {
+      dbError = String(e);
+    }
   }
   // Presence-only booleans (NEVER the values) to pinpoint which env var the
   // running deployment can actually see.
