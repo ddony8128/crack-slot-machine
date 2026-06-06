@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useGameStore } from "@/store/gameStore";
 import ReferenceModal from "@/components/ReferenceModal";
+import { fetchLeaderboard } from "@/lib/client/api";
+import type { LeaderboardItem } from "@/lib/db/types";
 import { FRUITS, GEMS } from "@/data/symbols";
 import SymbolView from "@/components/SymbolView";
 
@@ -25,6 +27,18 @@ export default function StartScreen({
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
   const [refView, setRefView] = useState<"rules" | "scores" | null>(null);
+
+  // Top 5 preview for this event, from the DB. null = loading.
+  const [top, setTop] = useState<LeaderboardItem[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchLeaderboard(slug, 1, 5)
+      .then((r) => alive && setTop(r.items))
+      .catch(() => alive && setTop([]));
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
 
   const canStart = nickname.trim().length > 0 && isActive && !starting;
 
@@ -73,7 +87,40 @@ export default function StartScreen({
         )}
       </form>
 
-      <section className="w-full max-w-sm">
+      <section className="w-full max-w-sm space-y-2">
+        <h2 className="text-center text-sm font-semibold tracking-wide text-zinc-400">
+          TOP 5 랭킹
+        </h2>
+        {top === null ? (
+          <p className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
+            불러오는 중…
+          </p>
+        ) : top.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
+            아직 기록이 없습니다
+          </p>
+        ) : (
+          <ol className="space-y-1">
+            {top.map((item) => (
+              <li
+                key={`${item.rank}-${item.nickname}-${item.submittedAt}`}
+                className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-sm"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="w-5 text-center font-mono font-bold text-amber-300">
+                    {item.rank}
+                  </span>
+                  <span className="truncate font-semibold text-zinc-200">
+                    {item.nickname}
+                  </span>
+                </span>
+                <span className="font-mono font-bold text-emerald-300">
+                  {item.score}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
         <Link
           href={`/e/${slug}/leaderboard`}
           className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
