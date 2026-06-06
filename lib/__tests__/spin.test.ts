@@ -94,6 +94,24 @@ describe('computeWeights', () => {
     for (const f of FRUITS) expect(w[f]).toBe(BASE_WEIGHTS[f] * 9);
   });
 
+  it('copy-above duplicates four-fortune (4 weight ×4 twice = ×16)', () => {
+    const w = computeWeights(
+      [RULES_BY_ID['four-fortune'], RULES_BY_ID['copy-above']],
+      BASE_WEIGHTS,
+    );
+    expect(w.four).toBe(BASE_WEIGHTS.four * 16);
+    // other symbols untouched
+    expect(w.seven).toBe(BASE_WEIGHTS.seven);
+  });
+
+  it('copy-above duplicates seven-fever (7 weight ×3 twice = ×9)', () => {
+    const w = computeWeights(
+      [RULES_BY_ID['seven-fever'], RULES_BY_ID['copy-above']],
+      BASE_WEIGHTS,
+    );
+    expect(w.seven).toBe(BASE_WEIGHTS.seven * 9);
+  });
+
   it('does not mutate the base weights', () => {
     const before = BASE_WEIGHTS.cherry;
     computeWeights([RULES_BY_ID['fruit-surge']], BASE_WEIGHTS);
