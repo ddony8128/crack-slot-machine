@@ -224,11 +224,14 @@ export default function ReferenceModal({
               <ScoreRow label="보석 3종" value={`+${BONUS_ALL_GEM_TYPES}`} />
               <ScoreRow label="올 과일" value={`+${BONUS_ONLY_FRUITS}`} />
               <ScoreRow label="올 보석" value={`+${BONUS_ONLY_GEMS}`} />
-              <ScoreRow label="올 블루" value={`+${BONUS_ALL_BLUE}`} />
-              <ScoreRow label="올 레드" value={`+${BONUS_ALL_RED}`} />
-              <li className="pt-1 text-[11px] leading-snug text-zinc-500">
-                ※ 올 과일/올 보석 = 5칸 전부 과일/보석. 올 블루 = 5칸 전부 파랑(사파이어 🔵·포도 🍇), 올 레드 = 5칸 전부 빨강(루비 🔴·체리 🍒).
-              </li>
+              <ScoreRow
+                label="올 블루 (사파이어🔵·포도🍇)"
+                value={`+${BONUS_ALL_BLUE}`}
+              />
+              <ScoreRow
+                label="올 레드 (루비🔴·체리🍒)"
+                value={`+${BONUS_ALL_RED}`}
+              />
             </ScoreCard>
 
             <ScoreCard title="4 페널티">
