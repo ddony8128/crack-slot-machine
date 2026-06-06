@@ -13,8 +13,11 @@ let cached: SupabaseClient | null = null;
 
 export function getSupabaseAdmin(): SupabaseClient {
   if (cached) return cached;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Sanitize: trim whitespace and strip any trailing slash(es). A trailing "/"
+  // on SUPABASE_URL makes supabase-js build ".../​/rest/v1/..." which PostgREST
+  // rejects with PGRST125 ("Invalid path specified in request URL").
+  const url = process.env.SUPABASE_URL?.trim().replace(/\/+$/, '');
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) {
     throw new Error(
       'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set; cannot use the Supabase Db.',
