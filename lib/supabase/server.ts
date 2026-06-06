@@ -13,10 +13,20 @@ let cached: SupabaseClient | null = null;
 
 export function getSupabaseAdmin(): SupabaseClient {
   if (cached) return cached;
-  // Sanitize: trim whitespace and strip any trailing slash(es). A trailing "/"
-  // on SUPABASE_URL makes supabase-js build ".../​/rest/v1/..." which PostgREST
-  // rejects with PGRST125 ("Invalid path specified in request URL").
-  const url = process.env.SUPABASE_URL?.trim().replace(/\/+$/, '');
+  // Normalize SUPABASE_URL to its ORIGIN only. supabase-js appends "/rest/v1"
+  // itself, so a value that already includes a path (e.g. ".../rest/v1/") or a
+  // trailing slash makes it build ".../rest/v1//rest/v1/..." → PostgREST
+  // PGRST125 ("Invalid path specified in request URL"). Taking the origin makes
+  // it work whether the user pasted the bare host or the full REST endpoint.
+  const rawUrl = process.env.SUPABASE_URL?.trim();
+  let url: string | undefined;
+  if (rawUrl) {
+    try {
+      url = new URL(rawUrl).origin;
+    } catch {
+      url = rawUrl.replace(/\/+$/, '');
+    }
+  }
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) {
     throw new Error(
