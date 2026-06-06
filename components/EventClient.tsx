@@ -6,6 +6,7 @@ import { startRun } from "@/lib/client/api";
 import StartScreen from "@/components/StartScreen";
 import GameScreen from "@/components/GameScreen";
 import ResultScreen from "@/components/ResultScreen";
+import IntroModal from "@/components/IntroModal";
 
 type Props = { slug: string; title: string; isActive: boolean };
 
@@ -23,6 +24,10 @@ export default function EventClient({ slug, title, isActive }: Props) {
 
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  // Shown every time a new game begins (no "don't show again"). Set true the
+  // moment we leave the 'start' screen for a fresh run; the player dismisses it
+  // with "시작하기".
+  const [showIntro, setShowIntro] = useState(false);
 
   // The store is a module singleton that survives client navigations, so reset
   // to a clean 'start' state whenever this event page mounts.
@@ -41,6 +46,8 @@ export default function EventClient({ slug, title, isActive }: Props) {
       const run = await startRun(slug);
       beginRun(run.seed, run.runId, slug);
       startGame();
+      // Game is about to begin: show the instructions before the player acts.
+      setShowIntro(true);
     } catch (err) {
       setStartError(startErrorMessage(err instanceof Error ? err.message : ""));
     } finally {
@@ -60,5 +67,10 @@ export default function EventClient({ slug, title, isActive }: Props) {
         onStart={handleStart}
       />
     );
-  return <GameScreen />;
+  return (
+    <>
+      <GameScreen />
+      <IntroModal open={showIntro} onClose={() => setShowIntro(false)} />
+    </>
+  );
 }

@@ -3,6 +3,7 @@
 import type { SymbolType } from "@/types";
 import { useGameStore } from "@/store/gameStore";
 import SymbolView from "@/components/SymbolView";
+import { play as playSound } from "@/lib/sound";
 
 type SlotMachineProps = {
   /** Controlled symbol array to display. Falls back to store currentResult. */
@@ -160,7 +161,12 @@ export default function SlotMachine({
         <div className="flex justify-center">
           <button
             type="button"
-            onClick={spin}
+            onClick={() => {
+              // Lever pull + reels rolling, played on the user gesture.
+              playSound("lever");
+              playSound("spin");
+              spin();
+            }}
             className="btn-breathe rounded-xl bg-amber-400 px-10 py-4 text-xl font-black tracking-wide text-zinc-950 transition hover:scale-105 hover:bg-amber-300 active:scale-95"
           >
             SPIN
