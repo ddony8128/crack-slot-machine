@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { GameState, Rule, SpinLog, SymbolType } from '@/types';
-import { defaultRng, type Rng } from '@/lib/rng';
+import { createSeededRng, defaultRng, type Rng } from '@/lib/rng';
 import { rollBoard, computeWeights } from '@/lib/spin';
 import {
   beginCascade,
@@ -40,6 +40,12 @@ export type RecordedAction =
 
 export type GameActions = {
   setNickname: (name: string) => void;
+  /**
+   * Bind this store to a server-issued run: re-seed the rng with `seed` and
+   * record runId/slug so the finished run can be submitted. Must be called
+   * before startGame() so the offered rules + rolls match the server's replay.
+   */
+  beginRun: (seed: string, runId: string, slug: string) => void;
   startGame: () => void;
   selectRule: (rule: Rule) => void;
   cancelSelection: () => void;
@@ -89,6 +95,8 @@ function emptySlots(): Array<Rule | null> {
 function freshState(nickname: string): GameState {
   return {
     nickname,
+    runId: null,
+    eventSlug: null,
     spinIndex: 0,
     maxSpins: MAX_SPINS,
     totalScore: 0,
@@ -112,7 +120,12 @@ type Initializer = (
   get: StoreApi<GameStore>['getState'],
 ) => GameStore;
 
-function buildInitializer(rng: Rng): Initializer {
+function buildInitializer(initialRng: Rng): Initializer {
+  // Mutable so beginRun() can re-seed an existing store with a server-issued
+  // seed. Every rng consumer below reads this closure variable, so swapping it
+  // changes all subsequent rolls/offers deterministically.
+  let rng: Rng = initialRng;
+
   // The in-progress cascade frame is kept OUT of GameState (it carries the live
   // working/locked arrays threaded across the pause). It only ever
   // matters between spin() and selectCells()/finalize().
@@ -205,6 +218,13 @@ function buildInitializer(rng: Rng): Initializer {
     ...freshState(''),
 
     setNickname: (name: string) => set({ nickname: name }),
+
+    beginRun: (seed: string, runId: string, slug: string) => {
+      rng = createSeededRng(seed);
+      activeFrame = null;
+      activeCtx = null;
+      set({ runId, eventSlug: slug });
+    },
 
     startGame: () => {
       const { nickname } = get();
