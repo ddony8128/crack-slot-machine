@@ -78,9 +78,11 @@ function ScoreRow({
 
 function ScoreCard({
   title,
+  note,
   children,
 }: {
   title: string;
+  note?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -88,6 +90,11 @@ function ScoreCard({
       <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
         {title}
       </h4>
+      {note && (
+        <p className="mb-2 text-sm font-medium leading-snug text-amber-200/90">
+          {note}
+        </p>
+      )}
       <ul className="space-y-1 text-sm">{children}</ul>
     </div>
   );
@@ -207,16 +214,16 @@ export default function ReferenceModal({
               <ScoreRow label="5개" value={`+${SEVEN_SCORE[5]}`} />
             </ScoreCard>
 
-            <ScoreCard title="족보">
+            <ScoreCard
+              title="족보"
+              note="※ 족보는 과일과 보석에 대해서만 적용됩니다 (숫자 7·0·4 제외)."
+            >
               <ScoreRow label="페어" value={`+${HAND_PAIR}`} />
               <ScoreRow label="투페어" value={`+${HAND_TWO_PAIR}`} />
               <ScoreRow label="트리플" value={`+${HAND_TRIPLE}`} />
               <ScoreRow label="풀하우스" value={`+${HAND_FULL_HOUSE}`} />
               <ScoreRow label="포카드" value={`+${HAND_FOUR_KIND}`} />
               <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
-              <li className="pt-1 text-[11px] leading-snug text-zinc-500">
-                ※ 족보는 과일과 보석에 대해서만 적용됩니다 (숫자 7·0·4 제외).
-              </li>
             </ScoreCard>
 
             <ScoreCard title="색·종류 보너스">
@@ -242,13 +249,13 @@ export default function ReferenceModal({
               />
             </ScoreCard>
 
-            <ScoreCard title="특수 족보">
+            <ScoreCard
+              title="특수 족보"
+              note="※ 특수 족보의 효과는 다음 스핀에만 적용됩니다."
+            >
               <ScoreRow label="0이 3개 이상" value="규칙 1장 추가" />
               <ScoreRow label="4가 4개" value={`점수 ×${FOURS_4_MULT}`} />
               <ScoreRow label="4가 5개" value={`점수 ×${FOURS_5_MULT}`} />
-              <li className="pt-1 text-[11px] leading-snug text-zinc-500">
-                ※ 특수 족보의 효과는 다음 스핀에만 적용됩니다.
-              </li>
             </ScoreCard>
           </section>
           )}
