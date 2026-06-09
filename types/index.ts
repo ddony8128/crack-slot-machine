@@ -17,6 +17,11 @@ export type SpinLogStep = {
   label: string;
   result: SymbolType[];   // board snapshot after this rule
   locked: boolean[];      // cells frozen by a lock rule so far (for the greyed-out reveal)
+  // Cells given a FRESH RANDOM ROLL by this step (four-shield, four-parry,
+  // gem-shuffle, fruit/gem-fish, SELECT REROLL). The reveal must animate these
+  // even when the value repeats (e.g. a 4 rerolled into another 4), otherwise a
+  // same-value reroll looks like the cell never spun. Absent for non-reroll steps.
+  rerolled?: number[];
 };
 
 // One line of the score breakdown ("why you got these points"). points can be negative.

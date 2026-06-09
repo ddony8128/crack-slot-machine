@@ -467,3 +467,51 @@ describe('COPY ABOVE covers every rule type', () => {
     expect(frame.working[2]).toBe('ruby');
   });
 });
+
+describe('cascade — step.rerolled (re-spin animation hint)', () => {
+  it('FOUR SHIELD: a 4 rerolled into ANOTHER 4 still records rerolled (value unchanged)', () => {
+    // The bug: a same-value reroll left the cell out of the diff, so the reveal
+    // showed no motion. rerolled must flag the cell regardless of value.
+    const base: SymbolType[] = ['four', 'cherry', 'cherry', 'cherry', 'cherry'];
+    const ctx = { previousResult: PREV, weights: BASE_WEIGHTS, rng: queuedRng([rngPoint('four')]) };
+    const frame = beginCascade(base, [RULES_BY_ID['four-shield']], ctx);
+    const step = frame.steps.find((s) => s.label === 'FOUR SHIELD');
+    expect(step?.result[0]).toBe('four'); // landed on 4 again — no value change
+    expect(step?.rerolled).toEqual([0]); // ...but still flagged as re-spun
+  });
+
+  it('FOUR SHIELD: flags every 4 it rerolls, value-change or not', () => {
+    const base: SymbolType[] = ['four', 'cherry', 'four', 'cherry', 'cherry'];
+    // cell0 -> four (same), cell2 -> seven (changed)
+    const ctx = {
+      previousResult: PREV,
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([rngPoint('four'), rngPoint('seven')]),
+    };
+    const frame = beginCascade(base, [RULES_BY_ID['four-shield']], ctx);
+    const step = frame.steps.find((s) => s.label === 'FOUR SHIELD');
+    expect(step?.rerolled).toEqual([0, 2]);
+    expect(step?.result[0]).toBe('four');
+    expect(step?.result[2]).toBe('seven');
+  });
+
+  it('SELECT REROLL: records the chosen cell as rerolled even if value repeats', () => {
+    const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'ruby'];
+    const rules = [RULES_BY_ID['select-reroll']];
+    // Reroll cell 0 (cherry) and land on cherry again.
+    const ctx = { previousResult: PREV, weights: BASE_WEIGHTS, rng: queuedRng([rngPoint('cherry')]) };
+    let frame = beginCascade(base, rules, ctx);
+    frame = resolveSelection(frame, rules, ctx, [0]);
+    const step = frame.steps[frame.steps.length - 1];
+    expect(step.result[0]).toBe('cherry'); // unchanged value
+    expect(step.rerolled).toEqual([0]); // still flagged
+  });
+
+  it('transforms carry NO rerolled hint (deterministic; diff is sufficient)', () => {
+    const base: SymbolType[] = ['zero', 'cherry', 'cherry', 'cherry', 'cherry'];
+    const frame = beginCascade(base, [RULES_BY_ID['zero-to-seven']], ctxNoRng);
+    const step = frame.steps.find((s) => s.label === 'ZERO ASCEND');
+    expect(step?.result[0]).toBe('seven');
+    expect(step?.rerolled).toBeUndefined();
+  });
+});

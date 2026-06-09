@@ -68,21 +68,29 @@ function write(
  * PURE SEQUENTIAL: each rule writes its target(s) freely, overwriting any earlier
  * change; the only off-limits cells are `locked` (pre-roll held) ones. "leftmost
  * X" targeting therefore skips only LOCKED cells, never previously-written ones.
+ *
+ * Returns the indices that were given a FRESH RANDOM ROLL (reroll rules only) so
+ * the reveal can animate them even when the value repeats. Transforms return [].
  */
 function applyOne(
   rule: Rule,
   working: SymbolType[],
   locked: boolean[],
   ctx: ApplyCtx,
-): void {
+): number[] {
   const { weights, rng } = ctx;
   switch (rule.id) {
     // ---- reroll ----
-    case 'four-shield':
+    case 'four-shield': {
+      const rolled: number[] = [];
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'four' && !locked[i]) write(working, locked, i, rollSymbol(weights, rng));
+        if (working[i] === 'four' && !locked[i]) {
+          write(working, locked, i, rollSymbol(weights, rng));
+          rolled.push(i);
+        }
       }
-      break;
+      return rolled;
+    }
     case 'four-parry': {
       const idx = working.findIndex((s, i) => s === 'four' && !locked[i]);
       if (idx !== -1) {
@@ -91,8 +99,9 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        return [idx];
       }
-      break;
+      return [];
     }
     case 'gem-shuffle': {
       const idx = working.findIndex((s, i) => GEM_SET.has(s) && !locked[i]);
@@ -102,8 +111,9 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        return [idx];
       }
-      break;
+      return [];
     }
     case 'fruit-fish': {
       const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !locked[i]);
@@ -113,8 +123,9 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        return [idx];
       }
-      break;
+      return [];
     }
     case 'gem-fish': {
       const idx = working.findIndex((s, i) => !GEM_SET.has(s) && !locked[i]);
@@ -124,52 +135,53 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        return [idx];
       }
-      break;
+      return [];
     }
 
     // ---- transform ----
     case 'left-pair':
       write(working, locked, 1, working[0]);
-      break;
+      return [];
     case 'center-echo':
       write(working, locked, 3, working[1]);
-      break;
+      return [];
     case 'third-mirror':
       write(working, locked, 2, working[4]);
-      break;
+      return [];
     case 'first-cherry':
       write(working, locked, 0, 'cherry');
-      break;
+      return [];
     case 'safe-convert':
       for (let i = 0; i < working.length; i++) {
         if ((working[i] === 'four' || working[i] === 'zero') && !locked[i])
           write(working, locked, i, 'ruby');
       }
-      break;
+      return [];
     case 'zero-to-seven':
       for (let i = 0; i < working.length; i++) {
         if (working[i] === 'zero' && !locked[i]) write(working, locked, i, 'seven');
       }
-      break;
+      return [];
     case 'red-dye':
       for (let i = 0; i < working.length; i++) {
         if ((working[i] === 'lemon' || working[i] === 'diamond') && !locked[i])
           write(working, locked, i, 'cherry');
       }
-      break;
+      return [];
     case 'blue-dye':
       for (let i = 0; i < working.length; i++) {
         if ((working[i] === 'lemon' || working[i] === 'diamond') && !locked[i])
           write(working, locked, i, 'sapphire');
       }
-      break;
+      return [];
 
     // ---- lock rules are handled in the PRE-ROLL HOLD pass, not here. ----
     // ---- select rules are interactive — handled via Pending, not here. ----
 
     default:
-      break;
+      return [];
   }
 }
 
@@ -334,15 +346,20 @@ export function advanceCascade(
       }
       // weight/score rules are not board-changing here; only reroll/transform
       // re-apply a post-roll board effect.
+      let copyRolled: number[] = [];
       if (above.type === 'reroll' || above.type === 'transform') {
-        applyOne(above, working, locked, ctx);
+        copyRolled = applyOne(above, working, locked, ctx);
       }
-      steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
+      const copyStep: SpinLogStep = { label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] };
+      if (copyRolled.length) copyStep.rerolled = copyRolled;
+      steps.push(copyStep);
       continue;
     }
 
-    applyOne(rule, working, locked, ctx);
-    steps.push({ label: rule.name, result: [...working], locked: [...locked] });
+    const rolled = applyOne(rule, working, locked, ctx);
+    const step: SpinLogStep = { label: rule.name, result: [...working], locked: [...locked] };
+    if (rolled.length) step.rerolled = rolled;
+    steps.push(step);
   }
 
   frame.done = true;
@@ -370,6 +387,10 @@ export function resolveSelection(
   // rule may be `copy-above`, not the select rule itself).
   const ruleName = pending.ruleName;
 
+  // SELECT REROLL gives the chosen cell a fresh random roll, so it must animate
+  // even if the value repeats. copy/swap are deterministic — a no-visible-change
+  // there genuinely means the board is identical, so no rerolled hint is needed.
+  let rerolled: number[] | undefined;
   switch (pending.kind) {
     case 'copy': {
       const i = indices[0];
@@ -387,11 +408,14 @@ export function resolveSelection(
     case 'reroll': {
       const i = indices[0];
       working[i] = rollSymbol(ctx.weights, ctx.rng);
+      rerolled = [i];
       break;
     }
   }
 
-  steps.push({ label: ruleName, result: [...working], locked: [...locked] });
+  const selStep: SpinLogStep = { label: ruleName, result: [...working], locked: [...locked] };
+  if (rerolled) selStep.rerolled = rerolled;
+  steps.push(selStep);
   frame.interactive = true;
   frame.pending = null;
   frame.slotIndex += 1; // advance past the resolved select rule

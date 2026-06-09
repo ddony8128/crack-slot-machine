@@ -161,7 +161,12 @@ export function useSpinReveal(
       let prev = prevResultRef.current;
       for (let s = from; s < steps.length; s++) {
         const step = steps[s];
-        const changed = diffIndices(prev, step.result);
+        const valueChanged = diffIndices(prev, step.result);
+        // A reroll that lands on the SAME value changes nothing in the diff, yet
+        // the cell DID spin — flash those cells too so the reroll is visible.
+        const changed = step.rerolled?.length
+          ? Array.from(new Set([...valueChanged, ...step.rerolled]))
+          : valueChanged;
         const resultSnapshot = step.result;
         const labelSnapshot = step.label;
         const lockedSnapshot = trueIndices(step.locked);
