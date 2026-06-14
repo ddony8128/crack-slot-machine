@@ -1,5 +1,5 @@
 import type { Rule, ScoreItem, SymbolType } from '@/types';
-import { FRUITS, GEMS, RED_SET, BLUE_SET } from '@/data/symbols';
+import { FRUITS, GEMS } from '@/data/symbols';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
   SEVEN_SCORE,
@@ -13,8 +13,6 @@ import {
   BONUS_ALL_GEM_TYPES,
   BONUS_ONLY_FRUITS,
   BONUS_ONLY_GEMS,
-  BONUS_ALL_BLUE,
-  BONUS_ALL_RED,
   FOUR_PENALTY_PER,
   FOUR_FORTUNE_PER,
   BONUS_77,
@@ -79,8 +77,6 @@ export function colorBonuses(result: SymbolType[]): number {
 
   if (result.length === 5 && result.every((s) => FRUIT_SET.has(s))) bonus += BONUS_ONLY_FRUITS;
   if (result.length === 5 && result.every((s) => GEM_SET.has(s))) bonus += BONUS_ONLY_GEMS;
-  if (result.length === 5 && result.every((s) => BLUE_SET.has(s))) bonus += BONUS_ALL_BLUE;
-  if (result.length === 5 && result.every((s) => RED_SET.has(s))) bonus += BONUS_ALL_RED;
 
   return bonus;
 }
@@ -102,13 +98,11 @@ export function colorBonusItems(result: SymbolType[]): ScoreItem[] {
     result.length === 5 && result.every((s) => set.has(s));
 
   if (has('cherry') && has('lemon') && has('grape'))
-    items.push({ label: '과일 3종', points: BONUS_ALL_FRUIT_TYPES });
+    items.push({ label: '신체 3종', points: BONUS_ALL_FRUIT_TYPES });
   if (has('diamond') && has('ruby') && has('sapphire'))
-    items.push({ label: '보석 3종', points: BONUS_ALL_GEM_TYPES });
-  if (all(FRUIT_SET)) items.push({ label: '올 과일', points: BONUS_ONLY_FRUITS });
-  if (all(GEM_SET)) items.push({ label: '올 보석', points: BONUS_ONLY_GEMS });
-  if (all(new Set(BLUE_SET))) items.push({ label: '올 블루', points: BONUS_ALL_BLUE });
-  if (all(new Set(RED_SET))) items.push({ label: '올 레드', points: BONUS_ALL_RED });
+    items.push({ label: '괴물 3종', points: BONUS_ALL_GEM_TYPES });
+  if (all(FRUIT_SET)) items.push({ label: '올 신체', points: BONUS_ONLY_FRUITS });
+  if (all(GEM_SET)) items.push({ label: '올 괴물', points: BONUS_ONLY_GEMS });
   return items;
 }
 

@@ -17,13 +17,11 @@ export const HAND_FULL_HOUSE = 180;
 export const HAND_FOUR_KIND = 300;
 export const HAND_FIVE_KIND = 700;
 
-// Color / type bonuses (additive).
-export const BONUS_ALL_FRUIT_TYPES = 50;  // all 3 fruit types present
-export const BONUS_ALL_GEM_TYPES = 80;    // all 3 gem types present
-export const BONUS_ONLY_FRUITS = 100;     // all 5 cells fruits
-export const BONUS_ONLY_GEMS = 150;       // all 5 cells gems
-export const BONUS_ALL_BLUE = 200;        // all 5 cells in BLUE set
-export const BONUS_ALL_RED = 250;         // all 5 cells in RED set
+// Type bonuses (additive).
+export const BONUS_ALL_FRUIT_TYPES = 100;  // all 3 신체 types present
+export const BONUS_ALL_GEM_TYPES = 160;    // all 3 괴물 types present
+export const BONUS_ONLY_FRUITS = 200;      // all 5 cells 신체
+export const BONUS_ONLY_GEMS = 300;        // all 5 cells 괴물
 
 // Four penalty per four.
 export const FOUR_PENALTY_PER = 20;

@@ -33,9 +33,9 @@ describe('computeWeights', () => {
     expect(w.sapphire).toBe(BASE_WEIGHTS.sapphire * 3);
   });
 
-  it('seven-fever triples seven', () => {
+  it('seven-fever quadruples seven', () => {
     const sf = computeWeights([RULES_BY_ID['seven-fever']], BASE_WEIGHTS);
-    expect(sf.seven).toBe(BASE_WEIGHTS.seven * 3);
+    expect(sf.seven).toBe(BASE_WEIGHTS.seven * 4);
   });
 
   it('no-zero sets zero weight to 0', () => {
@@ -83,7 +83,7 @@ describe('computeWeights', () => {
       [RULES_BY_ID['seven-fever'], RULES_BY_ID['seven-fever']],
       BASE_WEIGHTS,
     );
-    expect(w.seven).toBe(BASE_WEIGHTS.seven * 3 * 3);
+    expect(w.seven).toBe(BASE_WEIGHTS.seven * 4 * 4);
   });
 
   it('copy-above above a weight rule duplicates its effect (fruit ×3 twice = ×9)', () => {
@@ -104,12 +104,12 @@ describe('computeWeights', () => {
     expect(w.seven).toBe(BASE_WEIGHTS.seven);
   });
 
-  it('copy-above duplicates seven-fever (7 weight ×3 twice = ×9)', () => {
+  it('copy-above duplicates seven-fever (7 weight ×4 twice = ×16)', () => {
     const w = computeWeights(
       [RULES_BY_ID['seven-fever'], RULES_BY_ID['copy-above']],
       BASE_WEIGHTS,
     );
-    expect(w.seven).toBe(BASE_WEIGHTS.seven * 9);
+    expect(w.seven).toBe(BASE_WEIGHTS.seven * 16);
   });
 
   it('number-spin changes NO weights (it only restricts the first roll, never rerolls)', () => {

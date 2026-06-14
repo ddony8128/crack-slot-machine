@@ -1,5 +1,14 @@
 import type { RecordedAction } from '@/store/gameStore';
 import type { ReplaySpin } from '@/lib/replay';
+import type { AchievementKey } from '@/types';
+
+/** A row in `players` (global whitelist), camelCased for app use. */
+export type PlayerRow = {
+  id: string;
+  nickname: string;
+  createdAt: string;
+  deletedAt: string | null;
+};
 
 /** A row in `events`, camelCased for app use. */
 export type EventRow = {
@@ -25,7 +34,9 @@ export type ClientResults = {
 export type RunRow = {
   id: string;
   eventId: string;
+  playerId: string | null;
   nickname: string | null;
+  achievements: AchievementKey[];
   seed: string;
   actions: RecordedAction[] | null;
   clientResults: ClientResults | null;
@@ -59,6 +70,7 @@ export type LeaderboardPage = {
 /** Fields needed to open a pending run (seed is server-generated). */
 export type CreateRunInput = {
   eventId: string;
+  playerId: string | null;
   seed: string;
   clientVersion: string;
   rulesetVersion: number;
@@ -67,6 +79,7 @@ export type CreateRunInput = {
 /** Final values written when a run is verified (or rejected). */
 export type FinalizeRunInput = {
   nickname: string;
+  achievements: AchievementKey[];
   actions: RecordedAction[];
   clientResults: ClientResults;
   score: number | null;
@@ -99,6 +112,31 @@ export interface Db {
   createRun(input: CreateRunInput): Promise<RunRow>;
   getRun(runId: string): Promise<RunRow | null>;
   finalizeRun(runId: string, input: FinalizeRunInput): Promise<RunRow | null>;
+
+  // ── players whitelist (BLACKHAVEN) ─────────────────────────────────────────
+  /** All players; active only unless includeDeleted is set. Newest first. */
+  listPlayers(opts?: { includeDeleted?: boolean }): Promise<PlayerRow[]>;
+  /** The single ACTIVE player matching nickname (case-insensitive), or null. */
+  getActivePlayerByNickname(nickname: string): Promise<PlayerRow | null>;
+  /** Register a nickname. Throws if an active row with that nickname exists. */
+  createPlayer(nickname: string): Promise<PlayerRow>;
+  /** Soft delete (set deleted_at). Returns the updated row or null if missing. */
+  softDeletePlayer(id: string): Promise<PlayerRow | null>;
+  /** Restore a soft-deleted player (clear deleted_at). Null if missing. */
+  restorePlayer(id: string): Promise<PlayerRow | null>;
+
+  // ── rewards / achievements (BLACKHAVEN) ────────────────────────────────────
+  /**
+   * Highest score among this player's submitted+verified runs in the event.
+   * null when the player has no qualifying prior run (=> their first play).
+   * Call this BEFORE finalizing the current run so it reflects PRIOR plays only.
+   */
+  getPlayerBestScore(playerId: string, eventId: string): Promise<number | null>;
+  /** Union of achievement keys across the player's submitted+verified runs. */
+  getPlayerAchievements(
+    playerId: string,
+    eventId: string,
+  ): Promise<AchievementKey[]>;
 
   /**
    * Leaderboard for `slug`, or the combined all-events board when slug==='total'.

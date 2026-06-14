@@ -323,13 +323,13 @@ export function advanceCascade(
     if (rule.id === 'copy-above') {
       const above = slotIndex > 0 ? rules[slotIndex - 1] : null;
       if (!above || above.id === 'copy-above') {
-        steps.push({ label: 'COPY ABOVE → (none)', result: [...working], locked: [...locked] });
+        steps.push({ label: `${rule.name} → (none)`, result: [...working], locked: [...locked] });
         continue;
       }
       if (above.type === 'lock') {
         // The lock (and this copy of it) were already applied in the pre-roll
         // HOLD pass; just acknowledge it here (board already reflects the hold).
-        steps.push({ label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] });
+        steps.push({ label: `${rule.name} → ${above.name}`, result: [...working], locked: [...locked] });
         continue;
       }
       if (above.type === 'select') {
@@ -337,11 +337,11 @@ export function advanceCascade(
         const kind = SELECT_KIND[above.id];
         const selectable = selectableFor(kind, locked);
         if (opts.autoSkipSelect || !isApplicable(kind, selectable)) {
-          steps.push({ label: `COPY ABOVE → ${above.name} (건너뜀)`, result: [...working], locked: [...locked] });
+          steps.push({ label: `${rule.name} → ${above.name} (건너뜀)`, result: [...working], locked: [...locked] });
           continue;
         }
         // Pause here (slotIndex stays on the copy-above slot) for the player.
-        frame.pending = { kind, ruleName: `COPY ABOVE → ${above.name}`, selectable };
+        frame.pending = { kind, ruleName: `${rule.name} → ${above.name}`, selectable };
         return frame;
       }
       // weight/score rules are not board-changing here; only reroll/transform
@@ -350,7 +350,7 @@ export function advanceCascade(
       if (above.type === 'reroll' || above.type === 'transform') {
         copyRolled = applyOne(above, working, locked, ctx);
       }
-      const copyStep: SpinLogStep = { label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] };
+      const copyStep: SpinLogStep = { label: `${rule.name} → ${above.name}`, result: [...working], locked: [...locked] };
       if (copyRolled.length) copyStep.rerolled = copyRolled;
       steps.push(copyStep);
       continue;

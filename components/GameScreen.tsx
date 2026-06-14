@@ -17,6 +17,11 @@ import {
 } from "@/components/Celebrations";
 import { useSpinReveal } from "@/hooks/useSpinReveal";
 import { play as playSound } from "@/lib/sound";
+import ScareOverlay from "@/components/ScareOverlay";
+
+// Presentation-only jump-scare odds, gated behind the '원숭이 손' rule.
+const SCARE_RULE_ID = "seven-fever";
+const SCARE_CHANCE = 0.05;
 
 const CELEBRATION_MS = 2200;
 
@@ -33,6 +38,7 @@ export default function GameScreen() {
   const pendingSelection = useGameStore((s) => s.pendingSelection);
   const selectCells = useGameStore((s) => s.selectCells);
   const revealStream = useGameStore((s) => s.revealStream);
+  const ruleSlots = useGameStore((s) => s.ruleSlots);
 
   const latestLog = spinLogs[spinLogs.length - 1] ?? null;
 
@@ -187,6 +193,33 @@ export default function GameScreen() {
     }
   }, [celebration]);
 
+  // --- Jump-scare (PRESENTATION ONLY) ---------------------------------------
+  // Fires when a spin STARTS while the '원숭이 손' (seven-fever) rule is active,
+  // at a 5% NON-seeded chance. This watches store reads only and never calls any
+  // store action, the seeded RNG, or the scorer — so it cannot affect outcomes
+  // or server replay. A new spin is detected by the revealStream.id incrementing
+  // (the store bumps it at the top of spin()); status 'spinning' is also honored
+  // for forward-compat. The guard ref keys on the spin id so it fires once/spin.
+  const [showScare, setShowScare] = useState(false);
+  const lastScareSpinIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const spinStarted =
+      status === "spinning" || (revealStream != null && !revealStream.done);
+    if (!spinStarted || revealStream == null) return;
+    // Once per spin: skip if we've already evaluated this reveal id.
+    if (lastScareSpinIdRef.current === revealStream.id) return;
+    lastScareSpinIdRef.current = revealStream.id;
+
+    const hasScareRule = ruleSlots.some((r) => r?.id === SCARE_RULE_ID);
+    if (!hasScareRule) return;
+    // Non-seeded, presentation-only roll — deliberately NOT the game rng.
+    if (Math.random() < SCARE_CHANCE) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowScare(true);
+      playSound("ghost");
+    }
+  }, [status, revealStream, ruleSlots]);
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-6">
       <StatusBar />
@@ -235,6 +268,8 @@ export default function GameScreen() {
       {celebration?.kind === "multiplier" && (
         <MultiplierCelebration multiplier={celebration.value} />
       )}
+
+      {showScare && <ScareOverlay onDone={() => setShowScare(false)} />}
     </main>
   );
 }

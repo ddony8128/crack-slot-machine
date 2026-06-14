@@ -84,30 +84,21 @@ describe('sevenScore', () => {
 });
 
 describe('colorBonuses', () => {
-  it('all fruit types present => +50', () => {
-    expect(colorBonuses(['cherry', 'lemon', 'grape', 'zero', 'four'])).toBe(50);
+  it('all 신체 types present => +100', () => {
+    expect(colorBonuses(['cherry', 'lemon', 'grape', 'zero', 'four'])).toBe(100);
   });
 
-  it('all gem types present => +80', () => {
-    expect(colorBonuses(['diamond', 'ruby', 'sapphire', 'zero', 'four'])).toBe(80);
+  it('all 괴물 types present => +160', () => {
+    expect(colorBonuses(['diamond', 'ruby', 'sapphire', 'zero', 'four'])).toBe(160);
   });
 
-  it('only fruits (5 fruits) stacks all-fruit-types + only-fruits', () => {
-    // cherry lemon grape grape grape: all 3 fruit types + only fruits
-    expect(colorBonuses(['cherry', 'lemon', 'grape', 'grape', 'grape'])).toBe(50 + 100);
+  it('only 신체 (5 신체) stacks all-신체-types + only-신체', () => {
+    // cherry lemon grape grape grape: all 3 신체 types + only 신체
+    expect(colorBonuses(['cherry', 'lemon', 'grape', 'grape', 'grape'])).toBe(100 + 200);
   });
 
-  it('only gems => +150 (+80 all gem types)', () => {
-    expect(colorBonuses(['diamond', 'ruby', 'sapphire', 'diamond', 'ruby'])).toBe(80 + 150);
-  });
-
-  it('all blue: 🔵🍇🔵🍇🔵 => +200 (also only-fruits? no — sapphire is gem)', () => {
-    // sapphire grape sapphire grape sapphire => all BLUE, not all fruit, not all gem
-    expect(colorBonuses(['sapphire', 'grape', 'sapphire', 'grape', 'sapphire'])).toBe(200);
-  });
-
-  it('all red: 🔴🍒🔴🍒🔴 => +250', () => {
-    expect(colorBonuses(['ruby', 'cherry', 'ruby', 'cherry', 'ruby'])).toBe(250);
+  it('only 괴물 => +300 (+160 all 괴물 types)', () => {
+    expect(colorBonuses(['diamond', 'ruby', 'sapphire', 'diamond', 'ruby'])).toBe(160 + 300);
   });
 });
 
@@ -123,22 +114,22 @@ describe('scoreResult', () => {
     expect(s.baseRoundScore).toBe(-10);
   });
 
-  it('five cherries is additive: 700 + only-fruits 100 + all-red 250', () => {
+  it('five cherries is additive: 700 + only-신체 200', () => {
     const r: SymbolType[] = ['cherry', 'cherry', 'cherry', 'cherry', 'cherry'];
     const s = scoreResult(r, []);
     expect(s.handScore).toBe(700);
-    // cherry is a fruit (only-fruits +100) AND in RED set (all-red +250).
-    expect(s.bonusScore).toBe(100 + 250);
+    // cherry is 신체 (only-신체 +200).
+    expect(s.bonusScore).toBe(200);
     expect(s.penalty).toBe(0);
-    expect(s.baseRoundScore).toBe(700 + 350);
+    expect(s.baseRoundScore).toBe(700 + 200);
   });
 
-  it('five lemons => 700 + only-fruits 100 (lemon is colorless, no red/blue)', () => {
+  it('five lemons => 700 + only-신체 200', () => {
     const r: SymbolType[] = ['lemon', 'lemon', 'lemon', 'lemon', 'lemon'];
     const s = scoreResult(r, []);
     expect(s.handScore).toBe(700);
-    expect(s.bonusScore).toBe(100);
-    expect(s.baseRoundScore).toBe(800);
+    expect(s.bonusScore).toBe(200);
+    expect(s.baseRoundScore).toBe(900);
   });
 
   it('four-of-a-kind 💎💎💎💎0 => 300, no penalty (no fours)', () => {
@@ -171,24 +162,8 @@ describe('scoreResult', () => {
     const dirty: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'four'];
     const c = scoreResult(clean, [RULES_BY_ID['clean-bonus']]);
     const d = scoreResult(dirty, [RULES_BY_ID['clean-bonus']]);
-    expect(c.bonusScore).toBe(50 + 120); // all fruit types + clean
-    expect(d.bonusScore).toBe(50);       // all fruit types only, no clean (has a four)
-  });
-
-  it('all-blue 🔵🍇🔵🍇🔵 => +200 bonus and Two Pair... actually triple-ish hand', () => {
-    // sapphire grape sapphire grape sapphire: sapphire x3, grape x2 => full house
-    const r: SymbolType[] = ['sapphire', 'grape', 'sapphire', 'grape', 'sapphire'];
-    const s = scoreResult(r, []);
-    expect(s.bonusScore).toBe(200);
-    expect(s.hand).toBe('Full House');
-    expect(s.handScore).toBe(180);
-    expect(s.baseRoundScore).toBe(380);
-  });
-
-  it('all-red 🔴🍒🔴🍒🔴 => +250 bonus', () => {
-    const r: SymbolType[] = ['ruby', 'cherry', 'ruby', 'cherry', 'ruby'];
-    const s = scoreResult(r, []);
-    expect(s.bonusScore).toBe(250);
+    expect(c.bonusScore).toBe(100 + 120); // all 신체 types + clean
+    expect(d.bonusScore).toBe(100);       // all 신체 types only, no clean (has a four)
   });
 
   it('five fours => penalty 100, No Hand, base -100', () => {
@@ -242,8 +217,8 @@ describe('copy-above duplicates score rules', () => {
   it('copy-above above clean-bonus applies +120 twice (no fours)', () => {
     const r: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'zero'];
     const dup = scoreResult(r, [RULES_BY_ID['clean-bonus'], RULES_BY_ID['copy-above']]);
-    // all-fruit-types 50 + clean 120*2
-    expect(dup.bonusScore).toBe(50 + 240);
+    // all-신체-types 100 + clean 120*2
+    expect(dup.bonusScore).toBe(100 + 240);
   });
 
   it('copy-above above seven-double quadruples the seven portion', () => {

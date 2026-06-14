@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { TOTAL_SLUG, type EventRow } from "@/lib/db/types";
+import { TOTAL_SLUG, type EventRow, type PlayerRow } from "@/lib/db/types";
 import { SLUG_RE } from "@/lib/server/validation";
 import {
   AdminApiError,
   adminLogout,
   createAdminEvent,
+  createAdminPlayer,
+  deleteAdminPlayer,
   fetchAdminEvents,
+  fetchAdminPlayers,
+  restoreAdminPlayer,
   setAdminEventActive,
   updateAdminEvent,
 } from "@/lib/client/adminApi";
@@ -56,6 +60,15 @@ export default function AdminDashboard() {
   const [editError, setEditError] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Nickname whitelist state.
+  const [players, setPlayers] = useState<PlayerRow[] | null>(null);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
+  const [playerListError, setPlayerListError] = useState<string | null>(null);
+  const [newNickname, setNewNickname] = useState("");
+  const [playerFormError, setPlayerFormError] = useState<string | null>(null);
+  const [addingPlayer, setAddingPlayer] = useState(false);
+  const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     try {
       const rows = await fetchAdminEvents();
@@ -76,6 +89,99 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  const loadPlayers = useCallback(async () => {
+    try {
+      const rows = await fetchAdminPlayers(includeDeleted);
+      setPlayers(rows);
+      setPlayerListError(null);
+    } catch (err) {
+      if (err instanceof AdminApiError && err.code === "unauthorized") {
+        router.refresh();
+        return;
+      }
+      setPlayerListError("닉네임 목록을 불러오지 못했습니다.");
+    }
+  }, [includeDeleted, router]);
+
+  useEffect(() => {
+    // Reload whenever the "삭제 포함 보기" toggle changes (and on mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadPlayers();
+  }, [loadPlayers]);
+
+  async function onAddPlayer(e: React.FormEvent) {
+    e.preventDefault();
+    if (addingPlayer) return;
+
+    const trimmed = newNickname.trim();
+    if (trimmed.length === 0) {
+      setPlayerFormError("닉네임을 입력하세요.");
+      return;
+    }
+
+    setAddingPlayer(true);
+    setPlayerFormError(null);
+    try {
+      await createAdminPlayer(trimmed);
+      setNewNickname("");
+      await loadPlayers();
+    } catch (err) {
+      const code = err instanceof AdminApiError ? err.code : "unknown";
+      if (code === "unauthorized") {
+        router.refresh();
+        return;
+      }
+      setPlayerFormError(
+        code === "nickname_exists"
+          ? "이미 등록된 닉네임입니다."
+          : code === "invalid_nickname"
+            ? "닉네임을 입력하세요."
+            : "닉네임 추가에 실패했습니다.",
+      );
+    } finally {
+      setAddingPlayer(false);
+    }
+  }
+
+  async function onDeletePlayer(row: PlayerRow) {
+    if (pendingPlayerId) return;
+    setPendingPlayerId(row.id);
+    try {
+      await deleteAdminPlayer(row.id);
+      await loadPlayers();
+    } catch (err) {
+      if (err instanceof AdminApiError && err.code === "unauthorized") {
+        router.refresh();
+        return;
+      }
+      setPlayerListError("삭제에 실패했습니다.");
+    } finally {
+      setPendingPlayerId(null);
+    }
+  }
+
+  async function onRestorePlayer(row: PlayerRow) {
+    if (pendingPlayerId) return;
+    setPendingPlayerId(row.id);
+    try {
+      await restoreAdminPlayer(row.id);
+      await loadPlayers();
+    } catch (err) {
+      const code = err instanceof AdminApiError ? err.code : "unknown";
+      if (code === "unauthorized") {
+        router.refresh();
+        return;
+      }
+      setPlayerListError(
+        code === "nickname_exists"
+          ? "이미 동일한 닉네임이 사용 중이라 복구할 수 없습니다."
+          : "복구에 실패했습니다.",
+      );
+    } finally {
+      setPendingPlayerId(null);
+    }
+  }
 
   async function onToggle(row: EventRow) {
     if (pendingSlug) return;
@@ -388,6 +494,120 @@ export default function AdminDashboard() {
                           : row.isActive
                             ? "비활성화"
                             : "다시 활성화"}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Nickname whitelist */}
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-zinc-100">닉네임 화이트리스트</h2>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={includeDeleted}
+              onChange={(e) => setIncludeDeleted(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 accent-emerald-500"
+            />
+            삭제 포함 보기
+          </label>
+        </div>
+
+        <form className="mt-4 flex flex-col gap-3" onSubmit={onAddPlayer}>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              type="text"
+              value={newNickname}
+              onChange={(e) => setNewNickname(e.target.value)}
+              placeholder="닉네임"
+              maxLength={60}
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-emerald-400"
+            />
+            <button
+              type="submit"
+              disabled={addingPlayer}
+              className="shrink-0 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+            >
+              {addingPlayer ? "추가 중…" : "추가"}
+            </button>
+          </div>
+          {playerFormError && (
+            <p className="text-sm text-rose-400">{playerFormError}</p>
+          )}
+        </form>
+
+        {playerListError && (
+          <p className="mt-3 text-sm text-rose-400">{playerListError}</p>
+        )}
+
+        {players === null ? (
+          <p className="py-8 text-center text-sm text-zinc-500">불러오는 중…</p>
+        ) : players.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-10 text-center text-sm text-zinc-500">
+            등록된 닉네임이 없습니다.
+          </div>
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {players.map((row) => {
+              const deleted = row.deletedAt !== null;
+              const busy = pendingPlayerId === row.id;
+              return (
+                <li
+                  key={row.id}
+                  className={`flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+                    deleted
+                      ? "border-zinc-800 bg-zinc-900/30 opacity-60"
+                      : "border-zinc-800 bg-zinc-900/60"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`font-semibold ${
+                          deleted
+                            ? "text-zinc-400 line-through"
+                            : "text-zinc-100"
+                        }`}
+                      >
+                        {row.nickname}
+                      </span>
+                      {deleted && (
+                        <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[11px] font-semibold text-zinc-400">
+                          삭제됨
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      생성: {formatDate(row.createdAt)}
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    {deleted ? (
+                      includeDeleted && (
+                        <button
+                          type="button"
+                          onClick={() => onRestorePlayer(row)}
+                          disabled={busy}
+                          className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {busy ? "처리 중…" : "복구"}
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onDeletePlayer(row)}
+                        disabled={busy}
+                        className="rounded-lg border border-rose-800/60 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {busy ? "처리 중…" : "삭제"}
                       </button>
                     )}
                   </div>

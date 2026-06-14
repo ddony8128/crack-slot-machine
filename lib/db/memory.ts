@@ -1,6 +1,7 @@
 import type {
   Db,
   EventRow,
+  PlayerRow,
   RunRow,
   CreateRunInput,
   FinalizeRunInput,
@@ -8,6 +9,7 @@ import type {
   LeaderboardPage,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
+import type { AchievementKey } from '@/types';
 
 /** Seed events mirroring supabase/migrations/0001_init.sql. */
 function seedEvents(): EventRow[] {
@@ -26,6 +28,7 @@ function seedEvents(): EventRow[] {
 export class MemoryDb implements Db {
   private events: EventRow[];
   private runs: RunRow[] = [];
+  private players: PlayerRow[] = [];
   private counter = 0;
 
   constructor(events?: EventRow[]) {
@@ -93,7 +96,9 @@ export class MemoryDb implements Db {
     const row: RunRow = {
       id: this.id('run'),
       eventId: input.eventId,
+      playerId: input.playerId,
       nickname: null,
+      achievements: [],
       seed: input.seed,
       actions: null,
       clientResults: null,
@@ -122,6 +127,7 @@ export class MemoryDb implements Db {
     const row = this.runs.find((r) => r.id === runId);
     if (!row) return null;
     row.nickname = input.nickname;
+    row.achievements = input.achievements;
     row.actions = input.actions;
     row.clientResults = input.clientResults;
     row.score = input.score;
@@ -166,9 +172,19 @@ export class MemoryDb implements Db {
       return as < bs ? -1 : as > bs ? 1 : 0;
     });
 
-    const totalCount = rows.length;
+    // Dedupe to the best run per nickname. Rows are already sorted by the
+    // ranking key, so the first occurrence per nickname is that nickname's best.
+    const seen = new Set<string>();
+    const deduped = rows.filter((r) => {
+      const key = r.nickname ?? 'Anonymous';
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const totalCount = deduped.length;
     const start = (page - 1) * pageSize;
-    const items: LeaderboardItem[] = rows
+    const items: LeaderboardItem[] = deduped
       .slice(start, start + pageSize)
       .map((r, i) => ({
         rank: start + i + 1,
@@ -180,5 +196,87 @@ export class MemoryDb implements Db {
       }));
 
     return { page, pageSize, totalCount, items };
+  }
+
+  // ── players whitelist (BLACKHAVEN) ─────────────────────────────────────────
+  async listPlayers(opts?: { includeDeleted?: boolean }): Promise<PlayerRow[]> {
+    const rows = opts?.includeDeleted
+      ? this.players
+      : this.players.filter((p) => p.deletedAt === null);
+    return [...rows].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
+  async getActivePlayerByNickname(nickname: string): Promise<PlayerRow | null> {
+    const lower = nickname.toLowerCase();
+    return (
+      this.players.find(
+        (p) => p.deletedAt === null && p.nickname.toLowerCase() === lower,
+      ) ?? null
+    );
+  }
+
+  async createPlayer(nickname: string): Promise<PlayerRow> {
+    const existing = await this.getActivePlayerByNickname(nickname);
+    if (existing) {
+      throw new Error(`active player nickname already exists: ${nickname}`);
+    }
+    const row: PlayerRow = {
+      id: this.id('player'),
+      nickname,
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+    };
+    this.players.push(row);
+    return row;
+  }
+
+  async softDeletePlayer(id: string): Promise<PlayerRow | null> {
+    const row = this.players.find((p) => p.id === id);
+    if (!row) return null;
+    row.deletedAt = new Date().toISOString();
+    return row;
+  }
+
+  async restorePlayer(id: string): Promise<PlayerRow | null> {
+    const row = this.players.find((p) => p.id === id);
+    if (!row) return null;
+    row.deletedAt = null;
+    return row;
+  }
+
+  // ── rewards / achievements (BLACKHAVEN) ────────────────────────────────────
+  async getPlayerBestScore(
+    playerId: string,
+    eventId: string,
+  ): Promise<number | null> {
+    const scores = this.runs
+      .filter(
+        (r) =>
+          r.playerId === playerId &&
+          r.eventId === eventId &&
+          r.status === 'submitted' &&
+          r.verified,
+      )
+      .map((r) => r.score ?? 0);
+    if (scores.length === 0) return null;
+    return Math.max(...scores);
+  }
+
+  async getPlayerAchievements(
+    playerId: string,
+    eventId: string,
+  ): Promise<AchievementKey[]> {
+    const set = new Set<AchievementKey>();
+    for (const r of this.runs) {
+      if (
+        r.playerId === playerId &&
+        r.eventId === eventId &&
+        r.status === 'submitted' &&
+        r.verified
+      ) {
+        for (const a of r.achievements) set.add(a);
+      }
+    }
+    return [...set];
   }
 }

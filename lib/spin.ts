@@ -31,7 +31,9 @@ export function computeWeights(
 
     switch (rule.id) {
       case 'seven-fever':
-        weights.seven *= 3;
+        // BLACKHAVEN 원숭이 손: 7 weight ×4 (was ×3). The "scare" is a client-only
+        // visual with no score impact, so it lives outside this seeded roll.
+        weights.seven *= 4;
         break;
       case 'fruit-surge':
         for (const f of FRUITS) weights[f] *= 3;

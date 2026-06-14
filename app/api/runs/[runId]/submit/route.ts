@@ -1,8 +1,11 @@
 import { getDb } from '@/lib/db';
 import { sanitizeNickname } from '@/lib/server/validation';
 import { verifySubmission } from '@/lib/server/verifySubmission';
+import { computeCredits } from '@/lib/server/rewards';
+import { detectRunAchievements, hasAllAchievements } from '@/lib/achievements';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
+import type { AchievementKey } from '@/types';
 import type { RecordedAction } from '@/store/gameStore';
 
 type SubmitBody = {
@@ -61,6 +64,7 @@ export async function POST(
   if (!versionOk) {
     await db.finalizeRun(runId, {
       nickname,
+      achievements: [],
       actions,
       clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
       score: null,
@@ -78,6 +82,7 @@ export async function POST(
   if (outcome.status === 'rejected') {
     await db.finalizeRun(runId, {
       nickname,
+      achievements: [],
       actions,
       clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
       score: null,
@@ -90,8 +95,35 @@ export async function POST(
     return Response.json({ status: 'rejected', reason: outcome.reason });
   }
 
+  // Success path. The submitted boards are already verified to equal the
+  // authoritative replay, so they are trustworthy for achievement detection.
+  const boards = clientResults!.spins.map((s) => s.finalBoard);
+  const runAchievements = detectRunAchievements(boards);
+
+  // Reward state must reflect PRIOR plays only — read before finalizing.
+  const playerId = run.playerId;
+  const priorBest = playerId
+    ? await db.getPlayerBestScore(playerId, run.eventId)
+    : null;
+  const priorAch: AchievementKey[] = playerId
+    ? await db.getPlayerAchievements(playerId, run.eventId)
+    : [];
+
+  const isFirstPlay = priorBest === null;
+  const hadAllBefore = hasAllAchievements(priorAch);
+  const hasAllNow = hasAllAchievements([...priorAch, ...runAchievements]);
+
+  const credits = computeCredits({
+    isFirstPlay,
+    previousBest: priorBest,
+    totalScore: outcome.score,
+    hadAllAchievementsBefore: hadAllBefore,
+    hasAllAchievementsNow: hasAllNow,
+  });
+
   await db.finalizeRun(runId, {
     nickname,
+    achievements: runAchievements,
     actions,
     clientResults: clientResults!,
     score: outcome.score,
@@ -102,10 +134,16 @@ export async function POST(
     submittedAt: now,
   });
 
+  const newAchievements = runAchievements.filter((k) => !priorAch.includes(k));
+
   return Response.json({
     status: 'submitted',
     score: outcome.score,
     bestSpinScore: outcome.bestSpinScore,
     eventSlug: event.slug,
+    credits,
+    newAchievements,
+    allAchievementsComplete: hasAllNow,
+    previousBest: priorBest,
   });
 }

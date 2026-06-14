@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useGameStore } from "@/store/gameStore";
 import ReferenceModal from "@/components/ReferenceModal";
+import AchievementsModal from "@/components/AchievementsModal";
 import { fetchLeaderboard } from "@/lib/client/api";
 import type { LeaderboardItem } from "@/lib/db/types";
 import { FRUITS, GEMS } from "@/data/symbols";
@@ -27,6 +28,7 @@ export default function StartScreen({
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
   const [refView, setRefView] = useState<"rules" | "scores" | null>(null);
+  const [showAchievements, setShowAchievements] = useState(false);
 
   // Top 5 preview for this event, from the DB. null = loading.
   const [top, setTop] = useState<LeaderboardItem[] | null>(null);
@@ -85,7 +87,25 @@ export default function StartScreen({
         {startError && (
           <p className="text-center text-sm text-rose-400">{startError}</p>
         )}
+        <p className="text-center text-xs leading-relaxed text-amber-400/90">
+          ※ 일부 깜짝 연출과 큰 효과음이 포함되어 있습니다.
+        </p>
       </form>
+
+      <section className="w-full max-w-sm space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-4">
+        <h2 className="text-center text-sm font-bold tracking-wide text-amber-300">
+          크레딧 획득 안내
+        </h2>
+        <ul className="space-y-1 text-xs leading-relaxed text-zinc-300">
+          <li>· 첫 플레이 완료 +1</li>
+          <li>· 2000·5000·10000점 최초 돌파마다 +1</li>
+          <li>· 모든 업적 달성 +1</li>
+          <li>· 입장 후 약 1시간 뒤 랭킹 1·2등 +1</li>
+        </ul>
+        <p className="text-center text-[0.7rem] text-zinc-500">
+          이미 받은 보상은 다시 받을 수 없습니다.
+        </p>
+      </section>
 
       <section className="w-full max-w-sm space-y-2">
         <h2 className="text-center text-sm font-semibold tracking-wide text-zinc-400">
@@ -135,20 +155,27 @@ export default function StartScreen({
             <SymbolView key={s} symbol={s as never} size="sm" />
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => setRefView("rules")}
-            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-2 py-3 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60 sm:text-base"
           >
             규칙 보기
           </button>
           <button
             type="button"
             onClick={() => setRefView("scores")}
-            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-2 py-3 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60 sm:text-base"
           >
             점수표 보기
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAchievements(true)}
+            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-2 py-3 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60 sm:text-base"
+          >
+            업적 보기
           </button>
         </div>
       </section>
@@ -157,6 +184,11 @@ export default function StartScreen({
         open={refView !== null}
         view={refView ?? "rules"}
         onClose={() => setRefView(null)}
+      />
+
+      <AchievementsModal
+        open={showAchievements}
+        onClose={() => setShowAchievements(false)}
       />
     </main>
   );

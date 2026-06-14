@@ -9,5 +9,6 @@
  * Leaderboards only show records whose stored versions match these, so scores
  * from different rule sets never mix.
  */
-export const CLIENT_VERSION = '1.0.0';
-export const RULESET_VERSION = 1;
+export const CLIENT_VERSION = '1.0.0-blackhaven';
+// Bumped to 2: BLACKHAVEN scoring changes (신체/괴물 보너스 2배, 올블루/올레드 제거).
+export const RULESET_VERSION = 2;

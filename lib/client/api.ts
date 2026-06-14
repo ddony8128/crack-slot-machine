@@ -1,5 +1,6 @@
 import type { RecordedAction } from '@/store/gameStore';
 import type { ClientResults, LeaderboardPage } from '@/lib/db/types';
+import type { AchievementKey, CreditSummary } from '@/types';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 export type StartResponse = {
@@ -10,13 +11,36 @@ export type StartResponse = {
 };
 
 export type SubmitResponse =
-  | { status: 'submitted'; score: number; bestSpinScore: number; eventSlug: string }
+  | {
+      status: 'submitted';
+      score: number;
+      bestSpinScore: number;
+      eventSlug: string;
+      // Credit breakdown to display (rewards are reconciled offline by staff).
+      credits: CreditSummary;
+      // Achievements newly unlocked in THIS run.
+      newAchievements: AchievementKey[];
+      // True once the player has unlocked all achievements (cumulative).
+      allAchievementsComplete: boolean;
+      // The player's prior best before this run (null = first play).
+      previousBest: number | null;
+    }
   | { status: 'rejected'; reason: string };
 
-/** Open a server run for `slug`. Throws with an error code on failure. */
-export async function startRun(slug: string): Promise<StartResponse> {
+/**
+ * Open a server run for `slug`. The nickname is validated against the event
+ * whitelist HERE (before any play): unregistered/soft-deleted nicknames are
+ * rejected up front. Throws with an error code on failure (e.g.
+ * 'nickname_not_whitelisted').
+ */
+export async function startRun(
+  slug: string,
+  nickname: string,
+): Promise<StartResponse> {
   const res = await fetch(`/api/events/${encodeURIComponent(slug)}/start`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

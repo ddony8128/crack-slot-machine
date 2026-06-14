@@ -198,7 +198,9 @@ describe('applyRules — copy-above', () => {
       rng,
     });
     expect(steps).toHaveLength(2);
-    expect(steps[1].label).toBe('COPY ABOVE → FOUR SHIELD');
+    expect(steps[1].label).toBe(
+      `${RULES_BY_ID['copy-above'].name} → ${RULES_BY_ID['four-shield'].name}`,
+    );
     expect(finalResult[0]).toBe('grape');
     expect(finalResult[2]).toBe('grape');
     // exactly two draws were consumed (no second pass) — value is stable
@@ -225,14 +227,16 @@ describe('applyRules — copy-above', () => {
     const { finalResult, steps } = applyRules(base, rules, noCtx);
     // left-pair: cell1 = cell0 = cherry; copy-above re-applies => same
     expect(finalResult).toEqual(['cherry', 'cherry', 'lemon', 'diamond', 'four']);
-    expect(steps[1].label).toBe('COPY ABOVE → LEFT PAIR');
+    expect(steps[1].label).toBe(
+      `${RULES_BY_ID['copy-above'].name} → ${RULES_BY_ID['left-pair'].name}`,
+    );
   });
 
   it('copy-above with nothing above is a no-op', () => {
     const base: SymbolType[] = ['cherry', 'zero', 'lemon', 'diamond', 'four'];
     const { finalResult, steps } = applyRules(base, [RULES_BY_ID['copy-above']], noCtx);
     expect(finalResult).toEqual(base);
-    expect(steps[0].label).toBe('COPY ABOVE → (none)');
+    expect(steps[0].label).toBe(`${RULES_BY_ID['copy-above'].name} → (none)`);
   });
 
   it('copy-above above a weight rule changes no cells but is labeled with the copied rule', () => {
@@ -243,7 +247,9 @@ describe('applyRules — copy-above', () => {
     const { finalResult, steps } = applyRules(base, rules, noCtx);
     expect(finalResult).toEqual(base);
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toBe('COPY ABOVE → FRUIT SURGE');
+    expect(steps[0].label).toBe(
+      `${RULES_BY_ID['copy-above'].name} → ${RULES_BY_ID['fruit-surge'].name}`,
+    );
   });
 });
 
@@ -262,7 +268,7 @@ describe('applyRules — pre-roll HOLD (locks are absolute, order-independent)',
     expect(locked[2]).toBe(true);
     // locks push no steps; only four-shield does
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toBe('FOUR SHIELD');
+    expect(steps[0].label).toBe(RULES_BY_ID['four-shield'].name);
     // per-step locked snapshot still reflects the held cell for the reveal
     expect(steps[0].locked[2]).toBe(true);
   });

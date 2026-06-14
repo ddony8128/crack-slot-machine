@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #09090b;
+  /* BLACKHAVEN horror theme: slightly darker base than the original #09090b. */
+  --background: #050505;
   --foreground: #f4f4f5;
 }
 
@@ -16,6 +17,79 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ----------------------------------------------------------------------------
+ * BLACKHAVEN — minimal horror layer (UI only).
+ * A subtle fixed radial vignette darkens the screen edges without harming
+ * contrast on the centered game content. Sits behind everything.
+ * ------------------------------------------------------------------------- */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0) 35%,
+    rgba(0, 0, 0, 0.45) 80%,
+    rgba(10, 0, 0, 0.7) 100%
+  );
+}
+
+/* Subtle red glow usable on accent text. */
+.horror-glow {
+  text-shadow:
+    0 0 4px rgba(190, 18, 60, 0.55),
+    0 0 10px rgba(120, 0, 0, 0.4);
+}
+
+/* Full-screen jump-scare overlay another component mounts. Hidden until the
+   .scare-flash animation runs (it starts at opacity 0). */
+.scare-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(120, 0, 0, 0.92) 0%,
+    rgba(0, 0, 0, 0.98) 70%
+  );
+}
+
+/* Quick jump-scare flash + shake (~0.6s). */
+@keyframes scare-flash {
+  0% {
+    opacity: 0;
+    transform: scale(1) translate(0, 0);
+  }
+  6% {
+    opacity: 1;
+    transform: scale(1.04) translate(-6px, 4px);
+  }
+  14% {
+    opacity: 0.85;
+    transform: scale(1.02) translate(7px, -5px);
+  }
+  24% {
+    opacity: 1;
+    transform: scale(1.05) translate(-5px, -4px);
+  }
+  40% {
+    opacity: 0.9;
+    transform: scale(1.01) translate(4px, 5px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) translate(0, 0);
+  }
+}
+
+.scare-flash {
+  animation: scare-flash 0.6s ease-out both;
 }
 
 /* ----------------------------------------------------------------------------
@@ -461,8 +535,15 @@ body {
   .stage-rise,
   .stage-shake,
   .stage-housing-glow,
-  .stage-announce {
+  .stage-announce,
+  .scare-flash {
     animation: none !important;
+  }
+
+  /* Keep the scare overlay invisible (no static red wash) under reduced motion. */
+  .scare-flash {
+    opacity: 0 !important;
+    transform: none !important;
   }
 
   .reel-rolling,

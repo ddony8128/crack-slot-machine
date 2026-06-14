@@ -14,8 +14,6 @@ import {
   BONUS_ALL_GEM_TYPES,
   BONUS_ONLY_FRUITS,
   BONUS_ONLY_GEMS,
-  BONUS_ALL_BLUE,
-  BONUS_ALL_RED,
   FOUR_PENALTY_PER,
   FOURS_4_MULT,
   FOURS_5_MULT,
@@ -216,7 +214,7 @@ export default function ReferenceModal({
 
             <ScoreCard
               title="족보"
-              note="※ 족보는 과일과 보석에 대해서만 적용됩니다 (숫자 7·0·4 제외)."
+              note="※ 족보는 신체와 괴물에 대해서만 적용됩니다 (숫자 7·0·4 제외)."
             >
               <ScoreRow label="페어" value={`+${HAND_PAIR}`} />
               <ScoreRow label="투페어" value={`+${HAND_TWO_PAIR}`} />
@@ -226,19 +224,11 @@ export default function ReferenceModal({
               <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
             </ScoreCard>
 
-            <ScoreCard title="색·종류 보너스">
-              <ScoreRow label="과일 3종" value={`+${BONUS_ALL_FRUIT_TYPES}`} />
-              <ScoreRow label="보석 3종" value={`+${BONUS_ALL_GEM_TYPES}`} />
-              <ScoreRow label="올 과일" value={`+${BONUS_ONLY_FRUITS}`} />
-              <ScoreRow label="올 보석" value={`+${BONUS_ONLY_GEMS}`} />
-              <ScoreRow
-                label="올 블루 (사파이어🔵·포도🍇)"
-                value={`+${BONUS_ALL_BLUE}`}
-              />
-              <ScoreRow
-                label="올 레드 (루비🔴·체리🍒)"
-                value={`+${BONUS_ALL_RED}`}
-              />
+            <ScoreCard title="종류 보너스">
+              <ScoreRow label="신체 3종" value={`+${BONUS_ALL_FRUIT_TYPES}`} />
+              <ScoreRow label="괴물 3종" value={`+${BONUS_ALL_GEM_TYPES}`} />
+              <ScoreRow label="올 신체" value={`+${BONUS_ONLY_FRUITS}`} />
+              <ScoreRow label="올 괴물" value={`+${BONUS_ONLY_GEMS}`} />
             </ScoreCard>
 
             <ScoreCard title="4 페널티">

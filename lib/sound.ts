@@ -10,7 +10,15 @@
  *   this from client components.
  */
 
-export type SoundKey = "lever" | "spin" | "rule" | "score" | "jackpot";
+export type SoundKey =
+  | "lever"
+  | "spin"
+  | "rule"
+  | "score"
+  | "jackpot"
+  | "ghost" // 귀신 공격 (jump-scare attack)
+  | "achievement" // 업적 (achievement unlocked)
+  | "bgm"; // 복고풍 카지노 + 공포 배경음 (retro-casino + horror ambience)
 
 const STORAGE_KEY = "rule-slot-muted";
 const EXT = "mp3";
@@ -80,6 +88,48 @@ export function play(key: SoundKey): void {
         /* missing file / autoplay blocked — stay silent */
       });
     }
+  } catch {
+    /* stay silent */
+  }
+}
+
+/**
+ * Start the looping background music (복고풍 카지노 + 공포 배경음).
+ * - Loops, plays at a lower volume (~0.4) so it sits under SFX.
+ * - No-ops when muted, on the server, or if the file is missing / autoplay is
+ *   blocked. Reuses the cached "bgm" element so repeated calls don't stack.
+ * - Never throws.
+ */
+export function playBgm(): void {
+  ensureInit();
+  if (muted || typeof window === "undefined") return;
+  const el = getAudio("bgm");
+  if (!el) return;
+  try {
+    el.loop = true;
+    el.volume = 0.4;
+    const p = el.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        /* missing file / autoplay blocked — stay silent */
+      });
+    }
+  } catch {
+    /* stay silent */
+  }
+}
+
+/**
+ * Stop the background music and rewind it. Safe to call even if BGM was never
+ * started or the file is missing. Never throws.
+ */
+export function stopBgm(): void {
+  if (typeof window === "undefined") return;
+  const el = audioCache["bgm"];
+  if (!el) return;
+  try {
+    el.pause();
+    el.currentTime = 0;
   } catch {
     /* stay silent */
   }

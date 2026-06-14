@@ -47,7 +47,7 @@ describe('cascade — select rules (resumable, interactive)', () => {
     expect(done.working[3]).toBe('grape');
     expect(done.interactive).toBe(true);
     expect(done.steps).toHaveLength(1);
-    expect(done.steps[0].label).toBe('SELECT COPY');
+    expect(done.steps[0].label).toBe(RULES_BY_ID['select-copy'].name);
   });
 
   it('select-swap: the two chosen cells swap symbols', () => {
@@ -115,7 +115,7 @@ describe('cascade — select rules (resumable, interactive)', () => {
     expect(frame.done).toBe(true);
     expect(frame.pending).toBeNull();
     const skip = frame.steps.find((s) => s.label.includes('건너뜀'));
-    expect(skip?.label).toBe('SELECT SWAP (건너뜀)');
+    expect(skip?.label).toBe(`${RULES_BY_ID['select-swap'].name} (건너뜀)`);
   });
 
   it('resumes the rest of the cascade after a select rule resolves', () => {
@@ -131,7 +131,10 @@ describe('cascade — select rules (resumable, interactive)', () => {
     expect(done.done).toBe(true);
     expect(done.working[2]).toBe('grape');
     expect(done.working[0]).toBe('cherry');
-    expect(done.steps.map((s) => s.label)).toEqual(['SELECT COPY', 'FIRST CHERRY']);
+    expect(done.steps.map((s) => s.label)).toEqual([
+      RULES_BY_ID['select-copy'].name,
+      RULES_BY_ID['first-cherry'].name,
+    ]);
   });
 
   it('two select rules pause in sequence', () => {
@@ -166,7 +169,7 @@ describe('applyRules — select rules AUTO-SKIP (pure path)', () => {
     // board unchanged; step labeled as skipped.
     expect(finalResult).toEqual(base);
     expect(steps).toHaveLength(1);
-    expect(steps[0].label).toBe('SELECT COPY (건너뜀)');
+    expect(steps[0].label).toBe(`${RULES_BY_ID['select-copy'].name} (건너뜀)`);
   });
 });
 
@@ -327,7 +330,9 @@ describe('rule interaction (sequential, lower-wins)', () => {
     const rules: Rule[] = [RULES_BY_ID['left-pair'], RULES_BY_ID['copy-above']];
     const { finalResult, steps } = applyRules(base, rules, ctx());
     expect(finalResult[1]).toBe('cherry');
-    expect(steps[1].label).toBe('COPY ABOVE → LEFT PAIR');
+    expect(steps[1].label).toBe(
+      `${RULES_BY_ID['copy-above'].name} → ${RULES_BY_ID['left-pair'].name}`,
+    );
   });
 
   it('copy-above duplicates a reroll, hitting the NOW-leftmost match', () => {
@@ -442,7 +447,9 @@ describe('COPY ABOVE covers every rule type', () => {
     frame = resolveSelection(frame, rules, ctxNoRng, [3]); // cell3 = cell2 (diamond)
     expect(frame.done).toBe(false);
     expect(frame.pending?.kind).toBe('copy');
-    expect(frame.pending?.ruleName).toBe('COPY ABOVE → SELECT COPY');
+    expect(frame.pending?.ruleName).toBe(
+      `${RULES_BY_ID['copy-above'].name} → ${RULES_BY_ID['select-copy'].name}`,
+    );
     frame = resolveSelection(frame, rules, ctxNoRng, [4]); // cell4 = cell3 (diamond)
     expect(frame.done).toBe(true);
     expect(frame.working[3]).toBe('diamond');
@@ -475,7 +482,7 @@ describe('cascade — step.rerolled (re-spin animation hint)', () => {
     const base: SymbolType[] = ['four', 'cherry', 'cherry', 'cherry', 'cherry'];
     const ctx = { previousResult: PREV, weights: BASE_WEIGHTS, rng: queuedRng([rngPoint('four')]) };
     const frame = beginCascade(base, [RULES_BY_ID['four-shield']], ctx);
-    const step = frame.steps.find((s) => s.label === 'FOUR SHIELD');
+    const step = frame.steps.find((s) => s.label === RULES_BY_ID['four-shield'].name);
     expect(step?.result[0]).toBe('four'); // landed on 4 again — no value change
     expect(step?.rerolled).toEqual([0]); // ...but still flagged as re-spun
   });
@@ -489,7 +496,7 @@ describe('cascade — step.rerolled (re-spin animation hint)', () => {
       rng: queuedRng([rngPoint('four'), rngPoint('seven')]),
     };
     const frame = beginCascade(base, [RULES_BY_ID['four-shield']], ctx);
-    const step = frame.steps.find((s) => s.label === 'FOUR SHIELD');
+    const step = frame.steps.find((s) => s.label === RULES_BY_ID['four-shield'].name);
     expect(step?.rerolled).toEqual([0, 2]);
     expect(step?.result[0]).toBe('four');
     expect(step?.result[2]).toBe('seven');
@@ -510,7 +517,7 @@ describe('cascade — step.rerolled (re-spin animation hint)', () => {
   it('transforms carry NO rerolled hint (deterministic; diff is sufficient)', () => {
     const base: SymbolType[] = ['zero', 'cherry', 'cherry', 'cherry', 'cherry'];
     const frame = beginCascade(base, [RULES_BY_ID['zero-to-seven']], ctxNoRng);
-    const step = frame.steps.find((s) => s.label === 'ZERO ASCEND');
+    const step = frame.steps.find((s) => s.label === RULES_BY_ID['zero-to-seven'].name);
     expect(step?.result[0]).toBe('seven');
     expect(step?.rerolled).toBeUndefined();
   });

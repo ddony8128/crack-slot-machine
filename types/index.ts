@@ -79,6 +79,37 @@ export type RevealStream = {
   done: boolean;
 };
 
+// ── BLACKHAVEN event: achievements & credit rewards ─────────────────────────
+
+/**
+ * Achievement keys. Each is detected per-spin from a final board:
+ *  - frankenstein  : 신체 3종 (cherry/lemon/grape 모두 등장) in one spin
+ *  - hyakki        : 괴물 3종 (diamond/ruby/sapphire 모두 등장) in one spin
+ *  - midas         : 77777 (five sevens) in one spin
+ *  - familiar_death: 44444 (five fours) in one spin
+ */
+export type AchievementKey = 'frankenstein' | 'hyakki' | 'midas' | 'familiar_death';
+
+export const ACHIEVEMENT_KEYS: AchievementKey[] = [
+  'frankenstein',
+  'hyakki',
+  'midas',
+  'familiar_death',
+];
+
+/** Why a credit was awarded for a finished run. */
+export type CreditReason =
+  | 'first_play'
+  | 'score_2000'
+  | 'score_5000'
+  | 'score_10000'
+  | 'all_achievements';
+
+export type CreditAward = { reason: CreditReason; amount: number };
+
+/** Credit breakdown returned by /submit and shown on the result screen. */
+export type CreditSummary = { total: number; awards: CreditAward[] };
+
 export type GameState = {
   nickname: string;
   // Server-issued run identity for score submission (null until a run starts).
