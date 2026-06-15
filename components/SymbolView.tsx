@@ -31,8 +31,10 @@ type Size = "sm" | "md" | "lg" | "xl";
 const SIZE_BOX: Record<Size, string> = {
   sm: "h-8 w-8 text-lg",
   md: "h-12 w-12 text-2xl",
-  lg: "h-20 w-16 text-4xl sm:h-24 sm:w-20 sm:text-5xl",
-  xl: "h-28 w-24 text-6xl sm:h-36 sm:w-28 sm:text-7xl",
+  // Mobile base kept small enough that five reels fit one row on a ~360px phone
+  // (5×52 + gaps ≈ 284px); scales up from sm:.
+  lg: "h-[68px] w-[52px] text-3xl sm:h-24 sm:w-20 sm:text-5xl",
+  xl: "h-24 w-[58px] text-5xl sm:h-36 sm:w-28 sm:text-7xl",
 };
 
 /** Pixel dimensions for the rendered Twemoji image per size variant. */

@@ -99,7 +99,7 @@ export default function SlotMachine({
           </div>
         )}
 
-        <div className="relative flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+        <div className="relative flex flex-nowrap items-center justify-center gap-1.5 sm:gap-3">
           {display.map((symbol, i) => {
             const isLocked = lockedSet.has(i);
             const isHaunted = hauntedSet.has(i);
