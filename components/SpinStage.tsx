@@ -17,6 +17,8 @@ type SpinStageProps = {
   stepLabel: string | null;
   /** Cells frozen by a lock rule. */
   lockedIndices: number[];
+  /** Cells haunted this spin (RULE SLOT monster-haunt) — rendered with a 👻 badge. */
+  hauntedIndices?: number[];
 
   /** True during 'awaiting-selection' — reels become clickable. */
   picking: boolean;
@@ -47,6 +49,7 @@ export default function SpinStage({
   landIndices,
   stepLabel,
   lockedIndices,
+  hauntedIndices,
   picking,
   selectable,
   chosen,
@@ -109,6 +112,7 @@ export default function SpinStage({
             landIndices={landIndices}
             stepLabel={null}
             lockedIndices={lockedIndices}
+            hauntedIndices={hauntedIndices}
             revealing
             picking={picking}
             selectable={selectable}

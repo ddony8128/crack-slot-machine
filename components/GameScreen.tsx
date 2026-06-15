@@ -63,6 +63,12 @@ export default function GameScreen() {
     ? pendingSelection.selectable.flatMap((ok, i) => (ok ? [i] : []))
     : [];
 
+  // Cells haunted this spin (RULE SLOT monster-haunt) -> 👻 badge. Derived from the
+  // latest log (acceptable for v0; the reveal shares the same spin's board).
+  const hauntedIndices = latestLog
+    ? latestLog.haunted.flatMap((h, i) => (h ? [i] : []))
+    : [];
+
   function handlePick(i: number) {
     if (!pendingSelection) return;
     const count = pendingSelection.count;
@@ -200,6 +206,7 @@ export default function GameScreen() {
           landIndices={reveal.landIndices}
           stepLabel={reveal.stepLabel}
           lockedIndices={reveal.lockedIndices}
+          hauntedIndices={showScore ? hauntedIndices : []}
           revealing={reveal.revealing}
         />
       )}
@@ -221,6 +228,7 @@ export default function GameScreen() {
           landIndices={reveal.landIndices}
           stepLabel={reveal.stepLabel}
           lockedIndices={reveal.lockedIndices}
+          hauntedIndices={hauntedIndices}
           picking={picking}
           selectable={selectableArr}
           chosen={chosen}

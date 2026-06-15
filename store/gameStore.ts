@@ -241,6 +241,9 @@ function buildInitializer(initialRng: Rng): Initializer {
         // ADDITIVE engine event log from the cascade (read-only; default [] if a
         // frame somehow lacks it). Does not affect any other SpinLog field.
         events: frame.events ?? [],
+        // Per-cell haunted flags for the UI 👻 indicator. Copied from the cascade
+        // frame; default to a length-5 all-false array if a frame somehow lacks it.
+        haunted: [...(frame.haunted ?? [false, false, false, false, false])],
       };
 
       activeFrame = null;

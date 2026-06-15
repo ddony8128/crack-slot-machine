@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Rng } from '@/lib/rng';
+import type { SymbolType } from '@/types';
 import { createGameStore } from '@/store/gameStore';
 import { RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS } from '@/data/symbols';
@@ -484,6 +485,42 @@ describe('multi-rule sequential resolution (full spin via store)', () => {
     expect(fr[1]).toBe('ruby');
     expect(fr[4]).toBe('ruby');
     expect(fr.includes('four')).toBe(false);
+  });
+});
+
+describe('SpinLog.haunted (RULE SLOT monster-haunt wiring)', () => {
+  it('finalize populates log.haunted (length 5, leftmost monster cell true)', () => {
+    // A bag of ONLY dracula so every cell rolls a monster; monster-haunt then
+    // marks the leftmost (idx0) as haunted. baseWeights must cover every symbol.
+    const onlyDracula = Object.fromEntries(
+      (Object.keys(BASE_WEIGHTS) as SymbolType[]).map((k) => [k, k === 'dracula' ? 1 : 0]),
+    ) as Record<SymbolType, number>;
+
+    const store = createGameStore(loopingRng([0]));
+    store.getState().setNickname('haunt');
+    store.getState().configureRun({
+      baseWeights: onlyDracula,
+      provisioning: 'fixed',
+      rulePoolIds: ['monster-haunt'],
+      maxSpins: 1,
+    });
+    store.getState().startGame();
+
+    // fixed provisioning -> straight to ready-to-spin with monster-haunt in the bag.
+    expect(store.getState().status).toBe('ready-to-spin');
+    expect(store.getState().bag.map((r) => r.id)).toEqual(['monster-haunt']);
+
+    // Drag monster-haunt from the bag into slot 0 so it actually runs this spin.
+    store.getState().moveRule({ zone: 'bag', index: 0 }, { zone: 'slot', index: 0 });
+    expect(store.getState().ruleSlots[0]?.id).toBe('monster-haunt');
+
+    store.getState().spin();
+
+    const log = store.getState().spinLogs[0];
+    expect(log.haunted).toHaveLength(5);
+    expect(log.haunted.some((h) => h === true)).toBe(true);
+    // leftmost monster cell (idx0, all draws are dracula) is the haunted one.
+    expect(log.haunted[0]).toBe(true);
   });
 });
 

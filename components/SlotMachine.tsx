@@ -18,6 +18,8 @@ type SlotMachineProps = {
   stepLabel?: string | null;
   /** Cells frozen by a lock rule — rendered greyed with a lock badge. */
   lockedIndices?: number[];
+  /** Cells haunted this spin (RULE SLOT monster-haunt) — rendered with a 👻 badge. */
+  hauntedIndices?: number[];
   /** True while the reveal sequence runs — hides the SPIN button. */
   revealing?: boolean;
   /** True during 'awaiting-selection' — cells become clickable for the player. */
@@ -41,6 +43,7 @@ export default function SlotMachine({
   landIndices = [],
   stepLabel = null,
   lockedIndices = [],
+  hauntedIndices = [],
   revealing = false,
   picking = false,
   selectable = [],
@@ -60,6 +63,7 @@ export default function SlotMachine({
   const flashSet = new Set(flashIndices);
   const landSet = new Set(landIndices);
   const lockedSet = new Set(lockedIndices);
+  const hauntedSet = new Set(hauntedIndices);
   const selectableSet = new Set(selectable);
   const chosenSet = new Set(chosen);
 
@@ -98,6 +102,7 @@ export default function SlotMachine({
         <div className="relative flex flex-wrap items-center justify-center gap-2 sm:gap-3">
           {display.map((symbol, i) => {
             const isLocked = lockedSet.has(i);
+            const isHaunted = hauntedSet.has(i);
             // A locked (held) cell never rolls, even if a stale rolling flag lingers.
             const rolling = reelRolling[i] && !isLocked;
             const flashing = flashSet.has(i);
@@ -149,6 +154,15 @@ export default function SlotMachine({
                     className="pointer-events-none absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-700 text-[11px] text-zinc-200 shadow ring-1 ring-zinc-500"
                   >
                     🔒
+                  </span>
+                )}
+                {isHaunted && (
+                  <span
+                    aria-label="유령 들림"
+                    title="유령 들림"
+                    className="pointer-events-none absolute -left-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-violet-900/80 text-[11px] text-violet-100 shadow ring-1 ring-violet-400/70"
+                  >
+                    👻
                   </span>
                 )}
               </div>

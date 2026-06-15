@@ -74,6 +74,10 @@ export type SpinLog = {
   // transform/lock, in application order). Read-only data for later set-scoring;
   // does NOT affect board/score/reveal/replay.
   events: EngineEvent[];
+  // Per-cell "haunted" flags (length 5) for THIS spin. A haunted cell added one
+  // phantom 'ghost' to the hand scoring (E1-lite, set by RULE SLOT monster-haunt).
+  // Surfaced to the UI so the player can see a 👻 indicator on haunted cells.
+  haunted: boolean[];
 };
 
 export type SelectKind = 'copy' | 'swap' | 'reroll';
