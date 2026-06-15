@@ -8,11 +8,13 @@
  */
 
 import type { SymbolType } from '@/types';
+import type { RunConfig } from '@/store/gameStore';
 import { BASE_WEIGHTS } from '@/data/symbols';
 import { createSeededRng } from '@/lib/rng';
 import { initialBoardFor } from '@/lib/board/initialBoard';
 import { buildRulePool } from '@/lib/modes/config';
 import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { SPIRE_STAGES, SPIRE_STAGE_COUNT, SPIRE_SPINS_PER_STAGE } from '@/lib/spire/config';
 
 /** The non-number symbol sets the player may be offered before stage 1. */
 const SPIRE_SET_CHOICE_IDS: string[] = ['fruit', 'gem', 'cat', 'vehicle', 'monster'];
@@ -78,4 +80,59 @@ export function spireRulePool(chosenSetId: string): string[] {
  */
 export function spireInitialBoard(seed: string, chosenSetId: string): SymbolType[] {
   return initialBoardFor(`${seed}:spire`, applySpireSetChoice(chosenSetId));
+}
+
+/**
+ * A spire run is modelled as ONE configurable run of (stages × spins-per-stage)
+ * spins with offers drawn from the spire rule pool — stage gating is a scoring
+ * interpretation over the spin scores (see spireProgress), so the whole run is
+ * reproducible by the standard replay/verify with this config.
+ */
+export function spireRunConfig(seed: string, chosenSetId: string): RunConfig {
+  return {
+    initialBoard: spireInitialBoard(seed, chosenSetId),
+    maxSpins: SPIRE_STAGE_COUNT * SPIRE_SPINS_PER_STAGE,
+    baseWeights: applySpireSetChoice(chosenSetId),
+    provisioning: 'pool',
+    rulePoolIds: spireRulePool(chosenSetId),
+  };
+}
+
+export type SpireProgress = {
+  stageScores: number[];      // score of each COMPLETED stage, in order
+  stagesCleared: number;      // consecutive stages cleared from stage 1
+  failedStage: number | null; // 1-based stage that failed/was incomplete; null if all cleared
+  totalScore: number;         // sum of all provided spin scores
+};
+
+/**
+ * Interpret a run's per-spin scores as spire stages. Stage k (1-based) covers
+ * spins [(k-1)*S, k*S); it's CLEARED when the sum of its S spins ≥ its target.
+ * Counting stops at the first stage that fails or is incomplete.
+ */
+export function spireProgress(roundScores: number[]): SpireProgress {
+  const S = SPIRE_SPINS_PER_STAGE;
+  const totalScore = roundScores.reduce((a, b) => a + b, 0);
+  const stageScores: number[] = [];
+  let stagesCleared = 0;
+  let failedStage: number | null = null;
+
+  for (let k = 0; k < SPIRE_STAGE_COUNT; k++) {
+    const start = k * S;
+    if (start + S > roundScores.length) {
+      // Stage incomplete (run ended before this stage finished).
+      failedStage = k + 1;
+      break;
+    }
+    const stageScore = roundScores.slice(start, start + S).reduce((a, b) => a + b, 0);
+    stageScores.push(stageScore);
+    if (stageScore >= SPIRE_STAGES[k].targetScore) {
+      stagesCleared += 1;
+    } else {
+      failedStage = k + 1;
+      break;
+    }
+  }
+
+  return { stageScores, stagesCleared, failedStage, totalScore };
 }
