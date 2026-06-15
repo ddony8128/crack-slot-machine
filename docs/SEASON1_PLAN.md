@@ -17,10 +17,14 @@ symbols → daily ad-refill → puzzle → spire**.
 | 6 | New symbols in engine | extend `SymbolType` + `BASE_WEIGHTS` + `SymbolView` for cat/vehicle/monster; tests. | med | ✅ 9413270 |
 | 7 | Daily ad-refill | migration `0003`; `daily_user_status`; 5 base +5 ad → 10 max; dummy-ad modal + refill API; attempts UI; tests. | med | ✅ `0a8d0b6` |
 | 8a | Puzzle core | goal checker (`PuzzleGoal` 6-type union) + `checkPuzzleRun`; evolved config (goals/seed/initialBoard/availableRuleIds); `puzzle_user_records` + distribution; tests. | high | ✅ `a98a30d`,`058c802` |
-| 8b | Puzzle play | `/api/puzzles/[key]/{start,submit}` + play client + distribution UI. Needs WU-RC. | high | ☐ |
+| 8b | Puzzle play | `/api/puzzles/[key]/{start,submit}` + play client + distribution UI. | high | ✅ `96f0b51` |
 | 9a | Spire core | seed set-choice + bag mutation (`lib/spire/run.ts`) + `spire_user_records`; tests. | high | ✅ `53dbabe`,`058c802` |
-| 9b | Spire play | set-choice UI + bag UI + 10-stage loop + `/api/spire/{start,submit-stage,finish}`. Needs WU-RC. | high | ☐ |
-| RC | Configurable-run store mode | extend the store/replay/verify to start a run from a config { initialBoard, weights/bag, maxSpins, rule provisioning: offer vs fixed-bag vs restricted-pool } reconstructable server-side from the run record. Shared prerequisite for 8b + 9b, and lets daily/spire use the seed start board. | high | ☐ NEXT |
+| 9b | Spire play | set-choice UI + bag HUD + staged 50-spin run + `/api/spire/{start,submit}`. | high | ✅ `6e28ce5` |
+| RC | Configurable-run store mode | store/replay/verify start a run from a config { initialBoard, weights/bag, maxSpins, provisioning: offer/pool/fixed } reconstructable server-side. Additive; defaults reproduce legacy behavior. | high | ✅ `977ee7e` |
+
+**All v0.1 work units complete.** Verified end-to-end: tsc 0 · 319 tests · `next build` ok · daily/puzzle/spire full-play E2E passing (in-memory DB).
+
+Deferred polish (post-v0.1, see "Deferred" below): wire **daily** to seed-start-board + 'pool' (currently legacy offer/00000 start); cat/vehicle/monster set-specific rules; spire per-stage rewards/artifacts; puzzle seed/board tuning for p03–p10; season-points reflection of puzzle/spire/daily into the season leaderboard query (rows are written; `buildSeasonRanking` already aggregates them).
 
 Deferred (post-v0.1): spire rewards/artifacts; full puzzle 10-set; per-set extra rules
 (cat/vehicle/monster rule pools); daily rotation tuning; season-points reflection per mode;
