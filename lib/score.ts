@@ -1,5 +1,6 @@
-import type { Rule, ScoreItem, SymbolType } from '@/types';
-import { FRUITS, GEMS, RED_SET, BLUE_SET } from '@/data/symbols';
+import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
+import { NUMBERS } from '@/data/symbols';
+import { SYMBOL_SETS } from '@/lib/symbols/sets';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
   SEVEN_SCORE,
@@ -9,22 +10,37 @@ import {
   HAND_FULL_HOUSE,
   HAND_FOUR_KIND,
   HAND_FIVE_KIND,
-  BONUS_ALL_FRUIT_TYPES,
-  BONUS_ALL_GEM_TYPES,
-  BONUS_ONLY_FRUITS,
-  BONUS_ONLY_GEMS,
-  BONUS_ALL_BLUE,
-  BONUS_ALL_RED,
   FOUR_PENALTY_PER,
   FOUR_FORTUNE_PER,
   BONUS_77,
   CLEAN_BONUS,
 } from '@/data/scoreTable';
 
-const FRUIT_SET = new Set<SymbolType>(FRUITS);
-const GEM_SET = new Set<SymbolType>(GEMS);
-const COLORED: SymbolType[] = [...FRUITS, ...GEMS];
-const COLORED_SET = new Set<SymbolType>(COLORED);
+// Numbers (seven/zero/four) have dedicated scoring and never form poker hands or
+// contribute to set bonuses. Everything else is a "set symbol".
+const NUMBER_SET = new Set<SymbolType>(NUMBERS);
+
+// Map an EngineEvent.type to the SetBonus.event tag it satisfies, plus where to
+// read the symbol id that the event acted on.
+type PerEventTag = 'moved' | 'rerolled' | 'copied';
+function eventTag(e: EngineEvent): { tag: PerEventTag; symbolId: SymbolType } | null {
+  switch (e.type) {
+    case 'symbol_moved':
+      return { tag: 'moved', symbolId: e.symbolId };
+    case 'symbol_rerolled':
+      return { tag: 'rerolled', symbolId: e.symbolId };
+    case 'symbol_copied':
+      return { tag: 'copied', symbolId: e.symbolId };
+    default:
+      return null; // transformed / locked have no per-event bonus
+  }
+}
+
+const PER_EVENT_LABEL: Record<PerEventTag, string> = {
+  moved: '이동',
+  rerolled: '재굴림',
+  copied: '복사',
+};
 
 export function countFours(result: SymbolType[]): number {
   return result.filter((s) => s === 'four').length;
@@ -38,11 +54,12 @@ export function countZeros(result: SymbolType[]): number {
   return result.filter((s) => s === 'zero').length;
 }
 
-// Best colored n-of-a-kind. Numbers (seven/zero/four) are ignored.
+// Best n-of-a-kind over ALL non-number symbols. Numbers (seven/zero/four) are
+// ignored. For legacy boards (only fruits/gems) this is identical to before.
 export function computeHand(result: SymbolType[]): { hand: string; handScore: number } {
   const counts = new Map<SymbolType, number>();
   for (const s of result) {
-    if (COLORED_SET.has(s)) counts.set(s, (counts.get(s) ?? 0) + 1);
+    if (!NUMBER_SET.has(s)) counts.set(s, (counts.get(s) ?? 0) + 1);
   }
 
   const values = [...counts.values()];
@@ -69,20 +86,79 @@ export function sevenScore(
   return opts.sevenDouble ? base * 2 : base;
 }
 
-// Sum of additive color/type bonuses.
-export function colorBonuses(result: SymbolType[]): number {
-  let bonus = 0;
-  const has = (s: SymbolType) => result.includes(s);
+/**
+ * Config-driven set bonuses. Iterates every non-number SYMBOL_SET and applies
+ * its configured SetBonus[] against the board (and optional engine events),
+ * returning both the running sum and the labeled line items (so scoreResult and
+ * scoreItems never disagree).
+ *
+ * Per-event bonuses count only when `events` is provided.
+ */
+export function setBonuses(
+  result: SymbolType[],
+  events?: EngineEvent[],
+): { sum: number; items: ScoreItem[] } {
+  const items: ScoreItem[] = [];
 
-  if (has('cherry') && has('lemon') && has('grape')) bonus += BONUS_ALL_FRUIT_TYPES;
-  if (has('diamond') && has('ruby') && has('sapphire')) bonus += BONUS_ALL_GEM_TYPES;
+  for (const set of SYMBOL_SETS) {
+    if (set.isNumberSet) continue;
 
-  if (result.length === 5 && result.every((s) => FRUIT_SET.has(s))) bonus += BONUS_ONLY_FRUITS;
-  if (result.length === 5 && result.every((s) => GEM_SET.has(s))) bonus += BONUS_ONLY_GEMS;
-  if (result.length === 5 && result.every((s) => BLUE_SET.has(s))) bonus += BONUS_ALL_BLUE;
-  if (result.length === 5 && result.every((s) => RED_SET.has(s))) bonus += BONUS_ALL_RED;
+    const members = new Set<SymbolType>(set.symbols.map((s) => s.id as SymbolType));
+    const onBoard = result.filter((s) => members.has(s)).length;
 
-  return bonus;
+    for (const bonus of set.bonuses) {
+      switch (bonus.type) {
+        case 'all-types': {
+          const present = set.symbols.every((s) => result.includes(s.id as SymbolType));
+          if (present) items.push({ label: `${set.name} 3종`, points: bonus.points });
+          break;
+        }
+        case 'all-symbols': {
+          if (result.length === 5 && result.every((s) => members.has(s)))
+            items.push({ label: `올 ${set.name}`, points: bonus.points });
+          break;
+        }
+        case 'per-symbol': {
+          if (onBoard > 0)
+            items.push({ label: `${set.name} ${onBoard}개`, points: bonus.points * onBoard });
+          break;
+        }
+        case 'adjacent-penalty': {
+          // Count board cells that are members AND have an adjacent (left/right)
+          // member. Example: [cheese_cat][tuxedo_cat][zero][calico_cat][seven]
+          // -> cells 0 and 1 each have a member neighbor (each other) = 2 cells;
+          // the lone calico at idx 3 has no member neighbor. 2 * points.
+          let adj = 0;
+          for (let i = 0; i < result.length; i++) {
+            if (!members.has(result[i])) continue;
+            const left = i > 0 && members.has(result[i - 1]);
+            const right = i + 1 < result.length && members.has(result[i + 1]);
+            if (left || right) adj += 1;
+          }
+          if (adj > 0)
+            items.push({ label: `이웃 ${set.name}`, points: bonus.points * adj });
+          break;
+        }
+        case 'per-event': {
+          if (!events || events.length === 0) break;
+          let count = 0;
+          for (const e of events) {
+            const tagged = eventTag(e);
+            if (tagged && tagged.tag === bonus.event && members.has(tagged.symbolId)) count += 1;
+          }
+          if (count > 0)
+            items.push({
+              label: `${set.name} ${PER_EVENT_LABEL[bonus.event]}`,
+              points: bonus.points * count,
+            });
+          break;
+        }
+      }
+    }
+  }
+
+  const sum = items.reduce((a, it) => a + it.points, 0);
+  return { sum, items };
 }
 
 const HAND_KO: Record<string, string> = {
@@ -94,24 +170,6 @@ const HAND_KO: Record<string, string> = {
   'Five of a Kind': '파이브카드',
 };
 
-// Color/type bonuses as labeled line items (parallel to colorBonuses' sum).
-export function colorBonusItems(result: SymbolType[]): ScoreItem[] {
-  const items: ScoreItem[] = [];
-  const has = (s: SymbolType) => result.includes(s);
-  const all = (set: Set<SymbolType>) =>
-    result.length === 5 && result.every((s) => set.has(s));
-
-  if (has('cherry') && has('lemon') && has('grape'))
-    items.push({ label: '과일 3종', points: BONUS_ALL_FRUIT_TYPES });
-  if (has('diamond') && has('ruby') && has('sapphire'))
-    items.push({ label: '보석 3종', points: BONUS_ALL_GEM_TYPES });
-  if (all(FRUIT_SET)) items.push({ label: '올 과일', points: BONUS_ONLY_FRUITS });
-  if (all(GEM_SET)) items.push({ label: '올 보석', points: BONUS_ONLY_GEMS });
-  if (all(new Set(BLUE_SET))) items.push({ label: '올 블루', points: BONUS_ALL_BLUE });
-  if (all(new Set(RED_SET))) items.push({ label: '올 레드', points: BONUS_ALL_RED });
-  return items;
-}
-
 /**
  * Itemized score breakdown ("why these points"). Sum of points == baseRoundScore
  * (pre-multiplier). Mirrors scoreResult exactly so they never disagree.
@@ -119,6 +177,7 @@ export function colorBonusItems(result: SymbolType[]): ScoreItem[] {
 export function scoreItems(
   result: SymbolType[],
   activeSlotRules: (Rule | null)[] = [],
+  events?: EngineEvent[],
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -134,7 +193,7 @@ export function scoreItems(
   const { hand, handScore } = computeHand(result);
   if (handScore > 0) items.push({ label: `족보: ${HAND_KO[hand] ?? hand}`, points: handScore });
 
-  items.push(...colorBonusItems(result));
+  items.push(...setBonuses(result, events).items);
 
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
@@ -159,6 +218,7 @@ export function scoreItems(
 export function scoreResult(
   result: SymbolType[],
   activeSlotRules: (Rule | null)[] = [],
+  events?: EngineEvent[],
 ): {
   hand: string;
   handScore: number;
@@ -177,7 +237,7 @@ export function scoreResult(
   const sevenDoubleCount = countRule(expanded, 'seven-double');
   for (let k = 0; k < sevenDoubleCount; k++) sevenPts *= 2;
 
-  let bonusScore = colorBonuses(result);
+  let bonusScore = setBonuses(result, events).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
   if (countFours(result) === 0) {
     bonusScore += CLEAN_BONUS * countRule(expanded, 'clean-bonus');

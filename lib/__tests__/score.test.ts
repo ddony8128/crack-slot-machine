@@ -6,7 +6,7 @@ import {
   countSevens,
   countZeros,
   sevenScore,
-  colorBonuses,
+  setBonuses,
   scoreResult,
   scoreItems,
 } from '@/lib/score';
@@ -83,31 +83,28 @@ describe('sevenScore', () => {
   });
 });
 
-describe('colorBonuses', () => {
+describe('setBonuses (fruit/gem, config-driven)', () => {
+  const sum = (r: SymbolType[]) => setBonuses(r).sum;
+
   it('all fruit types present => +50', () => {
-    expect(colorBonuses(['cherry', 'lemon', 'grape', 'zero', 'four'])).toBe(50);
+    expect(sum(['cherry', 'lemon', 'grape', 'zero', 'four'])).toBe(50);
   });
 
   it('all gem types present => +80', () => {
-    expect(colorBonuses(['diamond', 'ruby', 'sapphire', 'zero', 'four'])).toBe(80);
+    expect(sum(['diamond', 'ruby', 'sapphire', 'zero', 'four'])).toBe(80);
   });
 
   it('only fruits (5 fruits) stacks all-fruit-types + only-fruits', () => {
     // cherry lemon grape grape grape: all 3 fruit types + only fruits
-    expect(colorBonuses(['cherry', 'lemon', 'grape', 'grape', 'grape'])).toBe(50 + 100);
+    expect(sum(['cherry', 'lemon', 'grape', 'grape', 'grape'])).toBe(50 + 100);
   });
 
   it('only gems => +150 (+80 all gem types)', () => {
-    expect(colorBonuses(['diamond', 'ruby', 'sapphire', 'diamond', 'ruby'])).toBe(80 + 150);
+    expect(sum(['diamond', 'ruby', 'sapphire', 'diamond', 'ruby'])).toBe(80 + 150);
   });
 
-  it('all blue: 🔵🍇🔵🍇🔵 => +200 (also only-fruits? no — sapphire is gem)', () => {
-    // sapphire grape sapphire grape sapphire => all BLUE, not all fruit, not all gem
-    expect(colorBonuses(['sapphire', 'grape', 'sapphire', 'grape', 'sapphire'])).toBe(200);
-  });
-
-  it('all red: 🔴🍒🔴🍒🔴 => +250', () => {
-    expect(colorBonuses(['ruby', 'cherry', 'ruby', 'cherry', 'ruby'])).toBe(250);
+  it('no set symbols (numbers only) => 0', () => {
+    expect(sum(['seven', 'zero', 'four', 'zero', 'seven'])).toBe(0);
   });
 });
 
@@ -123,14 +120,14 @@ describe('scoreResult', () => {
     expect(s.baseRoundScore).toBe(-20);
   });
 
-  it('five cherries is additive: 700 + only-fruits 100 + all-red 250', () => {
+  it('five cherries: 700 + only-fruits 100 (cherry is fruit; no red/blue)', () => {
     const r: SymbolType[] = ['cherry', 'cherry', 'cherry', 'cherry', 'cherry'];
     const s = scoreResult(r, []);
     expect(s.handScore).toBe(700);
-    // cherry is a fruit (only-fruits +100) AND in RED set (all-red +250).
-    expect(s.bonusScore).toBe(100 + 250);
+    // cherry is a fruit (올 과일 +100). The legacy all-red bonus is gone.
+    expect(s.bonusScore).toBe(100);
     expect(s.penalty).toBe(0);
-    expect(s.baseRoundScore).toBe(700 + 350);
+    expect(s.baseRoundScore).toBe(700 + 100);
   });
 
   it('five lemons => 700 + only-fruits 100 (lemon is colorless, no red/blue)', () => {
@@ -175,20 +172,22 @@ describe('scoreResult', () => {
     expect(d.bonusScore).toBe(50);       // all fruit types only, no clean (has a four)
   });
 
-  it('all-blue 🔵🍇🔵🍇🔵 => +200 bonus and Two Pair... actually triple-ish hand', () => {
-    // sapphire grape sapphire grape sapphire: sapphire x3, grape x2 => full house
+  it('🔵🍇🔵🍇🔵 => Full House, no cross-color bonus (blue removed)', () => {
+    // sapphire x3 (gem) + grape x2 (fruit): mixed set => no all-types/all-symbols.
     const r: SymbolType[] = ['sapphire', 'grape', 'sapphire', 'grape', 'sapphire'];
     const s = scoreResult(r, []);
-    expect(s.bonusScore).toBe(200);
+    expect(s.bonusScore).toBe(0);
     expect(s.hand).toBe('Full House');
     expect(s.handScore).toBe(180);
-    expect(s.baseRoundScore).toBe(380);
+    expect(s.baseRoundScore).toBe(180);
   });
 
-  it('all-red 🔴🍒🔴🍒🔴 => +250 bonus', () => {
+  it('🔴🍒🔴🍒🔴 => Full House, no cross-color bonus (red removed)', () => {
+    // ruby x3 (gem) + cherry x2 (fruit): mixed => no set bonus.
     const r: SymbolType[] = ['ruby', 'cherry', 'ruby', 'cherry', 'ruby'];
     const s = scoreResult(r, []);
-    expect(s.bonusScore).toBe(250);
+    expect(s.bonusScore).toBe(0);
+    expect(s.hand).toBe('Full House');
   });
 
   it('five fours => penalty 150, No Hand, base -150', () => {

@@ -159,8 +159,11 @@ function buildInitializer(initialRng: Rng): Initializer {
       const { ruleSlots, spinIndex } = state;
       const finalResult = [...frame.working];
 
-      const score = scoreResult(finalResult, ruleSlots);
-      const items = scoreItems(finalResult, ruleSlots);
+      // The spin's engine events (same list attached to the SpinLog below) feed
+      // per-event SET bonuses (vehicle moved/rerolled, monster copied, ...).
+      const events = frame.events ?? [];
+      const score = scoreResult(finalResult, ruleSlots, events);
+      const items = scoreItems(finalResult, ruleSlots, events);
       const specials = detectSpecials(finalResult);
       const multiplier = state.nextMultiplier;
       const roundScore = score.baseRoundScore * multiplier;
