@@ -25,6 +25,7 @@ import {
   rerollShop,
   settleClear,
   settleFail,
+  applyArtifactAcquire,
   type SpireRunState,
 } from "@/lib/spire/state";
 import {
@@ -547,7 +548,10 @@ export default function SpireClient() {
     const choose = (id: string | null) => {
       recordAction({ type: "choose_artifact", artifactId: id });
       if (id) {
-        const next = { ...runState, artifacts: [...runState.artifacts, id] };
+        // Add the id, then apply its onAcquire effect at the SAME point the server
+        // replayer does (lib/spire/replay.ts `choose_artifact`) so states match.
+        const added = { ...runState, artifacts: [...runState.artifacts, id] };
+        const next = applyArtifactAcquire(added, id);
         runStateRef.current = next;
         setRunState(next);
       }
@@ -619,13 +623,19 @@ export default function SpireClient() {
               removedRuleId,
             })
           }
-          onBuyArtifact={(id, price) =>
-            applyReducer(buyArtifact(runState, id, price), {
+          onBuyArtifact={(id, price) => {
+            // Buy, then (on success) apply the onAcquire effect at the SAME point
+            // the server replayer does (lib/spire/replay.ts `buy_artifact`).
+            const bought = buyArtifact(runState, id, price);
+            const r = bought.ok
+              ? { ok: true as const, state: applyArtifactAcquire(bought.state, id) }
+              : bought;
+            applyReducer(r, {
               type: "buy_artifact",
               artifactId: id,
               cost: price,
-            })
-          }
+            });
+          }}
           onBuyHandFlat={(hand) =>
             applyReducer(buyHandFlat(runState, hand), { type: "buy_hand_flat", handType: hand })
           }

@@ -26,6 +26,7 @@ import {
   rerollShop,
   settleClear,
   settleFail,
+  applyArtifactAcquire,
   type SpireRunState,
 } from '@/lib/spire/state';
 import {
@@ -193,7 +194,9 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
       case 'buy_artifact': {
         const r = buyArtifact(state, action.artifactId, action.cost);
         if (!r.ok) return fail(r.error);
-        state = r.state;
+        // The artifact id is now in state.artifacts; apply its onAcquire effect at
+        // the SAME point the live client does so the two states stay identical.
+        state = applyArtifactAcquire(r.state, action.artifactId);
         break;
       }
       case 'buy_hand_flat': {
@@ -223,6 +226,9 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
         // validation lands with the seeded shop generator (SP-H).
         if (action.artifactId && !state.artifacts.includes(action.artifactId)) {
           state = { ...state, artifacts: [...state.artifacts, action.artifactId] };
+          // Apply the onAcquire effect right after the id is added — same point as
+          // the live client (components/SpireClient.tsx `choose`).
+          state = applyArtifactAcquire(state, action.artifactId);
         }
         break;
       }

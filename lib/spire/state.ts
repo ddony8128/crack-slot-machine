@@ -229,6 +229,193 @@ function nonNumberSet(setId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// onAcquire artifact effects (첨탑)
+// ---------------------------------------------------------------------------
+
+/** The 'zero' symbol id is never touched by 물뿌리개. */
+const ZERO_ID = 'zero';
+
+/** The number set's symbol ids (0/4/7) — guaranteed present after a 슬롯머신 rebuild. */
+const NUMBER_SYMBOL_IDS: string[] = (SYMBOL_SETS_BY_ID.number?.symbols ?? []).map(
+  (s) => s.id,
+);
+
+/**
+ * Apply an artifact's one-time onAcquire effect to `state`, returning a NEW
+ * state (input is never mutated). Artifacts without an onAcquire effect return a
+ * clone unchanged.
+ *
+ * Determinism: an artifact is acquired AT MOST ONCE per run (no duplicates), so
+ * salting the rng with `${state.seed}:acquire:${artifactId}` is both stable and
+ * unique. The live client and the server replayer call this at the SAME point
+ * (right after the id is appended to state.artifacts), so their states match.
+ */
+export function applyArtifactAcquire(
+  state: SpireRunState,
+  artifactId: string,
+): SpireRunState {
+  switch (artifactId) {
+    case 'watering-can':
+      return applyWateringCan(state);
+    case 'slot-machine':
+      return applySlotMachine(state);
+    default:
+      return cloneState(state);
+  }
+}
+
+/**
+ * 물뿌리개: among the bag's NON-zero symbols with count ≥1, give +1 to one of the
+ * highest-count symbols and -1 to one of the lowest-count symbols (each tie
+ * broken by the seeded rng). Bag total stays 20; 'zero' is never touched. If only
+ * one non-zero symbol type exists the +1/-1 would cancel, so it is a no-op.
+ */
+function applyWateringCan(state: SpireRunState): SpireRunState {
+  const next = cloneState(state);
+  const rng = createSeededRng(`${state.seed}:acquire:watering-can`);
+
+  const entries = Object.entries(next.symbolBag).filter(
+    ([id, n]) => id !== ZERO_ID && n >= 1,
+  );
+  // 0 or 1 non-zero symbol types → +1/-1 cancel or nothing to do → no-op.
+  if (entries.length < 2) {
+    assertBag20(next.symbolBag);
+    return next;
+  }
+
+  const counts = entries.map(([, n]) => n);
+  const maxCount = Math.max(...counts);
+  const minCount = Math.min(...counts);
+
+  const maxIds = entries.filter(([, n]) => n === maxCount).map(([id]) => id);
+  const minIds = entries.filter(([, n]) => n === minCount).map(([id]) => id);
+
+  const incId = maxIds[Math.floor(rng() * maxIds.length)];
+  const decId = minIds[Math.floor(rng() * minIds.length)];
+
+  // entries.length ≥ 2 guarantees distinct symbols exist; if the rng happened to
+  // pick the same id (only possible when max===min, i.e. all counts equal), pick a
+  // distinct min target so the net effect is non-trivial.
+  let finalDecId = decId;
+  if (finalDecId === incId) {
+    const distinct = minIds.filter((id) => id !== incId);
+    if (distinct.length === 0) {
+      // Every non-zero symbol shares the same id as incId — impossible with
+      // length ≥ 2, but stay graceful: no-op.
+      assertBag20(next.symbolBag);
+      return next;
+    }
+    finalDecId = distinct[Math.floor(rng() * distinct.length)];
+  }
+
+  bagAdd(next.symbolBag, incId, 1);
+  bagRemoveOne(next.symbolBag, finalDecId);
+
+  assertBag20(next.symbolBag);
+  return next;
+}
+
+/**
+ * 슬롯머신: fully reconstruct symbolBag + rulePool from the run's OWNED sets.
+ *  1. Draw 20 symbols uniformly from every owned set's symbol ids, then guarantee
+ *     the number-set minimums (0,4,7 each ≥1) by bumping a missing number and
+ *     decrementing the current-highest non-number, keeping total 20.
+ *  2. Rebuild rulePool from SPIRE_BASE_RULE_IDS ∪ every owned set's ruleIds,
+ *     shuffled, capped at SPIRE_RULE_POOL_MAX.
+ * Everything else (artifacts/handUpgrades/money/ownedSetIds/stage/attempt) is kept.
+ */
+function applySlotMachine(state: SpireRunState): SpireRunState {
+  const next = cloneState(state);
+  const rng = createSeededRng(`${state.seed}:acquire:slot-machine`);
+
+  // ── 1. rebuild symbolBag ──
+  const symbolIds: string[] = [];
+  for (const setId of next.ownedSetIds) {
+    const set = SYMBOL_SETS_BY_ID[setId];
+    if (!set) continue;
+    for (const sym of set.symbols) symbolIds.push(sym.id);
+  }
+  // Defensive: with no owned-set symbols there is nothing to draw; keep the bag.
+  if (symbolIds.length === 0) {
+    assertBag20(next.symbolBag);
+    return next;
+  }
+
+  const bag: Record<string, number> = {};
+  for (let i = 0; i < SPIRE_BAG_TOTAL; i++) {
+    const id = symbolIds[Math.floor(rng() * symbolIds.length)];
+    bag[id] = (bag[id] ?? 0) + 1;
+  }
+
+  // Guarantee the number-set minimums (0/4/7 each ≥1). For each missing number,
+  // bump it to 1 and decrement the current-highest NON-number symbol so the total
+  // stays 20.
+  const numberIds = new Set<string>(NUMBER_SYMBOL_IDS);
+  for (const numId of NUMBER_SYMBOL_IDS) {
+    if ((bag[numId] ?? 0) >= 1) continue;
+    // Find the highest-count non-number symbol with ≥2 (so removing 1 keeps ≥1),
+    // falling back to any non-number with ≥1.
+    let donor: string | null = null;
+    let donorCount = 0;
+    for (const [id, n] of Object.entries(bag)) {
+      if (numberIds.has(id)) continue;
+      if (n > donorCount) {
+        donor = id;
+        donorCount = n;
+      }
+    }
+    if (donor === null) {
+      // No non-number donor (bag is all numbers already) — pull from the highest
+      // OTHER number instead so 0/4/7 can still all reach ≥1 when possible.
+      for (const [id, n] of Object.entries(bag)) {
+        if (id === numId) continue;
+        if (n > donorCount + 1 && n - 1 >= 1) {
+          donor = id;
+          donorCount = n;
+        }
+      }
+    }
+    if (donor === null) continue; // can't satisfy without breaking another min
+    bag[donor] -= 1;
+    if (bag[donor] <= 0) delete bag[donor];
+    bag[numId] = (bag[numId] ?? 0) + 1;
+  }
+
+  next.symbolBag = bag;
+  assertBag20(next.symbolBag);
+
+  // ── 2. rebuild rulePool ──
+  const ruleCandidates: string[] = [];
+  const seen = new Set<string>();
+  for (const id of SPIRE_BASE_RULE_IDS) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      ruleCandidates.push(id);
+    }
+  }
+  for (const setId of next.ownedSetIds) {
+    const set = SYMBOL_SETS_BY_ID[setId];
+    if (!set) continue;
+    for (const id of set.ruleIds) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        ruleCandidates.push(id);
+      }
+    }
+  }
+  // Fisher–Yates shuffle, then take up to the pool cap.
+  for (let i = ruleCandidates.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = ruleCandidates[i];
+    ruleCandidates[i] = ruleCandidates[j];
+    ruleCandidates[j] = tmp;
+  }
+  next.rulePool = ruleCandidates.slice(0, SPIRE_RULE_POOL_MAX);
+
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // Reducers
 // ---------------------------------------------------------------------------
 
