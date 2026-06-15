@@ -9,6 +9,7 @@ import {
 } from '@/lib/daily/run';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import { seasonSnapshot, makeSeasonScoreChange } from '@/lib/server/seasonChange';
+import { settleDueDailyChallenges } from '@/lib/server/dailySettlement';
 import type { ClientResults } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
 
@@ -109,6 +110,10 @@ export async function POST(req: Request) {
       attemptsLeft,
     });
   }
+
+  // Settle any ended daily windows first so prior days' rank rewards are
+  // persisted before we read the season snapshot.
+  await settleDueDailyChallenges(db, run.seasonId!, now);
 
   // Season total + rank BEFORE the upsert. The daily +20 first-play grant is
   // derived in buildSeasonRanking from the presence of a daily best_scores row,

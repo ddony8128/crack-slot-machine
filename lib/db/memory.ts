@@ -325,6 +325,8 @@ export class MemoryDb implements Db {
     groupBSetId: string;
     config?: unknown;
   }): Promise<DailyChallengeRow> {
+    // Re-upsert is a no-op on an existing row (the /api/daily/current route
+    // upserts on every load) — crucially this PRESERVES settled_at.
     const existing = await this.getDailyChallenge(input.seasonId, input.dateKey);
     if (existing) return existing;
     const row: DailyChallengeRow = {
@@ -338,9 +340,37 @@ export class MemoryDb implements Db {
       groupBSetId: input.groupBSetId,
       config: input.config ?? null,
       createdAt: new Date().toISOString(),
+      settledAt: null,
     };
     this.dailyChallenges.push(row);
     return row;
+  }
+
+  async listSeasonDailyChallenges(seasonId: string): Promise<DailyChallengeRow[]> {
+    return this.dailyChallenges.filter((d) => d.seasonId === seasonId);
+  }
+
+  async settleDailyChallenge(input: {
+    seasonId: string;
+    dateKey: string;
+    settledAt: string;
+    rewards: Array<{ playerId: string; seasonPoints: number }>;
+  }): Promise<void> {
+    for (const reward of input.rewards) {
+      const row = this.bestScores.find(
+        (b) =>
+          b.playerId === reward.playerId &&
+          b.seasonId === input.seasonId &&
+          b.mode === 'daily' &&
+          b.scopeKey === input.dateKey,
+      );
+      // Overwrite (not max) with this day's settled rank reward.
+      if (row) row.seasonPoints = reward.seasonPoints;
+    }
+    const challenge = this.dailyChallenges.find(
+      (d) => d.seasonId === input.seasonId && d.dateKey === input.dateKey,
+    );
+    if (challenge) challenge.settledAt = input.settledAt;
   }
 
   async countResolvedDailyRuns(input: {

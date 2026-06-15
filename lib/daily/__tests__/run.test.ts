@@ -64,6 +64,7 @@ describe('daily run config (DB-referenced)', () => {
       groupBSetId: 'monster',
       config: { basicRuleSetId: 'daily_basic_2' },
       createdAt: '',
+      settledAt: null,
     };
     expect(dailyRunConfigFromRow(row)).toEqual(
       dailyRunConfigFromParts({

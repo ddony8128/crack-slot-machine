@@ -65,6 +65,8 @@ export type DailyChallengeRow = {
   groupBSetId: string;
   config: unknown | null;
   createdAt: string;
+  /** When this day's ranking was settled (rank rewards persisted), or null. */
+  settledAt: string | null;
 };
 
 /** A row in `daily_user_status` — per-day ad-refill flag for a player. */
@@ -245,6 +247,19 @@ export interface Db {
     groupBSetId: string;
     config?: unknown;
   }): Promise<DailyChallengeRow>;
+  /** Every daily challenge in a season (for the lazy settlement pass). */
+  listSeasonDailyChallenges(seasonId: string): Promise<DailyChallengeRow[]>;
+  /**
+   * Settle one day's ranking: overwrite each player's daily best_scores row's
+   * seasonPoints with the given rank reward (NOT a max), then stamp the
+   * daily_challenge's settledAt. Idempotency is the caller's job (settledAt gate).
+   */
+  settleDailyChallenge(input: {
+    seasonId: string;
+    dateKey: string;
+    settledAt: string;
+    rewards: Array<{ playerId: string; seasonPoints: number }>;
+  }): Promise<void>;
   /** Count a player's RESOLVED (submitted|rejected) daily runs for a date. */
   countResolvedDailyRuns(input: {
     playerId: string;

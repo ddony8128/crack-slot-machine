@@ -106,6 +106,7 @@ function toDailyChallenge(row: any): DailyChallengeRow {
     groupBSetId: row.group_b_set_id,
     config: row.config ?? null,
     createdAt: row.created_at,
+    settledAt: row.settled_at ?? null,
   };
 }
 
@@ -455,6 +456,9 @@ export class SupabaseDb implements Db {
     groupBSetId: string;
     config?: unknown;
   }): Promise<DailyChallengeRow> {
+    // Re-upsert returns the existing row untouched (the /api/daily/current route
+    // upserts on every load) — crucially this PRESERVES settled_at, so settling
+    // is never undone by a later page load. New rows get settled_at null.
     const existing = await this.getDailyChallenge(input.seasonId, input.dateKey);
     if (existing) return existing;
     const { data, error } = await this.sb
@@ -473,6 +477,41 @@ export class SupabaseDb implements Db {
       .single();
     if (error) throw error;
     return toDailyChallenge(data);
+  }
+
+  async listSeasonDailyChallenges(seasonId: string): Promise<DailyChallengeRow[]> {
+    const { data, error } = await this.sb
+      .from('daily_challenges')
+      .select('*')
+      .eq('season_id', seasonId);
+    if (error) throw error;
+    return (data ?? []).map(toDailyChallenge);
+  }
+
+  async settleDailyChallenge(input: {
+    seasonId: string;
+    dateKey: string;
+    settledAt: string;
+    rewards: Array<{ playerId: string; seasonPoints: number }>;
+  }): Promise<void> {
+    // Overwrite each player's daily best_scores row season_points with the
+    // settled rank reward (NOT a max), then stamp settled_at on the challenge.
+    for (const reward of input.rewards) {
+      const { error } = await this.sb
+        .from('best_scores')
+        .update({ season_points: reward.seasonPoints })
+        .eq('player_id', reward.playerId)
+        .eq('season_id', input.seasonId)
+        .eq('mode', 'daily')
+        .eq('scope_key', input.dateKey);
+      if (error) throw error;
+    }
+    const { error: stampError } = await this.sb
+      .from('daily_challenges')
+      .update({ settled_at: input.settledAt })
+      .eq('season_id', input.seasonId)
+      .eq('date_key', input.dateKey);
+    if (stampError) throw stampError;
   }
 
   async countResolvedDailyRuns(input: {

@@ -93,8 +93,6 @@ describe('seasonDailyTotal', () => {
 
 describe('buildSeasonRanking', () => {
   const nick = (id: string) => `nick-${id}`;
-  // A `now` well past every test day so daily rank rewards are SETTLED.
-  const SETTLED = new Date('2027-01-01T00:00:00.000Z');
 
   function spireRow(playerId: string, seasonPoints: number, score = 0): BestScoreRow {
     return baseRow(playerId, 'spire', `spire`, score, seasonPoints, null, '2026-06-01T00:00:00.000Z');
@@ -102,13 +100,17 @@ describe('buildSeasonRanking', () => {
   function puzzleRow(playerId: string, scopeKey: string, seasonPoints: number): BestScoreRow {
     return baseRow(playerId, 'puzzle', scopeKey, seasonPoints, seasonPoints, seasonPoints > 0, '2026-06-01T00:00:00.000Z');
   }
+  // Daily rows now carry their SETTLED rank reward in `seasonPoints` (0 until the
+  // day is settled by settleDueDailyChallenges). buildSeasonRanking just sums
+  // DAILY_FIRST_PLAY + that stored reward per row — no per-day ranking recompute.
   function dailyRow(
     playerId: string,
     dateKey: string,
     score: number,
     updatedAt: string,
+    rankReward = 0,
   ): BestScoreRow {
-    return baseRow(playerId, 'daily', dateKey, score, 0, null, updatedAt);
+    return baseRow(playerId, 'daily', dateKey, score, rankReward, null, updatedAt);
   }
   function baseRow(
     playerId: string,
@@ -133,34 +135,35 @@ describe('buildSeasonRanking', () => {
     };
   }
 
-  it('aggregates spire(best)/puzzle(sum)/daily(first-play+settled rank)', () => {
-    // 2-player days → top10 cutoff=1: rank1 +50, rank2 +0. Each played day +20.
+  it('aggregates spire(best)/puzzle(sum)/daily(first-play+persisted rank)', () => {
+    // Daily rows carry their settled rank reward in seasonPoints; +20 per row is
+    // derived here. A's days were settled rank1 (+50), B's rank2 (+0).
     const rows: BestScoreRow[] = [
       spireRow('A', 900, 900),
       puzzleRow('A', 'puzzle-1', 130),
       puzzleRow('A', 'puzzle-2', 120),
-      dailyRow('A', '2026-06-15', 500, '2026-06-15T10:00:00.000Z'),
-      dailyRow('A', '2026-06-16', 400, '2026-06-16T10:00:00.000Z'),
+      dailyRow('A', '2026-06-15', 500, '2026-06-15T10:00:00.000Z', 50),
+      dailyRow('A', '2026-06-16', 400, '2026-06-16T10:00:00.000Z', 50),
 
       spireRow('B', 300, 300),
       puzzleRow('B', 'puzzle-1', 110),
-      dailyRow('B', '2026-06-15', 100, '2026-06-15T10:00:00.000Z'),
-      dailyRow('B', '2026-06-16', 50, '2026-06-16T10:00:00.000Z'),
+      dailyRow('B', '2026-06-15', 100, '2026-06-15T10:00:00.000Z', 0),
+      dailyRow('B', '2026-06-16', 50, '2026-06-16T10:00:00.000Z', 0),
     ];
 
-    const result = buildSeasonRanking(rows, nick, SETTLED);
+    const result = buildSeasonRanking(rows, nick);
     const a = result.find((r) => r.playerId === 'A')!;
     const b = result.find((r) => r.playerId === 'B')!;
 
     expect(a.spirePoints).toBe(900);
     expect(a.puzzlePoints).toBe(250); // 130 + 120 (summed)
-    expect(a.dailyPoints).toBe(140); // (20+50) + (20+50), rank1 both days
+    expect(a.dailyPoints).toBe(140); // (20+50) + (20+50)
     expect(a.seasonPoints).toBe(1290);
     expect(a.nickname).toBe('nick-A');
 
     expect(b.spirePoints).toBe(300);
     expect(b.puzzlePoints).toBe(110);
-    expect(b.dailyPoints).toBe(40); // (20+0) + (20+0), rank2 both days
+    expect(b.dailyPoints).toBe(40); // (20+0) + (20+0)
     expect(b.seasonPoints).toBe(450);
 
     expect(result.map((r) => r.playerId)).toEqual(['A', 'B']);
@@ -169,46 +172,28 @@ describe('buildSeasonRanking', () => {
 
   it('keeps the best spire seasonPoints per player, no cap', () => {
     const rows: BestScoreRow[] = [spireRow('A', 400), spireRow('A', 1200)];
-    const result = buildSeasonRanking(rows, nick, SETTLED);
+    const result = buildSeasonRanking(rows, nick);
     expect(result[0].spirePoints).toBe(1200); // max, uncapped
   });
 
-  it('daily rank rewards on a settled day (field of 3)', () => {
-    // N=3 → top10 cutoff=1 (+50), top50 cutoff=2 (+30), rank3 +0. All +20 first-play.
+  it('sums daily as DAILY_FIRST_PLAY×rows + Σ persisted rank rewards', () => {
+    // Three settled rows for one player: +20 each + their stored rewards.
     const rows: BestScoreRow[] = [
-      dailyRow('P1', '2026-06-15', 300, '2026-06-15T04:00:00.000Z'),
-      dailyRow('P2', '2026-06-15', 200, '2026-06-15T04:00:00.000Z'),
-      dailyRow('P3', '2026-06-15', 100, '2026-06-15T04:00:00.000Z'),
+      dailyRow('P1', '2026-06-15', 300, '2026-06-15T04:00:00.000Z', 50),
+      dailyRow('P1', '2026-06-16', 200, '2026-06-16T04:00:00.000Z', 30),
+      dailyRow('P1', '2026-06-17', 100, '2026-06-17T04:00:00.000Z', 0),
     ];
-    const result = buildSeasonRanking(rows, nick, SETTLED);
-    expect(result.map((r) => [r.playerId, r.dailyPoints])).toEqual([
-      ['P1', 70], // 20 + 50
-      ['P2', 50], // 20 + 30
-      ['P3', 20], // 20 + 0
-    ]);
-    expect(result.map((r) => r.rank)).toEqual([1, 2, 3]);
+    const result = buildSeasonRanking(rows, nick);
+    // 3×20 + (50+30+0) = 60 + 80 = 140
+    expect(result[0].dailyPoints).toBe(140);
   });
 
-  it('ranks daily ties within a day by earlier updatedAt', () => {
-    const rows: BestScoreRow[] = [
-      dailyRow('Late', '2026-06-15', 500, '2026-06-15T12:00:00.000Z'),
-      dailyRow('Early', '2026-06-15', 500, '2026-06-15T09:00:00.000Z'),
-    ];
-    const result = buildSeasonRanking(rows, nick, SETTLED);
-    const early = result.find((r) => r.playerId === 'Early')!;
-    const late = result.find((r) => r.playerId === 'Late')!;
-    expect(early.dailyPoints).toBe(70); // rank1: 20 + 50
-    expect(late.dailyPoints).toBe(20); // rank2 (N=2): 20 + 0
-  });
-
-  it('UNSETTLED day pays only first-play (+20), no rank reward yet', () => {
-    // now is DURING 2026-06-20's window (ends 06-21 03:00Z) → not settled.
-    const duringDay = new Date('2026-06-20T20:00:00.000Z');
+  it('an unsettled daily row (seasonPoints 0) pays only first-play (+20)', () => {
     const rows: BestScoreRow[] = [
       dailyRow('P1', '2026-06-20', 300, '2026-06-20T13:00:00.000Z'),
       dailyRow('P2', '2026-06-20', 100, '2026-06-20T13:00:00.000Z'),
     ];
-    const result = buildSeasonRanking(rows, nick, duringDay);
+    const result = buildSeasonRanking(rows, nick);
     expect(result.find((r) => r.playerId === 'P1')!.dailyPoints).toBe(20);
     expect(result.find((r) => r.playerId === 'P2')!.dailyPoints).toBe(20);
   });

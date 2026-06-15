@@ -1,5 +1,4 @@
 import type { BestScoreRow, SeasonRankItem } from '@/lib/db/types';
-import { dailyWindow } from '@/lib/daily/challenge';
 
 /**
  * A before/after season-total + rank delta for one point-granting submit. Returned
@@ -109,14 +108,15 @@ export function seasonDailyTotal(dailyPoints: number[]): number {
 /**
  * Build the season ranking from every best_scores row in the season (v2 spec).
  * Spire/puzzle points are the per-row `seasonPoints` stored at submit (spire =
- * the best run; puzzle = summed over each puzzle's best). Daily = +20 per played
- * day (first-play) plus a rank reward for days whose window has ENDED relative to
- * `now` (lazy settlement) — ongoing days pay only the +20. No per-mode caps.
+ * the best run; puzzle = summed over each puzzle's best). Daily is LAZY-PERSISTED:
+ * each daily row already carries its settled rank reward in `seasonPoints` (0
+ * until the day is settled by settleDueDailyChallenges), and the +20 first-play
+ * stays derived per daily row here. So this is a pure O(rows) sum — no per-day
+ * ranking recompute and no `now`. No per-mode caps.
  */
 export function buildSeasonRanking(
   rows: BestScoreRow[],
   nicknameOf: (playerId: string) => string,
-  now: Date = new Date(),
 ): SeasonRankItem[] {
   const players = new Set<string>();
   for (const r of rows) players.add(r.playerId);
@@ -125,8 +125,8 @@ export function buildSeasonRanking(
   const spire = new Map<string, number>();
   // puzzle: sum of stored seasonPoints (each row is that puzzle's best)
   const puzzleSum = new Map<string, number>();
-  // daily: group rows by date for cross-player ranking
-  const byDate = new Map<string, BestScoreRow[]>();
+  // daily: +DAILY_FIRST_PLAY per played day + the row's persisted rank reward
+  const dailyByPlayer = new Map<string, number>();
 
   for (const r of rows) {
     if (r.mode === 'spire') {
@@ -134,24 +134,11 @@ export function buildSeasonRanking(
     } else if (r.mode === 'puzzle') {
       puzzleSum.set(r.playerId, (puzzleSum.get(r.playerId) ?? 0) + r.seasonPoints);
     } else if (r.mode === 'daily') {
-      const list = byDate.get(r.scopeKey) ?? [];
-      list.push(r);
-      byDate.set(r.scopeKey, list);
+      dailyByPlayer.set(
+        r.playerId,
+        (dailyByPlayer.get(r.playerId) ?? 0) + DAILY_FIRST_PLAY + r.seasonPoints,
+      );
     }
-  }
-
-  // daily points: +DAILY_FIRST_PLAY per played day, + rank reward for SETTLED days.
-  const nowIso = now.toISOString();
-  const dailyByPlayer = new Map<string, number>();
-  for (const [dateKey, list] of byDate.entries()) {
-    const settled = dailyWindow(dateKey).endsAt <= nowIso;
-    const sorted = [...list].sort(
-      (a, b) => b.score - a.score || a.updatedAt.localeCompare(b.updatedAt),
-    );
-    sorted.forEach((row, i) => {
-      const reward = settled ? dailyRankReward(i + 1, sorted.length) : 0;
-      dailyByPlayer.set(row.playerId, (dailyByPlayer.get(row.playerId) ?? 0) + DAILY_FIRST_PLAY + reward);
-    });
   }
 
   const items: SeasonRankItem[] = [...players].map((playerId) => {

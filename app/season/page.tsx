@@ -4,6 +4,7 @@ import { currentPlayer } from "@/lib/server/playerAuth";
 import { getDb } from "@/lib/db";
 import { SEASON_TITLE, MODE_LABELS } from "@/lib/season/config";
 import { dailyDateKey, dailyAttemptsAllowed } from "@/lib/daily/challenge";
+import { settleDueDailyChallenges } from "@/lib/server/dailySettlement";
 import { PUZZLES, PUZZLES_BY_KEY } from "@/lib/puzzle/config";
 
 const SEASON_PERIOD = "2026년 6월 15일 낮 12시 ~ 6월 28일 낮 12시 (KST)";
@@ -95,6 +96,11 @@ export default async function SeasonHubPage() {
     currentPlayer(),
     getDb().getActiveSeason(),
   ]);
+
+  // Settle any ended daily windows before showing season status/ranking entry.
+  if (season) {
+    await settleDueDailyChallenges(getDb(), season.id, new Date().toISOString());
+  }
 
   // Only show live status when a player is logged in AND a season is active.
   const statusByHref =

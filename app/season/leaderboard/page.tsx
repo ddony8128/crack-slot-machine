@@ -1,6 +1,7 @@
 import SeasonNav from "@/components/SeasonNav";
 import { getDb } from "@/lib/db";
 import { buildSeasonRanking } from "@/lib/season/scoring";
+import { settleDueDailyChallenges } from "@/lib/server/dailySettlement";
 
 // Live ranking data + reads the DB per request — never prerender at build.
 export const dynamic = "force-dynamic";
@@ -39,6 +40,9 @@ async function renderRanking(
   db: ReturnType<typeof getDb>,
   seasonId: string,
 ) {
+  // Lazily settle any ended daily windows so daily rank rewards are persisted
+  // before we read the ranking rows.
+  await settleDueDailyChallenges(db, seasonId, new Date().toISOString());
   const rows = await db.listSeasonBestScores(seasonId);
 
   // Resolve nicknames: dedupe playerIds, fetch each once. Also capture which
