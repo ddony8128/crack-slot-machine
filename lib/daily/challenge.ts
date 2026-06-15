@@ -55,7 +55,7 @@ const ROTATION: Array<[string, string]> = [
   ['monster', 'vehicle'],
 ];
 
-const SEASON_START_KEY = '2026-06-15';
+const SEASON_START_KEY = '2026-06-16'; // 프리 시즌 1 start (noon KST)
 
 function daysBetween(aKey: string, bKey: string): number {
   const a = Date.parse(`${aKey}T00:00:00Z`);

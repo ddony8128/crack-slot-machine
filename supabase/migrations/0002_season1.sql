@@ -104,9 +104,9 @@ create table if not exists public.puzzle_stages (
 -- ── seed Season 1 ────────────────────────────────────────────────────────────
 insert into public.seasons (slug, title, starts_at, ends_at, client_version, ruleset_version, is_active)
 values (
-  '2026-06-season-1', 'RULE SLOT Season 1',
-  '2026-06-15T03:00:00Z',  -- 2026-06-15 12:00 KST
-  '2026-06-28T03:00:00Z',  -- 2026-06-28 12:00 KST
+  '2026-06-season-1', '프리 시즌 1',
+  '2026-06-16T03:00:00Z',  -- 2026-06-16 12:00 KST
+  '2026-06-30T03:00:00Z',  -- 2026-06-30 12:00 KST (14 days)
   '2.0.0', 2, true
 )
 on conflict (slug) do nothing;

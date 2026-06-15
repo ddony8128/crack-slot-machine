@@ -2,12 +2,12 @@ import Link from "next/link";
 import SeasonNav from "@/components/SeasonNav";
 import { currentPlayer } from "@/lib/server/playerAuth";
 import { getDb } from "@/lib/db";
-import { SEASON_TITLE, MODE_LABELS } from "@/lib/season/config";
+import { SEASON_TITLE, SEASON_NOTICE, MODE_LABELS } from "@/lib/season/config";
 import { dailyDateKey, dailyAttemptsAllowed } from "@/lib/daily/challenge";
 import { settleDueDailyChallenges } from "@/lib/server/dailySettlement";
 import { PUZZLES, PUZZLES_BY_KEY } from "@/lib/puzzle/config";
 
-const SEASON_PERIOD = "2026년 6월 15일 낮 12시 ~ 6월 28일 낮 12시 (KST)";
+const SEASON_PERIOD = "2026년 6월 16일 낮 12시 ~ 6월 30일 낮 12시 (KST)";
 
 type ModeCard = {
   href: string;
@@ -113,7 +113,7 @@ export default async function SeasonHubPage() {
       <main className="fade-rise mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-4 py-10">
         <header className="text-center">
           <p className="text-sm font-semibold uppercase tracking-widest text-emerald-400">
-            Season 1
+            Pre-Season 1
           </p>
           <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">
             {SEASON_TITLE}
@@ -122,6 +122,10 @@ export default async function SeasonHubPage() {
             {SEASON_PERIOD}
           </p>
         </header>
+
+        <p className="rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-center text-xs leading-relaxed text-amber-200/90">
+          {SEASON_NOTICE}
+        </p>
 
         {!player && (
           <section className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 px-5 py-5 text-center">

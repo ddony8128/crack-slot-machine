@@ -36,19 +36,19 @@ describe('dailySeed', () => {
 });
 
 describe('dailyGroups', () => {
-  it('returns the rotation-index-0 pair at the season start key', () => {
-    expect(dailyGroups('2026-06-15')).toEqual({
+  it('returns the rotation-index-0 pair at the season start key (6/16)', () => {
+    expect(dailyGroups('2026-06-16')).toEqual({
       groupASetId: 'fruit',
       groupBSetId: 'gem',
     });
   });
 
   it('is deterministic for a given key', () => {
-    expect(dailyGroups('2026-06-15')).toEqual(dailyGroups('2026-06-15'));
+    expect(dailyGroups('2026-06-16')).toEqual(dailyGroups('2026-06-16'));
   });
 
   it('advances to the next rotation pair one day later', () => {
-    expect(dailyGroups('2026-06-16')).toEqual({
+    expect(dailyGroups('2026-06-17')).toEqual({
       groupASetId: 'cat',
       groupBSetId: 'vehicle',
     });
