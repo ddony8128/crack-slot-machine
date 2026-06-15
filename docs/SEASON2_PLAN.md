@@ -16,7 +16,12 @@ Each WU: independently testable + committed (test + lint per unit).
 | R2 | 유지(hold) — all current rules | DECISION: all current rules are hold (no 봉인). Held cells keep first-roll value but later rules can modify them; removed immutability; reworded rules. | med | ✅ `ae60a26` |
 | O3 | Guest→account merge | on signup, optionally attach guest's quick records to the account. | low | ☐ |
 | E1 | Cell-status board model | done as **E1-lite**: parallel `frame.haunted[]` (no board-type refactor); `computeHand` adds a phantom ghost per haunted cell. | high | ✅ `d89b811` |
-| E2 | Symbol tags / hybrids | symbol tag system + hybrid symbols (zombie_cat…). | high | ⏸ deferred — only if a future rule needs it (none in v0.2). |
+| E2 | Symbol tags / hybrids | symbol tag system + hybrid symbols (zombie_cat…). | high | ⏸ deferred ON PURPOSE — no v0.2 rule produces/consumes a hybrid, so adding the symbols+tags now would be dead code. Land it WITH the first rule that needs it (e.g. a monster rule that turns a cat into a 좀비고양이), so the abstraction has a real consumer. |
+
+### Post-v0.2 polish (done, beyond the table)
+- ✅ `b2521f6` — config-driven 점수표 (set bonuses + pair rules from SYMBOL_SETS/PAIR_RULES).
+- ✅ `76500b3` — haunted-cell 👻 indicator (SpinLog.haunted → board badge).
+- ✅ `6e08843` — `[다음 스핀]` hold infra + 유료 주차 (the deferred S2 rule; finally exercises the next-spin category).
 | S1 | Cat set rules | 식빵 굽기/우다다다/점프의 달인 (hold + rotate/swap; symbol_moved events). | med | ✅ `0ca2a3e` |
 | S2 | Vehicle set rules | 러시아워/물류 사업/배 크다 (weight×slots, random swaps, copy-neighbors). 유료 주차 deferred (needs next-spin hold). | med | ✅ `a31a405` |
 | S3 | Monster set rules | 유령 들림 (haunt) + 가족 만들기 (dracula copy → +40). | high | ✅ `d89b811` |
