@@ -37,17 +37,20 @@ Shop offers seeded from `${runSeed}:shop:${shopVisitIndex}:${rerollCount}`.
 ## Work units
 | WU | Title | Scope | Status |
 |----|-------|-------|--------|
-| SP-A | Economy config + helpers | new targets/payouts/spins(7), money constants, base-rule ids, `spireInterest/spireSpinBonus/spireClearPayout`. Update old tests. | ☐ |
-| SP-B | SpireRunState + pure reducers | state type + deterministic reducers: initSetChoice, buySymbolIncrement, buySymbolSet, buyRule(cap10+removal), buyHandFlat, buyHandDouble, rerollShop, settleClear, settleFail; seeded shop-offer generation; `assertBag20`. Heavy tests. | ☐ |
-| SP-C | Hand-upgrade scoring | `(base+50×flat)×2^double` applied to hand score in score.ts, gated by a passed-in `handUpgrades`. Tests. | ☐ |
-| SP-D | Stage-attempt run config | `stageAttemptSeed`, per-stage RC config from current bag/pool, immediate-clear (stop at target ≤7 spins). | ☐ |
-| SP-E | Run controller / store | drive stages × attempts × shop; record `SpireAction[]`; resume-safe. | ☐ |
+| SP-A | Economy config + helpers | new targets/payouts/spins(7), money constants, base-rule ids, `spireInterest/spireSpinBonus/spireClearPayout`. Update old tests. | ✅ `fd1efb0` |
+| SP-B | SpireRunState + pure reducers | state type + deterministic reducers: initSetChoice, buySymbolIncrement, buySymbolSet, buyRule(cap10+removal), buyHandFlat, buyHandDouble, rerollShop, settleClear, settleFail; `assertBag20`/`pickSetRules`/`addRulesToPool`. 50 tests. | ✅ `5c1696c` |
+| SP-C | Hand-upgrade scoring | `(base+50×flat)×2^double` applied to hand score in score.ts, gated by a passed-in `handUpgrades`. | ✅ `5f7fc36` |
+| SP-D | Stage-attempt run config | `stageAttemptSeed`, per-stage RC config from current bag/pool, immediate-clear (stop at target ≤7 spins). | ✅ `7083180` |
+| SP-E | Run controller / store | drive stages × attempts × shop; record `SpireAction[]`; resume-safe. **(next — integration keystone)** | ☐ |
 | SP-F | Server replay/verify | replay actions + per-stage runs; recompute money/state/cost; reject mismatch. | ☐ |
 | SP-G | DB persistence | SpireRunState snapshot + final record (reach stage, totalScore, money, artifacts). | ☐ |
-| SP-H | Shop UI | sections (artifact/symbol/set/rule/hand/reroll) + replace-symbol confirm. | ☐ |
+| SP-H | Shop UI + seeded shop-offer generator | sections (artifact/symbol/set/rule/hand/reroll) + replace-symbol confirm. | ☐ |
 | SP-I | First-set selection UI | already partial (choosing phase) — adapt to new state. | ☐ |
 | SP-J | Artifacts | 3/6/9 selection + effects (v0 temp). | ☐ |
 | SP-K | Resume | extend spireResume to the new SpireAction stream. | ☐ |
+
+### Progress note (this session)
+Foundation **SP-A–SP-D** complete, tested, pushed (full suite 462+ green, replay-fuzz green, tsc 0). The pure, replay-critical core is done: economy math, all shop/settlement reducers, hand-upgrade scoring, and per-stage seeding/clear. Remaining **SP-E–SP-K** is the integration layer (store state-machine, server replay extension, DB migration, shop UI, artifacts) — larger and interdependent; SP-E (controller) is the keystone that wires the foundation into a playable loop.
 
 Process per WU: subagent (supervised) → vitest (scoped) + eslint → fix → tsc → commit+push.
 Replay-fuzz + full suite at integration points. Build the new model additively;
