@@ -55,6 +55,16 @@ export type DailyChallengeRow = {
   createdAt: string;
 };
 
+/** A row in `daily_user_status` — per-day ad-refill flag for a player. */
+export type DailyUserStatusRow = {
+  id: string;
+  playerId: string;
+  seasonId: string;
+  dateKey: string;
+  adRefillUsed: boolean;
+  updatedAt: string;
+};
+
 /** A row in `best_scores` — the ranking source of truth (one per scope). */
 export type BestScoreRow = {
   id: string;
@@ -224,6 +234,18 @@ export interface Db {
     seasonId: string;
     dateKey: string;
   }): Promise<number>;
+  /** The player's daily status row for a date (ad-refill flag), or null. */
+  getDailyUserStatus(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<DailyUserStatusRow | null>;
+  /** Mark the one-time ad refill used (idempotent upsert). Returns the row. */
+  setDailyAdRefillUsed(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<DailyUserStatusRow>;
 
   // ── Season 1: best scores / ranking ────────────────────────────────────────
   /** Insert or update the player's best for a scope IF the new score is higher. */

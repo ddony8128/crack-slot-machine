@@ -6,11 +6,13 @@ import { useGameStore } from "@/store/gameStore";
 import {
   fetchDailyCurrent,
   startDaily,
+  refillDaily,
   type DailyCurrent,
 } from "@/lib/client/dailyApi";
 import { fetchMe } from "@/lib/client/authApi";
 import GameScreen from "@/components/GameScreen";
 import DailyResultScreen from "@/components/DailyResultScreen";
+import DummyAdModal from "@/components/DummyAdModal";
 
 function startErrorMessage(code: string): string {
   if (code === "daily_attempts_exhausted") return "오늘 도전 횟수를 모두 소진했습니다.";
@@ -30,6 +32,9 @@ export default function DailyClient() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [adOpen, setAdOpen] = useState(false);
+  const [refilling, setRefilling] = useState(false);
+  const [refillError, setRefillError] = useState<string | null>(null);
 
   // The store is a module singleton that survives client navigations, so reset
   // to a clean 'start' state whenever this page mounts, then load the day's info.
@@ -62,6 +67,27 @@ export default function DailyClient() {
       setStartError(startErrorMessage(err instanceof Error ? err.message : ""));
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function handleRefillConfirm() {
+    if (refilling) return;
+    setRefilling(true);
+    setRefillError(null);
+    try {
+      await refillDaily();
+      // Re-fetch so attemptsLeft/allowed/adRefillUsed (and canRefill) update.
+      const next = await fetchDailyCurrent();
+      setCurrent(next);
+      setAdOpen(false);
+    } catch (err) {
+      setRefillError(
+        err instanceof Error && err.message === "ad_refill_already_used"
+          ? "이미 광고 충전을 사용했습니다."
+          : "충전에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      );
+    } finally {
+      setRefilling(false);
     }
   }
 
@@ -104,13 +130,36 @@ export default function DailyClient() {
             </div>
 
             {current.loggedIn ? (
-              <div>
+              <div className="space-y-3">
                 <p className="text-xs uppercase tracking-wide text-zinc-500">
                   남은 도전
                 </p>
-                <p className="font-mono text-4xl font-black text-amber-300">
-                  {current.attemptsLeft}
+                <p className="font-mono text-lg font-bold text-amber-300">
+                  공식 도전: {current.attemptsLeft} /{" "}
+                  {current.allowed ?? current.attemptsLeft}회 남음
                 </p>
+
+                {current.canRefill ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRefillError(null);
+                        setAdOpen(true);
+                      }}
+                      className="w-full rounded-xl border border-amber-500/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                    >
+                      광고 보고 5회 충전
+                    </button>
+                    {refillError && (
+                      <p className="text-sm text-rose-400">{refillError}</p>
+                    )}
+                  </>
+                ) : current.adRefillUsed ? (
+                  <p className="text-sm text-zinc-400">
+                    광고 충전을 사용했습니다.
+                  </p>
+                ) : null}
               </div>
             ) : (
               <p className="text-sm text-zinc-400">로그인이 필요합니다.</p>
@@ -140,6 +189,16 @@ export default function DailyClient() {
       >
         오늘의 랭킹 보기
       </Link>
+
+      <DummyAdModal
+        open={adOpen}
+        onConfirm={handleRefillConfirm}
+        onClose={() => {
+          if (refilling) return;
+          setAdOpen(false);
+        }}
+        pending={refilling}
+      />
     </main>
   );
 }

@@ -14,6 +14,7 @@ import type {
   PlayerRow,
   SeasonRow,
   DailyChallengeRow,
+  DailyUserStatusRow,
   BestScoreRow,
   RunMode,
 } from '@/lib/db/types';
@@ -101,6 +102,17 @@ function toDailyChallenge(row: any): DailyChallengeRow {
     groupBSetId: row.group_b_set_id,
     config: row.config ?? null,
     createdAt: row.created_at,
+  };
+}
+
+function toDailyUserStatus(row: any): DailyUserStatusRow {
+  return {
+    id: row.id,
+    playerId: row.player_id,
+    seasonId: row.season_id,
+    dateKey: row.date_key,
+    adRefillUsed: row.ad_refill_used,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -432,6 +444,52 @@ export class SupabaseDb implements Db {
       .in('status', ['submitted', 'rejected']);
     if (error) throw error;
     return count ?? 0;
+  }
+
+  async getDailyUserStatus(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<DailyUserStatusRow | null> {
+    const { data, error } = await this.sb
+      .from('daily_user_status')
+      .select('*')
+      .eq('player_id', input.playerId)
+      .eq('season_id', input.seasonId)
+      .eq('date_key', input.dateKey)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toDailyUserStatus(data) : null;
+  }
+
+  async setDailyAdRefillUsed(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<DailyUserStatusRow> {
+    const existing = await this.getDailyUserStatus(input);
+    if (existing) {
+      const { data, error } = await this.sb
+        .from('daily_user_status')
+        .update({ ad_refill_used: true, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return toDailyUserStatus(data);
+    }
+    const { data, error } = await this.sb
+      .from('daily_user_status')
+      .insert({
+        player_id: input.playerId,
+        season_id: input.seasonId,
+        date_key: input.dateKey,
+        ad_refill_used: true,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toDailyUserStatus(data);
   }
 
   // ── Season 1: best scores / ranking ────────────────────────────────────────

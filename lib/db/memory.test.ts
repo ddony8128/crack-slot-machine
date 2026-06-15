@@ -256,6 +256,56 @@ describe('MemoryDb daily challenges', () => {
   });
 });
 
+describe('MemoryDb daily user status', () => {
+  it('getDailyUserStatus returns null before any refill, true after setDailyAdRefillUsed', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const scope = { playerId: 'p1', seasonId: season!.id, dateKey: '2026-06-15' };
+
+    expect(await db.getDailyUserStatus(scope)).toBeNull();
+
+    const set = await db.setDailyAdRefillUsed(scope);
+    expect(set.adRefillUsed).toBe(true);
+    expect(set.playerId).toBe('p1');
+    expect(set.dateKey).toBe('2026-06-15');
+
+    const fetched = await db.getDailyUserStatus(scope);
+    expect(fetched?.adRefillUsed).toBe(true);
+  });
+
+  it('setDailyAdRefillUsed is idempotent (one row, still true)', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const scope = { playerId: 'p1', seasonId: season!.id, dateKey: '2026-06-15' };
+
+    const first = await db.setDailyAdRefillUsed(scope);
+    const second = await db.setDailyAdRefillUsed(scope);
+    expect(second.id).toBe(first.id);
+    expect(second.adRefillUsed).toBe(true);
+  });
+
+  it('different (player/date) statuses are independent', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const base = { seasonId: season!.id, dateKey: '2026-06-15' };
+
+    await db.setDailyAdRefillUsed({ ...base, playerId: 'p1' });
+
+    // different player -> not affected
+    expect(
+      await db.getDailyUserStatus({ ...base, playerId: 'p2' }),
+    ).toBeNull();
+    // different date -> not affected
+    expect(
+      await db.getDailyUserStatus({ ...base, playerId: 'p1', dateKey: '2026-06-16' }),
+    ).toBeNull();
+    // original still set
+    expect(
+      (await db.getDailyUserStatus({ ...base, playerId: 'p1' }))?.adRefillUsed,
+    ).toBe(true);
+  });
+});
+
 describe('MemoryDb best scores', () => {
   it('upsertBestScore keeps the higher score and cleared is sticky-true', async () => {
     const db = new MemoryDb();

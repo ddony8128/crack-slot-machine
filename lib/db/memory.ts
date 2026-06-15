@@ -9,6 +9,7 @@ import type {
   PlayerRow,
   SeasonRow,
   DailyChallengeRow,
+  DailyUserStatusRow,
   BestScoreRow,
   RunMode,
 } from '@/lib/db/types';
@@ -51,6 +52,7 @@ export class MemoryDb implements Db {
   private players: PlayerRow[] = [];
   private seasons: SeasonRow[];
   private dailyChallenges: DailyChallengeRow[] = [];
+  private dailyUserStatuses: DailyUserStatusRow[] = [];
   private bestScores: BestScoreRow[] = [];
   private counter = 0;
 
@@ -319,6 +321,44 @@ export class MemoryDb implements Db {
         r.dailyDateKey === input.dateKey &&
         (r.status === 'submitted' || r.status === 'rejected'),
     ).length;
+  }
+
+  async getDailyUserStatus(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<DailyUserStatusRow | null> {
+    return (
+      this.dailyUserStatuses.find(
+        (s) =>
+          s.playerId === input.playerId &&
+          s.seasonId === input.seasonId &&
+          s.dateKey === input.dateKey,
+      ) ?? null
+    );
+  }
+
+  async setDailyAdRefillUsed(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<DailyUserStatusRow> {
+    const existing = await this.getDailyUserStatus(input);
+    if (existing) {
+      existing.adRefillUsed = true;
+      existing.updatedAt = new Date().toISOString();
+      return existing;
+    }
+    const row: DailyUserStatusRow = {
+      id: this.id('daily-status'),
+      playerId: input.playerId,
+      seasonId: input.seasonId,
+      dateKey: input.dateKey,
+      adRefillUsed: true,
+      updatedAt: new Date().toISOString(),
+    };
+    this.dailyUserStatuses.push(row);
+    return row;
   }
 
   // ── Season 1: best scores / ranking ────────────────────────────────────────

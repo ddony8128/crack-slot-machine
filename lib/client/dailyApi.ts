@@ -10,7 +10,17 @@ export type DailyCurrent =
       attemptsUsed: number;
       attemptsLeft: number;
       loggedIn: true;
+      // Ad-refill fields (present from the server; optional for forward-compat).
+      allowed?: number;
+      adRefillUsed?: boolean;
+      canRefill?: boolean;
     };
+
+export type RefillDailyResponse = {
+  adRefillUsed: boolean;
+  allowed: number;
+  attemptsLeft: number;
+};
 
 export type StartDailyResponse = { runId: string; seed: string; dateKey: string };
 
@@ -38,6 +48,13 @@ export async function fetchDailyCurrent(): Promise<DailyCurrent> {
 /** POST /api/daily/start. Throws Error(code) on failure. */
 export async function startDaily(): Promise<StartDailyResponse> {
   const res = await fetch('/api/daily/start', { method: 'POST' });
+  if (!res.ok) throw new Error(await errorCode(res));
+  return res.json();
+}
+
+/** POST /api/daily/refill — claim the one-time ad refill. Throws Error(code). */
+export async function refillDaily(): Promise<RefillDailyResponse> {
+  const res = await fetch('/api/daily/refill', { method: 'POST' });
   if (!res.ok) throw new Error(await errorCode(res));
   return res.json();
 }

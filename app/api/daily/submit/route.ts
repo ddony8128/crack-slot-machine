@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/db';
 import { currentPlayer } from '@/lib/server/playerAuth';
 import { verifySubmission } from '@/lib/server/verifySubmission';
-import { MAX_DAILY_ATTEMPTS } from '@/lib/daily/challenge';
+import { dailyAttemptsAllowed } from '@/lib/daily/challenge';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
@@ -90,15 +90,11 @@ export async function POST(req: Request) {
       rejectReason: outcome.reason,
       submittedAt: now,
     });
-    const used = await db.countResolvedDailyRuns({
-      playerId: player.id,
-      seasonId: run.seasonId!,
-      dateKey: run.dailyDateKey!,
-    });
+    const attemptsLeft = await dailyAttemptsLeft(db, player.id, run.seasonId!, run.dailyDateKey!);
     return Response.json({
       status: 'rejected',
       reason: outcome.reason,
-      attemptsLeft: Math.max(0, MAX_DAILY_ATTEMPTS - used),
+      attemptsLeft,
     });
   }
 
@@ -124,16 +120,25 @@ export async function POST(req: Request) {
     runId: run.id,
   });
 
-  const used = await db.countResolvedDailyRuns({
-    playerId: player.id,
-    seasonId: run.seasonId!,
-    dateKey: run.dailyDateKey!,
-  });
+  const attemptsLeft = await dailyAttemptsLeft(db, player.id, run.seasonId!, run.dailyDateKey!);
 
   return Response.json({
     status: 'submitted',
     score: outcome.score,
     bestSpinScore: outcome.bestSpinScore,
-    attemptsLeft: Math.max(0, MAX_DAILY_ATTEMPTS - used),
+    attemptsLeft,
   });
+}
+
+/** Attempts remaining today = (5, or 10 if the ad refill was used) − resolved runs. */
+async function dailyAttemptsLeft(
+  db: ReturnType<typeof getDb>,
+  playerId: string,
+  seasonId: string,
+  dateKey: string,
+): Promise<number> {
+  const status = await db.getDailyUserStatus({ playerId, seasonId, dateKey });
+  const allowed = dailyAttemptsAllowed(status?.adRefillUsed ?? false);
+  const used = await db.countResolvedDailyRuns({ playerId, seasonId, dateKey });
+  return Math.max(0, allowed - used);
 }

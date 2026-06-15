@@ -5,11 +5,12 @@ import {
   dailyWindow,
   dailySeed,
   dailyGroups,
-  MAX_DAILY_ATTEMPTS,
+  dailyAttemptsAllowed,
 } from '@/lib/daily/challenge';
 
 // GET /api/daily/current — lazily ensures today's challenge exists, then returns
-// the day's metadata plus (if signed in) how many attempts the player has left.
+// the day's metadata plus (if signed in) how many attempts the player has left,
+// the per-day allowance, and whether the one-time ad refill is still available.
 export async function GET() {
   const db = getDb();
 
@@ -34,7 +35,15 @@ export async function GET() {
     return Response.json({ dateKey, endsAt, loggedIn: false });
   }
 
-  const attemptsUsed = await db.countResolvedDailyRuns({
+  const status = await db.getDailyUserStatus({
+    playerId: player.id,
+    seasonId: season.id,
+    dateKey,
+  });
+  const adRefillUsed = status?.adRefillUsed ?? false;
+  const allowed = dailyAttemptsAllowed(adRefillUsed);
+
+  const used = await db.countResolvedDailyRuns({
     playerId: player.id,
     seasonId: season.id,
     dateKey,
@@ -43,8 +52,11 @@ export async function GET() {
   return Response.json({
     dateKey,
     endsAt,
-    attemptsUsed,
-    attemptsLeft: Math.max(0, MAX_DAILY_ATTEMPTS - attemptsUsed),
     loggedIn: true,
+    attemptsUsed: used,
+    attemptsLeft: Math.max(0, allowed - used),
+    allowed,
+    adRefillUsed,
+    canRefill: !adRefillUsed,
   });
 }

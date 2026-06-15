@@ -1,7 +1,16 @@
 /** Daily-challenge timing + seed + symbol-group rotation. Pure & deterministic
  *  so the server route and tests agree. Day boundary is 12:00 KST = 03:00 UTC. */
 
-export const MAX_DAILY_ATTEMPTS = 3;
+// WU7: 5 official attempts/day, +5 after a one-time (dummy) ad refill → 10 max.
+export const DAILY_BASE_ATTEMPTS = 5;
+export const DAILY_AD_REFILL_ATTEMPTS = 5;
+export const DAILY_MAX_ATTEMPTS = DAILY_BASE_ATTEMPTS + DAILY_AD_REFILL_ATTEMPTS;
+
+/** Total attempts a player may use today given whether they used the ad refill. */
+export function dailyAttemptsAllowed(adRefillUsed: boolean): number {
+  return adRefillUsed ? DAILY_MAX_ATTEMPTS : DAILY_BASE_ATTEMPTS;
+}
+
 const DAY_BOUNDARY_UTC_HOURS = 3; // 12:00 KST
 
 /** The active daily date key (YYYY-MM-DD) for an instant. The window for key D

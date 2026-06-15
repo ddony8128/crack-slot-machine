@@ -5,12 +5,13 @@ import {
   dailyWindow,
   dailySeed,
   dailyGroups,
-  MAX_DAILY_ATTEMPTS,
+  dailyAttemptsAllowed,
 } from '@/lib/daily/challenge';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 // POST /api/daily/start — open a pending daily run on today's shared seed.
-// Requires a signed-in player and enforces the per-day attempt cap.
+// Requires a signed-in player and enforces the per-day attempt cap (which
+// expands from the base allowance to the max once the ad refill is used).
 export async function POST() {
   const player = await currentPlayer();
   if (!player) {
@@ -34,12 +35,19 @@ export async function POST() {
     ...dailyGroups(dateKey),
   });
 
+  const status = await db.getDailyUserStatus({
+    playerId: player.id,
+    seasonId: season.id,
+    dateKey,
+  });
+  const allowed = dailyAttemptsAllowed(status?.adRefillUsed ?? false);
+
   const attemptsUsed = await db.countResolvedDailyRuns({
     playerId: player.id,
     seasonId: season.id,
     dateKey,
   });
-  if (attemptsUsed >= MAX_DAILY_ATTEMPTS) {
+  if (attemptsUsed >= allowed) {
     return Response.json(
       { error: 'daily_attempts_exhausted' },
       { status: 403 },
