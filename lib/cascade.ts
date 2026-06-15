@@ -12,6 +12,7 @@ const FRUIT_SET = new Set<SymbolType>(FRUITS);
 const GEM_SET = new Set<SymbolType>(GEMS);
 const CAT_SET = new Set<SymbolType>(CATS);
 const MONSTER_SET = new Set<SymbolType>(MONSTERS);
+const VEHICLE_SET = new Set<SymbolType>(VEHICLES);
 
 // VEHICLES = [plane, ship, car]; plane/ship literals drive the vehicle rules.
 const PLANE: SymbolType = VEHICLES[0];
@@ -59,6 +60,12 @@ export type CascadeFrame = {
   // adds ONE phantom 'ghost' to the n-of-a-kind counts at scoring time (E1-lite).
   // No board/score effect on its own; read-only data consumed by computeHand.
   haunted: boolean[];
+  // Cell indices to HOLD at the start of the NEXT spin (init []). The next-spin
+  // rule 유료 주차 (vehicle-parking) pushes every vehicle cell here. The store
+  // copies this onto the committed GameState.nextHoldCells, and the next spin()
+  // feeds it back as beginCascade's `preHeld`. No board/score effect on its own;
+  // pure cross-spin engine state so replay reproduces it deterministically.
+  nextHold: number[];
 };
 
 /**
@@ -99,6 +106,7 @@ function applyOne(
   ctx: ApplyCtx,
   events: EngineEvent[],
   haunted: boolean[],
+  nextHold: number[],
 ): number[] {
   const { weights, rng } = ctx;
   // ADDITIVE event helpers. They only PUSH to `events`; they never read or change
@@ -336,6 +344,15 @@ function applyOne(
       }
       return [];
     }
+    case 'vehicle-parking': {
+      // NEXT-SPIN HOLD: flag every vehicle cell on the CURRENT board so the next
+      // spin's first roll holds those cells. No board change, no rng, no events —
+      // the points loss is applied at scoring (lib/score.ts). Dedupe defensively.
+      for (let i = 0; i < working.length; i++) {
+        if (VEHICLE_SET.has(working[i]) && !nextHold.includes(i)) nextHold.push(i);
+      }
+      return [];
+    }
 
     // ---- transform (monster) ----
     case 'monster-haunt': {
@@ -412,7 +429,7 @@ export function beginCascade(
   base: SymbolType[],
   rules: (Rule | null)[],
   ctx: ApplyCtx,
-  opts: { autoSkipSelect?: boolean } = {},
+  opts: { autoSkipSelect?: boolean; preHeld?: number[] } = {},
 ): CascadeFrame {
   const working: SymbolType[] = [...base];
   const locked: boolean[] = [false, false, false, false, false];
@@ -424,6 +441,20 @@ export function beginCascade(
   // A `copy-above` whose slot above is a lock re-applies that lock here too
   // (idempotent for center/last-lock; fruit-freeze then holds the NEXT 2 fruits).
   const prev = ctx.previousResult;
+
+  // CROSS-SPIN HOLD: cells flagged by the previous spin's next-spin rule
+  // (유료 주차) are held to their previous value here, exactly like a lock. Runs
+  // first so a subsequent lock rule sees them as already held (no double-emit).
+  // Deterministic (reads previousResult), so replay reproduces it byte-for-byte.
+  if (opts.preHeld) {
+    for (const i of opts.preHeld) {
+      if (i >= 0 && i < working.length && !locked[i]) {
+        working[i] = prev[i];
+        locked[i] = true;
+        events.push({ type: 'symbol_locked', symbolId: working[i], index: i, byRuleId: 'next-hold' });
+      }
+    }
+  }
   const applyLock = (lockRule: Rule) => {
     if (lockRule.id === 'center-lock') {
       if (!locked[2]) {
@@ -483,6 +514,7 @@ export function beginCascade(
     events,
     scoreBoards: [],
     haunted: [false, false, false, false, false],
+    nextHold: [],
   };
 
   return advanceCascade(frame, rules, ctx, opts);
@@ -571,7 +603,7 @@ export function advanceCascade(
       if (above.type === 'reroll' || above.type === 'transform') {
         // Events emit NATURALLY from this call, tagged with the above rule's id
         // (the ACTUAL rule applied). No separate emit here -> no double-emit.
-        copyRolled = applyOne(above, working, locked, ctx, frame.events, frame.haunted);
+        copyRolled = applyOne(above, working, locked, ctx, frame.events, frame.haunted, frame.nextHold);
       }
       const copyStep: SpinLogStep = { label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] };
       if (copyRolled.length) copyStep.rerolled = copyRolled;
@@ -579,7 +611,7 @@ export function advanceCascade(
       continue;
     }
 
-    const rolled = applyOne(rule, working, locked, ctx, frame.events, frame.haunted);
+    const rolled = applyOne(rule, working, locked, ctx, frame.events, frame.haunted, frame.nextHold);
     const step: SpinLogStep = { label: rule.name, result: [...working], locked: [...locked] };
     if (rolled.length) step.rerolled = rolled;
     steps.push(step);

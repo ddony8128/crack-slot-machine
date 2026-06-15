@@ -1,5 +1,5 @@
 import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
-import { NUMBERS } from '@/data/symbols';
+import { NUMBERS, VEHICLES } from '@/data/symbols';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { PAIR_RULES } from '@/lib/pairRules';
 import { expandRules, countRule } from '@/lib/expandRules';
@@ -13,6 +13,7 @@ import {
   HAND_FIVE_KIND,
   FOUR_PENALTY_PER,
   FOUR_FORTUNE_PER,
+  PARKING_FEE_PER,
   BONUS_77,
   CLEAN_BONUS,
 } from '@/data/scoreTable';
@@ -20,6 +21,13 @@ import {
 // Numbers (seven/zero/four) have dedicated scoring and never form poker hands or
 // contribute to set bonuses. Everything else is a "set symbol".
 const NUMBER_SET = new Set<SymbolType>(NUMBERS);
+// Vehicle symbols, for the 유료 주차 (vehicle-parking) per-vehicle fee.
+const VEHICLE_SET = new Set<SymbolType>(VEHICLES);
+
+/** Count vehicle cells on the board (for the 유료 주차 fee). */
+function countVehicles(result: SymbolType[]): number {
+  return result.filter((s) => VEHICLE_SET.has(s)).length;
+}
 
 // Map an EngineEvent.type to the SetBonus.event tag it satisfies, plus where to
 // read the symbol id that the event acted on.
@@ -278,6 +286,14 @@ export function scoreItems(
     }
   }
 
+  // 유료 주차 (vehicle-parking): lose PARKING_FEE_PER per vehicle cell on the
+  // FINAL board (×stacks via copy-above). A negative ScoreItem, like 4 페널티.
+  const parking = countRule(expanded, 'vehicle-parking');
+  const vehicles = countVehicles(result);
+  if (parking > 0 && vehicles > 0) {
+    items.push({ label: `유료 주차 (${vehicles}칸)`, points: -(vehicles * PARKING_FEE_PER * parking) });
+  }
+
   return items;
 }
 
@@ -321,6 +337,12 @@ export function scoreResult(
   } else {
     penalty = fours * FOUR_PENALTY_PER;
   }
+
+  // 유료 주차 (vehicle-parking): add a per-vehicle fee on the FINAL board to the
+  // penalty (×stacks via copy-above), mirroring the four-penalty handling.
+  const parking = countRule(expanded, 'vehicle-parking');
+  if (parking > 0) penalty += countVehicles(result) * PARKING_FEE_PER * parking;
+
   const baseRoundScore = sevenPts + handScore + bonusScore - penalty;
 
   return {

@@ -27,6 +27,9 @@ export const BONUS_ALL_RED = 250;         // all 5 cells in RED set
 
 // Four penalty per four. (Season 1 v0.1: -30 per four.)
 export const FOUR_PENALTY_PER = 30;
+// 유료 주차 (vehicle-parking): lose this much per vehicle cell on the FINAL board
+// (×stacks). Treated as a penalty, like the four-penalty.
+export const PARKING_FEE_PER = 30;
 // FOUR FORTUNE rule: each 4 scores +this instead of the penalty.
 export const FOUR_FORTUNE_PER = 20;
 

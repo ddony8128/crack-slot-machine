@@ -138,4 +138,13 @@ export type GameState = {
   // Incremental reveal feed for the UI; null when idle. Updated as the cascade
   // progresses (spin → selectCells → finalize) so the reveal plays once.
   revealStream: RevealStream | null;
+  // Cells to HOLD at the start of the NEXT spin's first roll (default []). A
+  // next-spin rule (e.g. 유료 주차 / vehicle-parking) populates this from the
+  // FINAL board of the spin that produced it; the next spin() feeds it as
+  // beginCascade's preHeld pass (held cells = previousResult, then locked).
+  // PURE ENGINE STATE: carried/consumed entirely via the cascade frame, so
+  // replay reproduces it byte-for-byte. A held cell may still be overwritten by
+  // a later rule that spin (held = first-roll only). REPLACED each spin: a spin
+  // with no parking rule yields frame.nextHold [] → this clears.
+  nextHoldCells: number[];
 };

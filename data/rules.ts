@@ -223,7 +223,14 @@ export const RULES: Rule[] = [
   },
 
   // ---- vehicle ----
-  // TODO 유료 주차 — needs next-spin hold infra
+  {
+    id: 'vehicle-parking',
+    name: '유료 주차',
+    type: 'transform',
+    phase: 'next-spin',
+    build: 'vehicle',
+    description: '교통수단 칸마다 30점을 잃고, 그 칸들은 다음 스핀 첫 굴림에서 유지된다. (유지된 칸은 이후 규칙으로 바뀔 수 있다)',
+  },
   {
     id: 'vehicle-surge',
     name: '러시아워',

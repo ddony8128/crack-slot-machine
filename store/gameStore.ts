@@ -152,6 +152,7 @@ function freshState(nickname: string): GameState {
     status: 'start',
     pendingSelection: null,
     revealStream: null,
+    nextHoldCells: [],
   };
 }
 
@@ -274,6 +275,10 @@ function buildInitializer(initialRng: Rng): Initializer {
         status: 'spin-result',
         pendingSelection: null,
         revealStream,
+        // Carry this spin's parking holds to the NEXT spin's preHeld pass. This
+        // REPLACES the value just consumed by spin(): a spin whose cascade left
+        // frame.nextHold [] (no 유료 주차) clears it, so a hold never lingers.
+        nextHoldCells: [...frame.nextHold],
       });
     };
 
@@ -477,7 +482,10 @@ function buildInitializer(initialRng: Rng): Initializer {
       const weights = computeWeights(ruleSlots, runConfig?.baseWeights ?? BASE_WEIGHTS);
       const base = rollBoard(ruleSlots, weights, previousResult, rng);
       const ctx: ApplyCtx = { previousResult, weights, rng };
-      const frame = beginCascade(base, ruleSlots, ctx);
+      // Cross-spin HOLD: cells flagged by the previous spin's next-spin rule
+      // (유료 주차) are held to previousResult at this spin's first roll. Pure
+      // engine state (deterministic), so replay reproduces it exactly.
+      const frame = beginCascade(base, ruleSlots, ctx, { preHeld: state.nextHoldCells });
 
       activeFrame = frame;
       activeCtx = ctx;
