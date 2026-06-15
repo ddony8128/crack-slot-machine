@@ -372,6 +372,22 @@ function applyOne(
       }
       return [];
     }
+    case 'monster-infect': {
+      // 전염병: if ANY base monster is on the board, the leftmost BASE cat becomes
+      // a zombie_cat HYBRID (scores as both cat AND monster, see lib/symbols/tags).
+      // Uses base CATS/MONSTERS for targeting — hybrids participate in scoring via
+      // tags, not in rule targeting (v0). No monster or no cat -> no-op.
+      const hasMonster = working.some((s) => MONSTER_SET.has(s));
+      if (hasMonster) {
+        const c = working.findIndex((s) => CAT_SET.has(s));
+        if (c !== -1) {
+          const old = working[c];
+          write(working, locked, c, 'zombie_cat');
+          emitTransform(old, 'zombie_cat', c);
+        }
+      }
+      return [];
+    }
 
     // ---- lock rules are handled in the PRE-ROLL HOLD pass, not here. ----
     // ---- select rules are interactive — handled via Pending, not here. ----

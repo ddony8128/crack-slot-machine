@@ -273,6 +273,14 @@ export const RULES: Rule[] = [
     build: 'monster',
     description: '가장 왼쪽 드라큘라를 가장 왼쪽의 드라큘라가 아닌 칸에 복사한다.',
   },
+  {
+    id: 'monster-infect',
+    name: '전염병',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'monster',
+    description: '괴물이 있으면 가장 왼쪽 고양이가 좀비고양이로 변한다. (좀비고양이는 고양이이자 괴물로 계산된다)',
+  },
 
   // ---- safe ----
   {

@@ -1,6 +1,7 @@
 import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
 import { NUMBERS, VEHICLES } from '@/data/symbols';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { symbolInSet } from '@/lib/symbols/tags';
 import { PAIR_RULES } from '@/lib/pairRules';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
@@ -123,8 +124,14 @@ export function setBonuses(
   for (const set of SYMBOL_SETS) {
     if (set.isNumberSet) continue;
 
-    const members = new Set<SymbolType>(set.symbols.map((s) => s.id as SymbolType));
-    const onBoard = result.filter((s) => members.has(s)).length;
+    // Set membership for COUNTING bonuses (per-symbol/adjacent/all-symbols/
+    // per-event) goes through symbolInSet, so a HYBRID (e.g. zombie_cat) counts
+    // for every set it is tagged into — NOT just a single literal set. The
+    // `all-types` ("3종") completeness check below deliberately does NOT use this:
+    // it keys off each base `set.symbols[].id` literally, so a hybrid alone can
+    // never complete a 3종 (every base type must actually be present).
+    const isMember = (sym: SymbolType) => symbolInSet(sym, set);
+    const onBoard = result.filter(isMember).length;
 
     for (const bonus of set.bonuses) {
       switch (bonus.type) {
@@ -134,7 +141,7 @@ export function setBonuses(
           break;
         }
         case 'all-symbols': {
-          if (result.length === 5 && result.every((s) => members.has(s)))
+          if (result.length === 5 && result.every(isMember))
             items.push({ label: `올 ${set.name}`, points: bonus.points });
           break;
         }
@@ -150,9 +157,9 @@ export function setBonuses(
           // the lone calico at idx 3 has no member neighbor. 2 * points.
           let adj = 0;
           for (let i = 0; i < result.length; i++) {
-            if (!members.has(result[i])) continue;
-            const left = i > 0 && members.has(result[i - 1]);
-            const right = i + 1 < result.length && members.has(result[i + 1]);
+            if (!isMember(result[i])) continue;
+            const left = i > 0 && isMember(result[i - 1]);
+            const right = i + 1 < result.length && isMember(result[i + 1]);
             if (left || right) adj += 1;
           }
           if (adj > 0)
@@ -164,7 +171,7 @@ export function setBonuses(
           let count = 0;
           for (const e of events) {
             const tagged = eventTag(e);
-            if (tagged && tagged.tag === bonus.event && members.has(tagged.symbolId)) count += 1;
+            if (tagged && tagged.tag === bonus.event && isMember(tagged.symbolId)) count += 1;
           }
           if (count > 0)
             items.push({

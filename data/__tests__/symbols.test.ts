@@ -10,13 +10,19 @@ import {
   NUMBERS,
 } from '@/data/symbols';
 import { SYMBOL_SETS } from '@/lib/symbols/sets';
+import { SYMBOL_TAGS } from '@/lib/symbols/tags';
 import type { SymbolType } from '@/types';
 
 // Source of truth for the full symbol key list: every symbol id declared across
-// SYMBOL_SETS (numbers + fruits + gems + the Season 1 cat/vehicle/monster sets).
-const ALL_SET_SYMBOL_IDS = SYMBOL_SETS.flatMap((set) =>
-  set.symbols.map((s) => s.id),
-);
+// SYMBOL_SETS (numbers + fruits + gems + the Season 1 cat/vehicle/monster sets),
+// PLUS hybrid ids (e.g. zombie_cat) which are not a single set's `symbols[]`
+// entry — they gain set membership for scoring via SYMBOL_TAGS instead, but still
+// need a weight (0) and an emoji glyph like any other symbol.
+const HYBRID_IDS = Object.keys(SYMBOL_TAGS);
+const ALL_SET_SYMBOL_IDS = [
+  ...SYMBOL_SETS.flatMap((set) => set.symbols.map((s) => s.id)),
+  ...HYBRID_IDS,
+];
 
 const NEW_SEASON1_IDS = ['cat', 'vehicle', 'monster'].flatMap(
   (setId) =>

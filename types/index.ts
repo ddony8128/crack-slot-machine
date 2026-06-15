@@ -6,7 +6,10 @@ export type SymbolType =
   // event play never rolls them; they only appear when a mode's bag includes them.
   | 'cheese_cat' | 'tuxedo_cat' | 'calico_cat'   // cats
   | 'plane' | 'ship' | 'car'                       // vehicles
-  | 'dracula' | 'zombie' | 'ghost';                // monsters
+  | 'dracula' | 'zombie' | 'ghost'                 // monsters
+  // hybrids: score as members of MULTIPLE sets via SYMBOL_TAGS (lib/symbols/tags.ts).
+  // zombie_cat (좀비고양이) counts as BOTH a cat and a monster for set bonuses.
+  | 'zombie_cat';                                  // hybrids
 
 export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta' | 'select';
 
