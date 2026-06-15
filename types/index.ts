@@ -20,10 +20,6 @@ export type Rule = {
 
 export type SpinLogStep = {
   label: string;
-  // The rule this step represents (for copy-above, the COPIED rule's id). Lets
-  // position-sensitive scoring (e.g. CLEAN SWEEP) read the board AT this rule's
-  // moment via `result`. Optional for backward-compat.
-  ruleId?: string;
   result: SymbolType[];   // board snapshot after this rule
   locked: boolean[];      // cells frozen by a lock rule so far (for the greyed-out reveal)
   // Cells given a FRESH RANDOM ROLL by this step (four-shield, four-parry,
