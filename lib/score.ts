@@ -100,6 +100,7 @@ export function countZeros(result: SymbolType[]): number {
 export function computeHand(
   result: SymbolType[],
   haunted?: boolean[],
+  opts?: { extraCherry?: boolean },
 ): { hand: string; handScore: number } {
   const counts = new Map<SymbolType, number>();
   for (const s of result) {
@@ -112,6 +113,12 @@ export function computeHand(
     for (let i = 0; i < haunted.length; i++) {
       if (haunted[i]) counts.set('ghost', (counts.get('ghost') ?? 0) + 1);
     }
+  }
+
+  // cherry-charm (체리): count one extra cherry BEFORE evaluating the hand, so a
+  // pair can upgrade to a triple, etc. No-op unless the artifact is active.
+  if (opts?.extraCherry) {
+    counts.set('cherry', (counts.get('cherry') ?? 0) + 1);
   }
 
   const values = [...counts.values()];
@@ -282,6 +289,121 @@ function pairBonus(
   return { sum, items };
 }
 
+// Per-event types carrying a single acted-on symbol (moved/rerolled/copied).
+type SymbolEventType = 'symbol_moved' | 'symbol_rerolled' | 'symbol_copied';
+
+/** Count events of a given type whose symbolId is a member of the named set. */
+function countSetEvents(
+  events: EngineEvent[] | undefined,
+  type: SymbolEventType,
+  setId: string,
+): number {
+  if (!events || events.length === 0) return 0;
+  const set = SYMBOL_SETS_BY_ID[setId];
+  if (!set) return 0;
+  let count = 0;
+  for (const e of events) {
+    if (e.type === type && symbolInSet(e.symbolId, set)) count += 1;
+  }
+  return count;
+}
+
+/** Count cat cells that have an adjacent cat — mirrors setBonuses' adjacent-penalty. */
+function catAdjacentCells(result: SymbolType[]): number {
+  const set = SYMBOL_SETS_BY_ID['cat'];
+  if (!set) return 0;
+  const isMember = (sym: SymbolType) => symbolInSet(sym, set);
+  let adj = 0;
+  for (let i = 0; i < result.length; i++) {
+    if (!isMember(result[i])) continue;
+    const left = i > 0 && isMember(result[i - 1]);
+    const right = i + 1 < result.length && isMember(result[i + 1]);
+    if (left || right) adj += 1;
+  }
+  return adj;
+}
+
+/**
+ * Additive 첨탑 artifact bonuses (effects 2–7). PURE — used by BOTH scoreResult
+ * and scoreItems so they never disagree. Returns the running sum + labeled line
+ * items. The cherry-charm (effect 1) and the spin multiplier (effects 8–9) are
+ * handled elsewhere (computeHand opts / artifactSpinMultiplier).
+ */
+export function artifactBonus(
+  result: SymbolType[],
+  activeSlotRules: (Rule | null)[],
+  events: EngineEvent[] | undefined,
+  artifacts: string[],
+): { bonus: number; items: ScoreItem[] } {
+  const items: ScoreItem[] = [];
+
+  // 2. receipt (영수증): +300 when all 5 cells are in the fruit set.
+  if (artifacts.includes('receipt')) {
+    const fruit = SYMBOL_SETS_BY_ID['fruit'];
+    if (fruit && result.length === 5 && result.every((s) => symbolInSet(s, fruit))) {
+      items.push({ label: '영수증 +300', points: 300 });
+    }
+  }
+
+  // 3. vault (금고): +200 when all 3 gem types are present.
+  if (artifacts.includes('vault')) {
+    const gem = SYMBOL_SETS_BY_ID['gem'];
+    if (gem && gem.symbols.every((s) => result.includes(s.id as SymbolType))) {
+      items.push({ label: '금고 +200', points: 200 });
+    }
+  }
+
+  // 4. cat-tower (캣 타워): +60 × (cat cells with an adjacent cat) — exactly
+  // cancels the existing adjacent-penalty.
+  if (artifacts.includes('cat-tower')) {
+    const adj = catAdjacentCells(result);
+    if (adj > 0) items.push({ label: '캣 타워', points: 60 * adj });
+  }
+
+  // 5. blank-canvas (새하얀 도화지): +50 × (NULL entries in activeSlotRules).
+  if (artifacts.includes('blank-canvas')) {
+    const empty = activeSlotRules.filter((r) => r === null).length;
+    if (empty > 0) items.push({ label: `새하얀 도화지 (${empty}칸)`, points: 50 * empty });
+  }
+
+  // 6. spooky-cruise (으스스한 유람선): +40 × (vehicle symbol_copied events).
+  if (artifacts.includes('spooky-cruise')) {
+    const n = countSetEvents(events, 'symbol_copied', 'vehicle');
+    if (n > 0) items.push({ label: `유람선 복사 (${n})`, points: 40 * n });
+  }
+
+  // 7. monster-truck (괴물 자동차): +20 × (monster moved + rerolled events).
+  if (artifacts.includes('monster-truck')) {
+    const n =
+      countSetEvents(events, 'symbol_moved', 'monster') +
+      countSetEvents(events, 'symbol_rerolled', 'monster');
+    if (n > 0) items.push({ label: `괴물 자동차 (${n})`, points: 20 * n });
+  }
+
+  const bonus = items.reduce((a, it) => a + it.points, 0);
+  return { bonus, items };
+}
+
+/**
+ * 첨탑 artifact spin multiplier (effects 8–9). PURE. Applied to baseRoundScore
+ * AFTER the additive bonuses/penalty. crowbar and private-jet each contribute a
+ * ×2, stacking to ×4.
+ */
+export function artifactSpinMultiplier(
+  events: EngineEvent[] | undefined,
+  artifacts: string[],
+): number {
+  // 8. crowbar (빠루): ≥3 monster rerolls → ×2.
+  const crowbar =
+    artifacts.includes('crowbar') &&
+    countSetEvents(events, 'symbol_rerolled', 'monster') >= 3;
+  // 9. private-jet (전용기): ≥6 vehicle moves → ×2.
+  const privateJet =
+    artifacts.includes('private-jet') &&
+    countSetEvents(events, 'symbol_moved', 'vehicle') >= 6;
+  return (crowbar ? 2 : 1) * (privateJet ? 2 : 1);
+}
+
 export function scoreItems(
   result: SymbolType[],
   activeSlotRules: (Rule | null)[] = [],
@@ -289,6 +411,7 @@ export function scoreItems(
   scoreBoards?: ScoreBoardSnapshot[],
   haunted?: boolean[],
   handUpgrades?: HandUpgradeMap,
+  artifacts: string[] = [],
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -301,7 +424,9 @@ export function scoreItems(
     items.push({ label: dbl > 0 ? `7 ${sevens}개 (×${2 ** dbl})` : `7 ${sevens}개`, points: pts });
   }
 
-  const { hand, handScore: baseHand } = computeHand(result, haunted);
+  const { hand, handScore: baseHand } = computeHand(result, haunted, {
+    extraCherry: artifacts.includes('cherry-charm'),
+  });
   const handScore = upgradedHandScore(hand, baseHand, handUpgrades);
   if (handScore > 0) {
     const upgraded = handScore !== baseHand;
@@ -352,6 +477,18 @@ export function scoreItems(
     items.push({ label: `유료 주차 (${parkHolds}칸)`, points: -(parkHolds * PARKING_FEE_PER) });
   }
 
+  // 첨탑 additive artifact bonuses (effects 2–7).
+  items.push(...artifactBonus(result, activeSlotRules, events, artifacts).items);
+
+  // 첨탑 spin multiplier (effects 8–9): applied to the whole spin AFTER the
+  // additive bonuses/penalty. Push a single item carrying the added delta so the
+  // items keep summing to scoreResult.baseRoundScore.
+  const mult = artifactSpinMultiplier(events, artifacts);
+  if (mult > 1) {
+    const preMult = items.reduce((a, it) => a + it.points, 0);
+    items.push({ label: `아티팩트 배수 ×${mult}`, points: preMult * (mult - 1) });
+  }
+
   return items;
 }
 
@@ -362,6 +499,7 @@ export function scoreResult(
   scoreBoards?: ScoreBoardSnapshot[],
   haunted?: boolean[],
   handUpgrades?: HandUpgradeMap,
+  artifacts: string[] = [],
 ): {
   hand: string;
   handScore: number;
@@ -373,7 +511,9 @@ export function scoreResult(
   // copy-above duplicates the rule above (including score rules), so expand and
   // COUNT occurrences — each application of a score rule stacks.
   const expanded = expandRules(activeSlotRules);
-  const { hand, handScore: baseHand } = computeHand(result, haunted);
+  const { hand, handScore: baseHand } = computeHand(result, haunted, {
+    extraCherry: artifacts.includes('cherry-charm'),
+  });
   const handScore = upgradedHandScore(hand, baseHand, handUpgrades);
 
   // seven-double: each application doubles the seven portion (×2 per occurrence).
@@ -408,7 +548,13 @@ export function scoreResult(
   // final board), mirroring the four-penalty handling.
   penalty += parkingHolds(events) * PARKING_FEE_PER;
 
-  const baseRoundScore = sevenPts + handScore + bonusScore - penalty;
+  // 첨탑 additive artifact bonuses (effects 2–7) fold into bonusScore.
+  bonusScore += artifactBonus(result, activeSlotRules, events, artifacts).bonus;
+
+  // 첨탑 spin multiplier (effects 8–9) applies to the whole spin AFTER the
+  // additive bonuses/penalty (crowbar/private-jet stack to ×4).
+  const mult = artifactSpinMultiplier(events, artifacts);
+  const baseRoundScore = (sevenPts + handScore + bonusScore - penalty) * mult;
 
   return {
     hand,

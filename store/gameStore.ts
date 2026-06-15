@@ -224,8 +224,9 @@ function buildInitializer(initialRng: Rng): Initializer {
       // exactly like `boards`: frame field -> finalize -> scoreResult/scoreItems.
       const haunted = frame.haunted ?? [];
       const ups = runConfig?.handUpgrades;
-      const score = scoreResult(finalResult, ruleSlots, events, boards, haunted, ups);
-      const items = scoreItems(finalResult, ruleSlots, events, boards, haunted, ups);
+      const arts = runConfig?.artifacts ?? [];
+      const score = scoreResult(finalResult, ruleSlots, events, boards, haunted, ups, arts);
+      const items = scoreItems(finalResult, ruleSlots, events, boards, haunted, ups, arts);
       const specials = detectSpecials(finalResult, runConfig?.numberSpecials);
       const multiplier = state.nextMultiplier;
       const roundScore = score.baseRoundScore * multiplier;
