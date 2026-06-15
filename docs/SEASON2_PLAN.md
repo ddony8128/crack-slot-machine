@@ -9,11 +9,11 @@ Each WU: independently testable + committed (test + lint per unit).
 
 | WU | Title | Scope | Risk | Status |
 |----|-------|-------|------|--------|
-| R1 | Rule trigger-timing (발동 시점) | add `phase` to Rule ('pre-spin'/'sequential'/'scoring'/'next-spin') + classify all 31 rules + timing badge in RuleCard/ReferenceModal; fix FOUR FORTUNE wording (감점 대신 +20). Data+UI, additive. | low | ☐ |
-| H1 | Season hub status cards | each mode card shows live status (daily N/M attempts + refill, puzzle cleared count, spire best stage/score). Server reads. | low | ☐ |
+| R1 | Rule trigger-timing (발동 시점) | add `phase` to Rule ('pre-spin'/'sequential'/'scoring'/'next-spin') + classify all 31 rules + timing badge in RuleCard/ReferenceModal; fix FOUR FORTUNE wording (감점 대신 +20). Data+UI, additive. | low | ✅ `d62a11f` |
+| H1 | Season hub status cards | each mode card shows live status (daily N/M attempts + refill, puzzle cleared count, spire best stage/score). Server reads. | low | ✅ `1c65cd5` |
+| O1 | Guest identity | backend-issued guest UUID + display name (게스트-####), localStorage; /quick uses it. | med | ✅ `5f12853`,`6a450e1` |
+| O2 | Guest fast-game ranking | record quick runs (guest or member) → a fast-game leaderboard, version+season-scoped, NOT in season points; result-screen 회원가입 CTA. | med | ✅ `5f12853`,`6a450e1` |
 | R2 | 유지(hold) vs 봉인(lock) | introduce a `hold` (first-roll-only, overwritable by later rules) distinct from the current immutable `lock`; reword rules; cascade支持. | med | ☐ |
-| O1 | Guest identity | backend-issued guest UUID + display name (게스트-####), localStorage; /quick uses it. | med | ☐ |
-| O2 | Guest fast-game ranking | record quick runs (guest or member) → a fast-game leaderboard, version+season-scoped, NOT in season points; result-screen 회원가입 CTA. | med | ☐ |
 | O3 | Guest→account merge | on signup, optionally attach guest's quick records to the account. | low | ☐ |
 | E1 | Cell-status board model | board cells carry statuses (e.g. `haunted`); engine/score/reveal aware. DEEP — prerequisite for monster set. | high | ☐ |
 | E2 | Symbol tags / hybrids | symbol tag system + hybrid symbols (zombie_cat…) as registered symbols + render. | high | ☐ |
