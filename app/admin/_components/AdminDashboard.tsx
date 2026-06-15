@@ -239,13 +239,21 @@ export default function AdminDashboard() {
           </h1>
           <p className="mt-1 text-sm text-zinc-400">관리자 콘솔</p>
         </div>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
-        >
-          로그아웃
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/admin/runs"
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            런 로그
+          </Link>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            로그아웃
+          </button>
+        </div>
       </header>
 
       {/* Create event form */}

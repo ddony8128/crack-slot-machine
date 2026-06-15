@@ -306,6 +306,23 @@ export class SupabaseDb implements Db {
     return data ? toRun(data) : null;
   }
 
+  async listRecentRuns(input: {
+    mode?: RunMode;
+    seasonId?: string;
+    status?: RunStatus;
+    limit?: number;
+  }): Promise<RunRow[]> {
+    let query = this.sb.from('game_runs').select('*');
+    if (input.mode !== undefined) query = query.eq('mode', input.mode);
+    if (input.seasonId !== undefined) query = query.eq('season_id', input.seasonId);
+    if (input.status !== undefined) query = query.eq('status', input.status);
+    const { data, error } = await query
+      .order('submitted_at', { ascending: false })
+      .limit(input.limit ?? 50);
+    if (error) throw error;
+    return (data ?? []).map(toRun);
+  }
+
   async listLeaderboard(input: {
     slug: string;
     page: number;

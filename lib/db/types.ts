@@ -203,6 +203,18 @@ export interface Db {
   finalizeRun(runId: string, input: FinalizeRunInput): Promise<RunRow | null>;
 
   /**
+   * Recent runs for admin balance tuning, newest first (submittedAt DESC, with
+   * createdAt as the fallback when submittedAt is null). Each provided field
+   * narrows the result; omitted fields are not filtered. Capped at `limit ?? 50`.
+   */
+  listRecentRuns(input: {
+    mode?: RunMode;
+    seasonId?: string;
+    status?: RunStatus;
+    limit?: number;
+  }): Promise<RunRow[]>;
+
+  /**
    * Leaderboard for `slug`, or the combined all-events board when slug==='total'.
    * Only status='submitted', verified=true, and matching versions are included.
    */

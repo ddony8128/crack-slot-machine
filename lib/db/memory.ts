@@ -14,6 +14,7 @@ import type {
   PuzzleRecordRow,
   SpireRecordRow,
   RunMode,
+  RunStatus,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
 
@@ -190,6 +191,27 @@ export class MemoryDb implements Db {
     row.clearedStageCount = input.clearedStageCount ?? null;
     row.seasonPoints = input.seasonPoints ?? null;
     return row;
+  }
+
+  async listRecentRuns(input: {
+    mode?: RunMode;
+    seasonId?: string;
+    status?: RunStatus;
+    limit?: number;
+  }): Promise<RunRow[]> {
+    const rows = this.runs.filter(
+      (r) =>
+        (input.mode === undefined || r.mode === input.mode) &&
+        (input.seasonId === undefined || r.seasonId === input.seasonId) &&
+        (input.status === undefined || r.status === input.status),
+    );
+    // Newest first by submittedAt, with createdAt as the fallback when null.
+    rows.sort((a, b) => {
+      const ak = a.submittedAt ?? a.createdAt;
+      const bk = b.submittedAt ?? b.createdAt;
+      return ak < bk ? 1 : ak > bk ? -1 : 0;
+    });
+    return rows.slice(0, input.limit ?? 50);
   }
 
   async listLeaderboard(input: {
