@@ -41,10 +41,10 @@ Shop offers seeded from `${runSeed}:shop:${shopVisitIndex}:${rerollCount}`.
 | SP-B | SpireRunState + pure reducers | state type + deterministic reducers: initSetChoice, buySymbolIncrement, buySymbolSet, buyRule(cap10+removal), buyHandFlat, buyHandDouble, rerollShop, settleClear, settleFail; `assertBag20`/`pickSetRules`/`addRulesToPool`. 50 tests. | ✅ `5c1696c` |
 | SP-C | Hand-upgrade scoring | `(base+50×flat)×2^double` applied to hand score in score.ts, gated by a passed-in `handUpgrades`. | ✅ `5f7fc36` |
 | SP-D | Stage-attempt run config | `stageAttemptSeed`, per-stage RC config from current bag/pool, immediate-clear (stop at target ≤7 spins). | ✅ `7083180` |
-| SP-E | Run controller / store | drive stages × attempts × shop; record `SpireAction[]`; resume-safe. **(next — integration keystone)** | ☐ |
-| SP-F | Server replay/verify | replay actions + per-stage runs; recompute money/state/cost; reject mismatch. | ☐ |
-| SP-G | DB persistence | SpireRunState snapshot + final record (reach stage, totalScore, money, artifacts). | ☐ |
-| SP-H | Shop UI + seeded shop-offer generator | sections (artifact/symbol/set/rule/hand/reroll) + replace-symbol confirm. | ☐ |
+| SP-E | Run replayer + hand-upgrade threading | `SpireAction[]` + `replaySpireRun` (threads state across stages, replays each via existing replayRun); `RunConfig.handUpgrades`→finalize→scoring. Live React controller + recording lands with SP-H. | ✅ `48588a3` |
+| SP-F | Authoritative verification | `verifySpireRun` — replay + claim-match + offered-set anti-tamper. Thin HTTP route + DB persistence land with SP-H (needs the live action stream). | ✅ `ea94332` |
+| SP-G | DB persistence | SpireRunState snapshot + final record (reach stage, totalScore, money, artifacts); widen finalize `actions` to carry `SpireAction[]`. | ☐ |
+| SP-H | Controller + Shop UI + seeded offer generator + submit route wiring | React controller drives stages×attempts×shop and records `SpireAction[]`; shop sections (artifact/symbol/set/rule/hand/reroll) + replace-symbol confirm; seeded shop-offer generator; wire `/api/spire/submit` to `verifySpireRun`. | ☐ |
 | SP-I | First-set selection UI | already partial (choosing phase) — adapt to new state. | ☐ |
 | SP-J | Artifacts | 3/6/9 selection + effects (v0 temp). | ☐ |
 | SP-K | Resume | extend spireResume to the new SpireAction stream. | ☐ |
