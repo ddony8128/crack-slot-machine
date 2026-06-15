@@ -1,7 +1,12 @@
 export type SymbolType =
   | 'cherry' | 'lemon' | 'grape'      // fruits
   | 'diamond' | 'ruby' | 'sapphire'   // gems
-  | 'seven' | 'zero' | 'four';
+  | 'seven' | 'zero' | 'four'         // numbers
+  // Season 1 sets (ADDITIVE). Default weight 0 in BASE_WEIGHTS so legacy/quick/
+  // event play never rolls them; they only appear when a mode's bag includes them.
+  | 'cheese_cat' | 'tuxedo_cat' | 'calico_cat'   // cats
+  | 'plane' | 'ship' | 'car'                       // vehicles
+  | 'dracula' | 'zombie' | 'ghost';                // monsters
 
 export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta' | 'select';
 

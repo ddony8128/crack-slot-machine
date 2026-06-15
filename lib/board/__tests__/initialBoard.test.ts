@@ -37,6 +37,10 @@ describe('initialBoardFor', () => {
     const onlySeven: Record<SymbolType, number> = {
       cherry: 0, lemon: 0, grape: 0, diamond: 0, ruby: 0, sapphire: 0,
       seven: 1, zero: 0, four: 0,
+      // Season 1 set symbols (weight 0, never rolled) — keep Record shape valid.
+      cheese_cat: 0, tuxedo_cat: 0, calico_cat: 0,
+      plane: 0, ship: 0, car: 0,
+      dracula: 0, zombie: 0, ghost: 0,
     };
     expect(initialBoardFor('x', onlySeven)).toEqual([
       'seven', 'seven', 'seven', 'seven', 'seven',

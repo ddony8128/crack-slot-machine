@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { SymbolType } from "@/types";
+import { SYMBOL_EMOJI } from "@/data/symbols";
 
 const NUMBER_SYMBOLS = new Set<SymbolType>(["seven", "zero", "four"]);
 
@@ -43,9 +44,11 @@ const SIZE_IMG: Record<Size, number> = {
 };
 
 /**
- * Renders a single slot symbol. Pictorial symbols render as crisp bundled
- * Twemoji SVGs; number symbols (7/0/4) render as styled monospace badges so
- * they read as intentional slot faces.
+ * Renders a single slot symbol. Pictorial symbols with a bundled SVG render as
+ * crisp Twemoji SVGs; number symbols (7/0/4) render as styled monospace badges
+ * so they read as intentional slot faces. Symbols without a bundled SVG (e.g.
+ * the Season 1 cat/vehicle/monster sets) render their emoji from SYMBOL_EMOJI
+ * inside the same styled pictorial box, so nothing ever renders blank.
  *
  * Optional `className` lets callers attach motion classes (e.g. reel-land,
  * reel-flash, reel-rolling) without changing the visual base.
@@ -73,7 +76,9 @@ export default function SymbolView({
       } ${className}`}
     >
       {isNumber || !svg ? (
-        NUMBER_GLYPH[symbol] ?? symbol
+        // Number badges use their glyph; emoji-only symbols (no bundled SVG)
+        // fall back to SYMBOL_EMOJI so they never render the raw id string.
+        NUMBER_GLYPH[symbol] ?? SYMBOL_EMOJI[symbol] ?? symbol
       ) : (
         <Image
           src={svg}
