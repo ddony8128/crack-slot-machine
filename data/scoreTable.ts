@@ -41,6 +41,9 @@ export const FOUR_FORTUNE_PER = 20;
 // symbol_rerolled event log, so it reflects fruits AT the rule's moment).
 export const VITAMIN_PER = 5;
 
+// 첨탑 hand upgrade: +this per flat upgrade. Final hand = (base + this×flat) × 2^double.
+export const HAND_FLAT_UPGRADE = 50;
+
 // Score-rule bonuses.
 export const BONUS_77 = 77;
 export const CLEAN_BONUS = 120;

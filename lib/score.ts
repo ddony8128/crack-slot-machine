@@ -17,9 +17,21 @@ import {
   PARKING_FEE_PER,
   DRACULA_FAMILY_PER,
   VITAMIN_PER,
+  HAND_FLAT_UPGRADE,
   BONUS_77,
   CLEAN_BONUS,
 } from '@/data/scoreTable';
+
+/** 첨탑 per-hand upgrades, keyed by computeHand's hand name. */
+export type HandUpgradeMap = Record<string, { flatBonusCount: number; doubleCount: number }>;
+
+/** Apply a hand upgrade: (base + 50×flat) × 2^double. No-op when absent/unscored. */
+export function upgradedHandScore(hand: string, base: number, ups?: HandUpgradeMap): number {
+  if (!ups || base <= 0) return base;
+  const u = ups[hand];
+  if (!u) return base;
+  return (base + HAND_FLAT_UPGRADE * (u.flatBonusCount ?? 0)) * 2 ** (u.doubleCount ?? 0);
+}
 
 /** +VITAMIN_PER per fruit rerolled by 비타민 보충 (counted from the event log, so
  *  it reflects fruits at the rule's moment, not the final board). */
@@ -276,6 +288,7 @@ export function scoreItems(
   events?: EngineEvent[],
   scoreBoards?: ScoreBoardSnapshot[],
   haunted?: boolean[],
+  handUpgrades?: HandUpgradeMap,
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -288,8 +301,15 @@ export function scoreItems(
     items.push({ label: dbl > 0 ? `7 ${sevens}개 (×${2 ** dbl})` : `7 ${sevens}개`, points: pts });
   }
 
-  const { hand, handScore } = computeHand(result, haunted);
-  if (handScore > 0) items.push({ label: `족보: ${HAND_KO[hand] ?? hand}`, points: handScore });
+  const { hand, handScore: baseHand } = computeHand(result, haunted);
+  const handScore = upgradedHandScore(hand, baseHand, handUpgrades);
+  if (handScore > 0) {
+    const upgraded = handScore !== baseHand;
+    items.push({
+      label: `족보: ${HAND_KO[hand] ?? hand}${upgraded ? ' (강화)' : ''}`,
+      points: handScore,
+    });
+  }
 
   items.push(...setBonuses(result, events).items);
 
@@ -341,6 +361,7 @@ export function scoreResult(
   events?: EngineEvent[],
   scoreBoards?: ScoreBoardSnapshot[],
   haunted?: boolean[],
+  handUpgrades?: HandUpgradeMap,
 ): {
   hand: string;
   handScore: number;
@@ -352,7 +373,8 @@ export function scoreResult(
   // copy-above duplicates the rule above (including score rules), so expand and
   // COUNT occurrences — each application of a score rule stacks.
   const expanded = expandRules(activeSlotRules);
-  const { hand, handScore } = computeHand(result, haunted);
+  const { hand, handScore: baseHand } = computeHand(result, haunted);
+  const handScore = upgradedHandScore(hand, baseHand, handUpgrades);
 
   // seven-double: each application doubles the seven portion (×2 per occurrence).
   let sevenPts = SEVEN_SCORE[countSevens(result)] ?? 0;

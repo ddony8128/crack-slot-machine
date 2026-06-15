@@ -59,7 +59,8 @@ export const SPIRE_ARTIFACT_PRICES = [6, 5, 4] as const; // slots 1..3
 export const SPIRE_SET_PRICE = 3;
 export const SPIRE_RULE_PRICE = 1;
 export const SPIRE_HAND_FLAT_PRICE = 1;
-export const SPIRE_HAND_FLAT_BONUS = 50;  // +this per flat upgrade
+// +this per flat upgrade — single source in scoreTable (used by score.ts too).
+export { HAND_FLAT_UPGRADE as SPIRE_HAND_FLAT_BONUS } from '@/data/scoreTable';
 export const SPIRE_HAND_DOUBLE_PRICE = 3; // ×2 per double upgrade
 export const SPIRE_REROLL_PRICE = 1;
 
