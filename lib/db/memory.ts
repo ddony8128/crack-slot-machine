@@ -256,6 +256,8 @@ export class MemoryDb implements Db {
       passwordHash: input.passwordHash,
       createdAt: new Date().toISOString(),
       deletedAt: null,
+      supporterBadge: false,
+      supporterBadgeGrantedAt: null,
     };
     this.players.push(row);
     return row;
@@ -272,6 +274,21 @@ export class MemoryDb implements Db {
         (p) => p.deletedAt === null && p.nickname.toLowerCase() === lower,
       ) ?? null
     );
+  }
+
+  async grantSupporterBadge(
+    playerId: string,
+    granted: boolean,
+  ): Promise<PlayerRow | null> {
+    const row = this.players.find((p) => p.id === playerId);
+    if (!row) return null;
+    row.supporterBadge = granted;
+    // MemoryDb has no clock for deterministic tests; use a fixed sentinel when
+    // granted so the column is non-null, and clear it when revoked.
+    row.supporterBadgeGrantedAt = granted
+      ? (row.supporterBadgeGrantedAt ?? new Date(0).toISOString())
+      : null;
+    return row;
   }
 
   // ── Season 1: seasons ──────────────────────────────────────────────────────

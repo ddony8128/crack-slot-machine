@@ -155,6 +155,38 @@ describe('MemoryDb players', () => {
     expect(await db.getPlayerById('missing')).toBeNull();
   });
 
+  it('createPlayer defaults supporterBadge to false', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Sup',
+      contactType: 'email',
+      contactValue: 's@e.com',
+      passwordHash: 'h',
+    });
+    expect(p.supporterBadge).toBe(false);
+    expect(p.supporterBadgeGrantedAt).toBeNull();
+  });
+
+  it('grantSupporterBadge grants then revokes the badge', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Donor',
+      contactType: 'email',
+      contactValue: 'd@e.com',
+      passwordHash: 'h',
+    });
+
+    const granted = await db.grantSupporterBadge(p.id, true);
+    expect(granted?.supporterBadge).toBe(true);
+    expect((await db.getPlayerById(p.id))?.supporterBadge).toBe(true);
+
+    const revoked = await db.grantSupporterBadge(p.id, false);
+    expect(revoked?.supporterBadge).toBe(false);
+    expect((await db.getPlayerById(p.id))?.supporterBadge).toBe(false);
+
+    expect(await db.grantSupporterBadge('missing', true)).toBeNull();
+  });
+
   it('getPlayerByNickname is case-insensitive and excludes soft-deleted', async () => {
     const db = new MemoryDb();
     const p = await db.createPlayer({

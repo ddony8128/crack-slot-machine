@@ -2,13 +2,27 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentPlayer } from "@/lib/server/playerAuth";
-import { PUZZLES } from "@/lib/puzzle/config";
+import { getDb } from "@/lib/db";
+import { PUZZLES, PUZZLES_BY_KEY } from "@/lib/puzzle/config";
+import PuzzleListDonationPrompt from "@/components/PuzzleListDonationPrompt";
 
 export const metadata: Metadata = { title: "RULE SLOT | 퍼즐" };
 export const dynamic = "force-dynamic";
 
 export default async function PuzzleListPage() {
-  if (!(await currentPlayer())) redirect("/login");
+  const player = await currentPlayer();
+  if (!player) redirect("/login");
+
+  // Cleared-puzzle count for this player (drives the all-cleared 후원 prompt).
+  const db = getDb();
+  const season = await db.getActiveSeason();
+  const records = season
+    ? await db.listPlayerPuzzleRecords(player.id, season.id)
+    : [];
+  const clearedCount = records.filter((record) => {
+    const def = PUZZLES_BY_KEY[record.puzzleKey];
+    return def != null && record.bestGoalsAchieved === def.goals.length;
+  }).length;
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8">
@@ -51,6 +65,12 @@ export default async function PuzzleListPage() {
           </li>
         ))}
       </ul>
+
+      <PuzzleListDonationPrompt
+        clearedCount={clearedCount}
+        total={PUZZLES.length}
+        isSupporter={player.supporterBadge}
+      />
     </main>
   );
 }

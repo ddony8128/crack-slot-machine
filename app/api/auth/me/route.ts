@@ -11,6 +11,7 @@ export async function GET() {
       id: player.id,
       nickname: player.nickname,
       contactType: player.contactType,
+      supporterBadge: player.supporterBadge,
     },
   });
 }

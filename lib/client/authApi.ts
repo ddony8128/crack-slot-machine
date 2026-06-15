@@ -16,6 +16,8 @@ export type MePlayer = {
   id: string;
   nickname: string;
   contactType: 'email' | 'phone';
+  /** True when the player carries the 후원자(supporter) badge. */
+  supporterBadge: boolean;
 };
 
 export type SignupInput = {

@@ -11,6 +11,7 @@ import {
   createAdminEvent,
   fetchAdminEvents,
   setAdminEventActive,
+  setSupporterBadge,
   updateAdminEvent,
 } from "@/lib/client/adminApi";
 
@@ -55,6 +56,12 @@ export default function AdminDashboard() {
   const [editDesc, setEditDesc] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // 후원자 칭호 grant/revoke state.
+  const [supporterNickname, setSupporterNickname] = useState("");
+  const [supporterPending, setSupporterPending] = useState(false);
+  const [supporterError, setSupporterError] = useState<string | null>(null);
+  const [supporterResult, setSupporterResult] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -186,6 +193,42 @@ export default function AdminDashboard() {
     router.refresh();
   }
 
+  async function onSupporter(granted: boolean) {
+    if (supporterPending) return;
+    const nickname = supporterNickname.trim();
+    if (nickname.length === 0) {
+      setSupporterError("닉네임을 입력해 주세요.");
+      setSupporterResult(null);
+      return;
+    }
+    setSupporterPending(true);
+    setSupporterError(null);
+    setSupporterResult(null);
+    try {
+      const player = await setSupporterBadge(nickname, granted);
+      setSupporterResult(
+        player.supporterBadge
+          ? `'${player.nickname}'님에게 후원자 칭호를 부여했습니다.`
+          : `'${player.nickname}'님의 후원자 칭호를 해제했습니다.`,
+      );
+    } catch (err) {
+      const code = err instanceof AdminApiError ? err.code : "unknown";
+      if (code === "unauthorized") {
+        router.refresh();
+        return;
+      }
+      setSupporterError(
+        code === "player_not_found"
+          ? "해당 닉네임의 플레이어를 찾을 수 없습니다."
+          : code === "nickname_required"
+            ? "닉네임을 입력해 주세요."
+            : "처리에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      );
+    } finally {
+      setSupporterPending(false);
+    }
+  }
+
   return (
     <main className="fade-rise mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
       <header className="flex items-center justify-between gap-4">
@@ -246,6 +289,48 @@ export default function AdminDashboard() {
             {creating ? "생성 중…" : "이벤트 생성"}
           </button>
         </form>
+      </section>
+
+      {/* 후원자 칭호 */}
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
+        <h2 className="text-lg font-bold text-zinc-100">후원자 칭호</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          만원 이상 후원해주신 분의 닉네임에 후원자 칭호를 부여하거나 해제합니다.
+        </p>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <input
+            type="text"
+            value={supporterNickname}
+            onChange={(e) => setSupporterNickname(e.target.value)}
+            placeholder="닉네임"
+            maxLength={120}
+            className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 sm:flex-1"
+          />
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSupporter(true)}
+              disabled={supporterPending}
+              className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+            >
+              {supporterPending ? "처리 중…" : "부여"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onSupporter(false)}
+              disabled={supporterPending}
+              className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-5 py-2.5 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              해제
+            </button>
+          </div>
+        </div>
+        {supporterError && (
+          <p className="mt-3 text-sm text-rose-400">{supporterError}</p>
+        )}
+        {supporterResult && (
+          <p className="mt-3 text-sm text-emerald-300">{supporterResult}</p>
+        )}
       </section>
 
       {/* Events list */}

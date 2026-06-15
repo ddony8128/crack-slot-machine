@@ -41,13 +41,18 @@ async function renderRanking(
 ) {
   const rows = await db.listSeasonBestScores(seasonId);
 
-  // Resolve nicknames: dedupe playerIds, fetch each once.
+  // Resolve nicknames: dedupe playerIds, fetch each once. Also capture which
+  // players carry the 후원자(supporter) badge so we can chip it in the table.
   const ids = [...new Set(rows.map((r) => r.playerId))];
   const players = await Promise.all(ids.map((id) => db.getPlayerById(id)));
   const nicknames = new Map<string, string>();
+  const supporters = new Set<string>();
   ids.forEach((id, i) => {
     const p = players[i];
-    if (p) nicknames.set(id, p.nickname);
+    if (p) {
+      nicknames.set(id, p.nickname);
+      if (p.supporterBadge) supporters.add(id);
+    }
   });
 
   const ranking = buildSeasonRanking(rows, (id) => nicknames.get(id) ?? "알수없음");
@@ -82,8 +87,15 @@ async function renderRanking(
               <td className="px-4 py-3 font-mono font-bold text-amber-300">
                 {item.rank}
               </td>
-              <td className="max-w-[12rem] truncate px-4 py-3 font-semibold text-zinc-100">
-                {item.nickname}
+              <td className="max-w-[12rem] px-4 py-3 font-semibold text-zinc-100">
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate">{item.nickname}</span>
+                  {supporters.has(item.playerId) && (
+                    <span className="shrink-0 rounded-full border border-amber-400/50 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                      후원자
+                    </span>
+                  )}
+                </span>
               </td>
               <td className="px-4 py-3 text-right font-mono font-bold text-emerald-300">
                 {item.seasonPoints}

@@ -37,6 +37,8 @@ import { replaySpireRun, type SpireAction } from "@/lib/spire/replay";
 import GameScreen from "@/components/GameScreen";
 import SpireShop from "@/components/SpireShop";
 import SpireResultScreen from "@/components/SpireResultScreen";
+import DonationModal from "@/components/DonationModal";
+import { useDonationPrompt } from "@/components/useDonationPrompt";
 import ModeIntro from "@/components/ModeIntro";
 import type { SymbolType } from "@/types";
 import type { SeasonScoreChange } from "@/lib/season/scoring";
@@ -363,6 +365,26 @@ export default function SpireClient() {
     ? spireShopOffers(runState, shopVisitIndex, rerollCount)
     : null;
 
+  // 후원 안내 (spec §9): on the result screen the SeasonScoreRise animation
+  // shows FIRST; only open the donation modal a short delay after the result
+  // mounts so it never fights the count-up.
+  const [donationReady, setDonationReady] = useState(false);
+  useEffect(() => {
+    if (phase !== "result") {
+      // Reset when leaving the result screen (e.g. retry). Synchronous reset is
+      // intentional here; the rule can't tell it's a teardown branch.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDonationReady(false);
+      return;
+    }
+    const t = setTimeout(() => setDonationReady(true), 1200);
+    return () => clearTimeout(t);
+  }, [phase]);
+  const donation = useDonationPrompt({
+    when: donationReady,
+    storageKey: "spire-finished",
+  });
+
   // ── render ──────────────────────────────────────────────────────────────────
 
   if (phase === "loading") {
@@ -471,18 +493,21 @@ export default function SpireClient() {
 
   if (phase === "result" && runState) {
     return (
-      <SpireResultScreen
-        stagesCleared={runState.currentStage - 1}
-        totalScore={runState.totalRunScore}
-        money={runState.money}
-        artifacts={runState.artifacts}
-        endReason={runState.currentStage > SPIRE_STAGE_COUNT ? "completed" : "failed-out"}
-        seasonPoints={seasonPoints}
-        scoreChange={scoreChange ?? undefined}
-        submitState={submitState}
-        rejectReason={rejectReason}
-        onRetry={startNewGame}
-      />
+      <>
+        <SpireResultScreen
+          stagesCleared={runState.currentStage - 1}
+          totalScore={runState.totalRunScore}
+          money={runState.money}
+          artifacts={runState.artifacts}
+          endReason={runState.currentStage > SPIRE_STAGE_COUNT ? "completed" : "failed-out"}
+          seasonPoints={seasonPoints}
+          scoreChange={scoreChange ?? undefined}
+          submitState={submitState}
+          rejectReason={rejectReason}
+          onRetry={startNewGame}
+        />
+        <DonationModal open={donation.open} onClose={donation.close} />
+      </>
     );
   }
 

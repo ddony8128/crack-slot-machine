@@ -68,6 +68,23 @@ export async function updateAdminEvent(
   return body.event;
 }
 
+/** POST /api/admin/supporter — grant/revoke the 후원자 badge for a nickname. */
+export async function setSupporterBadge(
+  nickname: string,
+  granted: boolean,
+): Promise<{ nickname: string; supporterBadge: boolean }> {
+  const res = await fetch('/api/admin/supporter', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname, granted }),
+  });
+  if (!res.ok) throw new AdminApiError(await errorCode(res));
+  const body = (await res.json()) as {
+    player: { nickname: string; supporterBadge: boolean };
+  };
+  return body.player;
+}
+
 /** POST /api/admin/events/[slug]/active — toggle active state. */
 export async function setAdminEventActive(
   slug: string,

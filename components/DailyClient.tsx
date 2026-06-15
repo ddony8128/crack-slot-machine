@@ -14,6 +14,8 @@ import { dailyRunConfigFromParts } from "@/lib/daily/run";
 import GameScreen from "@/components/GameScreen";
 import DailyResultScreen from "@/components/DailyResultScreen";
 import DummyAdModal from "@/components/DummyAdModal";
+import DonationModal from "@/components/DonationModal";
+import { useDonationPrompt } from "@/components/useDonationPrompt";
 import ModeIntro from "@/components/ModeIntro";
 import DailySetupPreview from "@/components/DailySetupPreview";
 
@@ -105,9 +107,27 @@ export default function DailyClient() {
     }
   }
 
+  // 후원 안내: prompt once when the player has truly run out of daily attempts
+  // (no official attempts left AND the one-time ad refill is unavailable).
+  const fullyExhausted =
+    !!current &&
+    current.loggedIn &&
+    current.attemptsLeft <= 0 &&
+    current.canRefill !== true;
+  const donation = useDonationPrompt({
+    when: fullyExhausted,
+    storageKey: "daily-exhausted",
+  });
+
   if (status === "finished") return <DailyResultScreen />;
 
-  if (status !== "start") return <GameScreen />;
+  if (status !== "start")
+    return (
+      <>
+        <GameScreen />
+        <DonationModal open={donation.open} onClose={donation.close} />
+      </>
+    );
 
   const attemptsLeft =
     current && current.loggedIn ? current.attemptsLeft : null;
@@ -224,6 +244,8 @@ export default function DailyClient() {
         }}
         pending={refilling}
       />
+
+      <DonationModal open={donation.open} onClose={donation.close} />
     </main>
   );
 }

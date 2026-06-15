@@ -24,10 +24,13 @@ Point-granting endpoints return `SeasonScoreChange { previousSeasonScore, newSea
 ## Work units
 | WU | Title | Scope | Status |
 |----|-------|-------|--------|
-| SR-B | New pure formulas | puzzleScore / dailyRankReward+DAILY_FIRST_PLAY / spireSeasonScore / SUPPORTER_MIN_AMOUNT + cutoffs. Additive (old fns stay until SR-D swap). | ☐ |
-| SR-C | Store the new data | puzzle submit → store spinsUsed/spinLimit; spire submit → store money + totalUnusedSpins (verifySpireRun returns them). | ☐ |
-| SR-D | Swap buildSeasonRanking | use new formulas; daily = +20/day + settled-rank reward (lazy via `now`); remove per-mode caps per spec. | ☐ |
-| SR-E | Score-rise API + animation | endpoints return SeasonScoreChange (recompute player total/rank before+after); slot count-up UI on result screens. | ☐ |
-| SR-F | Donation + supporter badge | players.supporter_badge + admin grant UI; donation info + popup (daily-exhausted / spire-end / all-puzzles-cleared, localStorage dedup, hidden for supporters); ranking shows 후원자. | ☐ |
+| SR-B | New pure formulas | puzzleScore / dailyRankReward+DAILY_FIRST_PLAY / spireSeasonScore / SUPPORTER_MIN_AMOUNT + cutoffs. | ✅ `928c900` |
+| SR-C | Store the new data | spire submit → money + unusedSpins via verifySpireRun; puzzle submit → leftover; both stored as best_scores.score/seasonPoints. | ✅ `fc09f02` |
+| SR-D | Swap buildSeasonRanking | new formulas; daily = +20/day + settled-rank reward (lazy via `now`); caps removed. | ✅ `fc09f02` |
+| SR-E | Score-rise API + animation | submit endpoints return SeasonScoreChange (before/after snapshot); SeasonScoreRise count-up on result screens. | ✅ `7b80b6c` |
+| SR-F | Donation + supporter badge | players.supporter_badge (migration 0005) + admin grant route/UI; DonationModal + useDonationPrompt (daily-exhausted / spire-end / all-puzzles-cleared, localStorage dedup, hidden for supporters); leaderboard 후원자 chip. | ✅ this commit |
 
 Process per WU: subagent (supervised) → vitest + eslint → tsc → commit+push.
+
+### Status: COMPLETE
+All units shipped (494 tests, tsc 0, build OK). Deploy note: apply `supabase/migrations/0005_supporter_badge.sql` to prod for the badge column.

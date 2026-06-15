@@ -75,6 +75,8 @@ function toPlayer(row: any): PlayerRow {
     passwordHash: row.password_hash,
     createdAt: row.created_at,
     deletedAt: row.deleted_at ?? null,
+    supporterBadge: row.supporter_badge ?? false,
+    supporterBadgeGrantedAt: row.supporter_badge_granted_at ?? null,
   };
 }
 
@@ -383,6 +385,23 @@ export class SupabaseDb implements Db {
       .select('*')
       .is('deleted_at', null)
       .ilike('nickname', nickname)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toPlayer(data) : null;
+  }
+
+  async grantSupporterBadge(
+    playerId: string,
+    granted: boolean,
+  ): Promise<PlayerRow | null> {
+    const { data, error } = await this.sb
+      .from('players')
+      .update({
+        supporter_badge: granted,
+        supporter_badge_granted_at: granted ? new Date().toISOString() : null,
+      })
+      .eq('id', playerId)
+      .select('*')
       .maybeSingle();
     if (error) throw error;
     return data ? toPlayer(data) : null;
