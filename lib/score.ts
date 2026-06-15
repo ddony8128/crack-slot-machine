@@ -15,9 +15,19 @@ import {
   FOUR_PENALTY_PER,
   FOUR_FORTUNE_PER,
   PARKING_FEE_PER,
+  VITAMIN_PER,
   BONUS_77,
   CLEAN_BONUS,
 } from '@/data/scoreTable';
+
+/** +VITAMIN_PER per fruit rerolled by 비타민 보충 (counted from the event log, so
+ *  it reflects fruits at the rule's moment, not the final board). */
+function vitaminFruits(events?: EngineEvent[]): number {
+  if (!events) return 0;
+  return events.filter(
+    (e) => e.type === 'symbol_rerolled' && e.byRuleId === 'fruit-vitamin',
+  ).length;
+}
 
 // Numbers (seven/zero/four) have dedicated scoring and never form poker hands or
 // contribute to set bonuses. Everything else is a "set symbol".
@@ -277,6 +287,9 @@ export function scoreItems(
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
 
+  const vit = vitaminFruits(events);
+  if (vit > 0) items.push({ label: `비타민 보충 (${vit}과일)`, points: VITAMIN_PER * vit });
+
   items.push(...pairBonus(expanded, result).items);
 
   const clean = cleanSweepCount(expanded, result, scoreBoards);
@@ -330,6 +343,7 @@ export function scoreResult(
 
   let bonusScore = setBonuses(result, events).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
+  bonusScore += VITAMIN_PER * vitaminFruits(events);
   bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 

@@ -141,6 +141,21 @@ function applyOne(
       }
       return rolled;
     }
+    case 'fruit-vitamin': {
+      // 비타민 보충: reroll EVERY fruit cell. Each emitReroll carries the OLD
+      // (fruit) symbol — score.ts pays +VITAMIN_PER per such event (counts the
+      // fruits at THIS moment, not the final board).
+      const rolled: number[] = [];
+      for (let i = 0; i < working.length; i++) {
+        if (FRUIT_SET.has(working[i])) {
+          const old = working[i];
+          write(working, locked, i, rollSymbol(weights, rng));
+          emitReroll(old, i);
+          rolled.push(i);
+        }
+      }
+      return rolled;
+    }
     case 'four-parry': {
       const idx = working.findIndex((s) => s === 'four');
       if (idx !== -1) {

@@ -69,6 +69,14 @@ export const RULES: Rule[] = [
     build: 'fruit',
     description: '가장 왼쪽의 과일이 아닌 칸을 과일이 나올 때까지 다시 굴린다.',
   },
+  {
+    id: 'fruit-vitamin',
+    name: '비타민 보충',
+    type: 'reroll',
+    phase: 'sequential',
+    build: 'fruit',
+    description: '과일을 모두 다시 굴리고, 다시 굴린 과일 하나당 5점을 얻는다.',
+  },
 
   // ---- gem ----
   {

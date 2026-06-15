@@ -33,6 +33,10 @@ export const PARKING_FEE_PER = 30;
 // FOUR FORTUNE rule: each 4 scores +this instead of the penalty.
 export const FOUR_FORTUNE_PER = 20;
 
+// 비타민 보충: +this per fruit cell rerolled by the rule (counted via the
+// symbol_rerolled event log, so it reflects fruits AT the rule's moment).
+export const VITAMIN_PER = 5;
+
 // Score-rule bonuses.
 export const BONUS_77 = 77;
 export const CLEAN_BONUS = 120;
