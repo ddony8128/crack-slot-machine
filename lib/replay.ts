@@ -4,6 +4,7 @@ import {
   createGameStore,
   type GameStore,
   type RecordedAction,
+  type RunConfig,
 } from '@/store/gameStore';
 import { RULES_BY_ID } from '@/data/rules';
 import type { StoreApi } from 'zustand/vanilla';
@@ -74,7 +75,11 @@ function dispatch(store: StoreApi<GameStore>, action: RecordedAction): void {
  *
  * Never throws: structural problems are returned as `ok:false` + `rejectReason`.
  */
-export function replayRun(seed: string, actions: RecordedAction[]): ReplayResult {
+export function replayRun(
+  seed: string,
+  actions: RecordedAction[],
+  config?: RunConfig | null,
+): ReplayResult {
   const empty: ReplayResult = {
     ok: false,
     spins: [],
@@ -88,6 +93,8 @@ export function replayRun(seed: string, actions: RecordedAction[]): ReplayResult
 
   const store = createGameStore(createSeededRng(seed));
   store.getState().setNickname(REPLAY_NICKNAME);
+  // Season modes pass a config so the reconstructed run matches the client's.
+  if (config) store.getState().configureRun(config);
   store.getState().startGame();
 
   try {

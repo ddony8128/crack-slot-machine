@@ -1,6 +1,6 @@
 import { replayRun } from '@/lib/replay';
 import type { ClientResults } from '@/lib/db/types';
-import type { RecordedAction } from '@/store/gameStore';
+import type { RecordedAction, RunConfig } from '@/store/gameStore';
 
 export type VerifyOutcome =
   | { status: 'submitted'; score: number; bestSpinScore: number }
@@ -18,8 +18,9 @@ export function verifySubmission(
   seed: string,
   actions: RecordedAction[],
   client: ClientResults | null | undefined,
+  config?: RunConfig | null,
 ): VerifyOutcome {
-  const replay = replayRun(seed, actions);
+  const replay = replayRun(seed, actions, config);
   if (!replay.ok) {
     return { status: 'rejected', reason: replay.rejectReason ?? 'replay_failed' };
   }

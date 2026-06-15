@@ -11,7 +11,7 @@ import {
 } from '@/lib/cascade';
 import { scoreResult, scoreItems } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
-import { RULES } from '@/data/rules';
+import { RULES, RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS } from '@/data/symbols';
 
 const MAX_SPINS = 7;
@@ -21,6 +21,28 @@ const ZERO_RESULT: SymbolType[] = ['zero', 'zero', 'zero', 'zero', 'zero'];
 
 export type PlaceTarget = { type: 'slot'; index: number } | { type: 'bag' };
 export type RuleLocation = { zone: 'slot'; index: number } | { zone: 'bag'; index: number };
+
+/**
+ * How a run provisions rules each turn:
+ *  - 'offer'  : random 3-card offers from the full rule pool (default; event/daily/quick).
+ *  - 'pool'   : random 3-card offers drawn only from `rulePoolIds` (season modes).
+ *  - 'fixed'  : NO offers — `rulePoolIds` are pre-loaded into the bag and the player
+ *               arranges them into slots (puzzle). Turns go straight to ready-to-spin.
+ */
+export type RunProvisioning = 'offer' | 'pool' | 'fixed';
+
+/**
+ * Optional per-run configuration for season modes. All fields default to the
+ * legacy behavior, so a run with no config (event/daily/quick) is unchanged.
+ * MUST be reconstructable server-side so replay/verify can apply the same config.
+ */
+export type RunConfig = {
+  initialBoard?: SymbolType[];             // previousResult before the first spin
+  maxSpins?: number;
+  baseWeights?: Record<SymbolType, number>; // the run's symbol bag (as weights)
+  provisioning?: RunProvisioning;
+  rulePoolIds?: string[];
+};
 
 /**
  * A serializable log of every outcome-affecting action the player took, in order.
@@ -47,6 +69,12 @@ export type GameActions = {
    * before startGame() so the offered rules + rolls match the server's replay.
    */
   beginRun: (seed: string, runId: string, slug: string) => void;
+  /**
+   * Set (or clear with null) the run config used by the NEXT startGame(). Call
+   * after beginRun() and before startGame(). Server replay calls this too so the
+   * reconstructed run matches. No-config runs behave exactly as before.
+   */
+  configureRun: (config: RunConfig | null) => void;
   startGame: () => void;
   selectRule: (rule: Rule) => void;
   cancelSelection: () => void;
@@ -81,12 +109,22 @@ function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
  * Shuffles the allowed pool with the injected rng and takes the first 3.
  * With 26 rules this never starves a 3-card offer.
  */
-function offerRules(rng: Rng, slots: Array<Rule | null>, bag: Rule[]): Rule[] {
+function offerRules(
+  rng: Rng,
+  slots: Array<Rule | null>,
+  bag: Rule[],
+  pool: Rule[] = RULES,
+): Rule[] {
   const usedIds = new Set<string>();
   for (const r of slots) if (r != null) usedIds.add(r.id);
   for (const r of bag) usedIds.add(r.id);
-  const allowed = RULES.filter((r) => !usedIds.has(r.id));
+  const allowed = pool.filter((r) => !usedIds.has(r.id));
   return shuffle(allowed, rng).slice(0, OFFER_COUNT);
+}
+
+/** Resolve a rule-id list to Rule objects (skips unknown ids). */
+function rulesFromIds(ids: string[]): Rule[] {
+  return ids.map((id) => RULES_BY_ID[id]).filter((r): r is Rule => r != null);
 }
 
 function emptySlots(): Array<Rule | null> {
@@ -127,6 +165,14 @@ function buildInitializer(initialRng: Rng): Initializer {
   // seed. Every rng consumer below reads this closure variable, so swapping it
   // changes all subsequent rolls/offers deterministically.
   let rng: Rng = initialRng;
+
+  // Optional per-run config (season modes). null → legacy behavior.
+  let runConfig: RunConfig | null = null;
+  // The rule pool used for offers ('offer'→all RULES; 'pool'→rulePoolIds).
+  const offerPool = (): Rule[] =>
+    runConfig?.provisioning === 'pool' && runConfig.rulePoolIds
+      ? rulesFromIds(runConfig.rulePoolIds)
+      : RULES;
 
   // The in-progress cascade frame is kept OUT of GameState (it carries the live
   // working/locked arrays threaded across the pause). It only ever
@@ -234,26 +280,57 @@ function buildInitializer(initialRng: Rng): Initializer {
       set({ runId, eventSlug: slug });
     },
 
+    configureRun: (config: RunConfig | null) => {
+      runConfig = config;
+    },
+
     startGame: () => {
       const { nickname } = get();
       if (!nickname || nickname.trim().length === 0) return;
       recorded = [];
       const ruleSlots = emptySlots();
+      const startBoard = runConfig?.initialBoard
+        ? [...runConfig.initialBoard]
+        : [...ZERO_RESULT];
+      const maxSpins = runConfig?.maxSpins ?? MAX_SPINS;
+
+      if (runConfig?.provisioning === 'fixed') {
+        // Puzzle-style: rules pre-loaded into the bag, no per-turn offers. The
+        // player drags them into slots, then spins. Straight to ready-to-spin.
+        set({
+          spinIndex: 0,
+          maxSpins,
+          totalScore: 0,
+          nextMultiplier: 1,
+          previousResult: startBoard,
+          currentResult: [...startBoard],
+          ruleSlots,
+          bag: rulesFromIds(runConfig.rulePoolIds ?? []),
+          extraRulePickCount: 0,
+          picksLeft: 0,
+          pendingRule: null,
+          spinLogs: [],
+          offeredRules: [],
+          status: 'ready-to-spin',
+        });
+        return;
+      }
+
       const bag: Rule[] = [];
       set({
         spinIndex: 0,
-        maxSpins: MAX_SPINS,
+        maxSpins,
         totalScore: 0,
         nextMultiplier: 1,
-        previousResult: [...ZERO_RESULT],
-        currentResult: [...ZERO_RESULT],
+        previousResult: startBoard,
+        currentResult: [...startBoard],
         ruleSlots,
         bag,
         extraRulePickCount: 0,
         picksLeft: 1,
         pendingRule: null,
         spinLogs: [],
-        offeredRules: offerRules(rng, ruleSlots, bag),
+        offeredRules: offerRules(rng, ruleSlots, bag, offerPool()),
         status: 'choosing-rule',
       });
     },
@@ -388,7 +465,7 @@ function buildInitializer(initialRng: Rng): Initializer {
 
       const { ruleSlots, previousResult } = state;
 
-      const weights = computeWeights(ruleSlots, BASE_WEIGHTS);
+      const weights = computeWeights(ruleSlots, runConfig?.baseWeights ?? BASE_WEIGHTS);
       const base = rollBoard(ruleSlots, weights, previousResult, rng);
       const ctx: ApplyCtx = { previousResult, weights, rng };
       const frame = beginCascade(base, ruleSlots, ctx);
@@ -496,13 +573,26 @@ function buildInitializer(initialRng: Rng): Initializer {
         return;
       }
 
+      // Fixed-provisioning (puzzle): no new offers — keep the arranged rules and
+      // go straight to the next spin.
+      if (runConfig?.provisioning === 'fixed') {
+        set({
+          spinIndex: nextSpinIndex,
+          picksLeft: 0,
+          extraRulePickCount: 0,
+          pendingRule: null,
+          status: 'ready-to-spin',
+        });
+        return;
+      }
+
       // Advance the turn. A zero-draw from the spin just finished grants extra
       // rule placements THIS upcoming turn (still a single spin for the turn).
       set({
         spinIndex: nextSpinIndex,
         picksLeft: 1 + state.extraRulePickCount,
         extraRulePickCount: 0,
-        offeredRules: offerRules(rng, state.ruleSlots, state.bag),
+        offeredRules: offerRules(rng, state.ruleSlots, state.bag, offerPool()),
         pendingRule: null,
         status: 'choosing-rule',
       });
@@ -513,6 +603,7 @@ function buildInitializer(initialRng: Rng): Initializer {
       activeFrame = null;
       activeCtx = null;
       recorded = [];
+      runConfig = null;
       set({ ...freshState(nickname) });
     },
 
