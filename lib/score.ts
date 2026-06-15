@@ -1,5 +1,5 @@
 import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
-import { NUMBERS, VEHICLES } from '@/data/symbols';
+import { NUMBERS } from '@/data/symbols';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { symbolInSet } from '@/lib/symbols/tags';
 import { PAIR_RULES } from '@/lib/pairRules';
@@ -15,6 +15,7 @@ import {
   FOUR_PENALTY_PER,
   FOUR_FORTUNE_PER,
   PARKING_FEE_PER,
+  DRACULA_FAMILY_PER,
   VITAMIN_PER,
   BONUS_77,
   CLEAN_BONUS,
@@ -32,12 +33,20 @@ function vitaminFruits(events?: EngineEvent[]): number {
 // Numbers (seven/zero/four) have dedicated scoring and never form poker hands or
 // contribute to set bonuses. Everything else is a "set symbol".
 const NUMBER_SET = new Set<SymbolType>(NUMBERS);
-// Vehicle symbols, for the 유료 주차 (vehicle-parking) per-vehicle fee.
-const VEHICLE_SET = new Set<SymbolType>(VEHICLES);
 
-/** Count vehicle cells on the board (for the 유료 주차 fee). */
-function countVehicles(result: SymbolType[]): number {
-  return result.filter((s) => VEHICLE_SET.has(s)).length;
+/** Cells held by 유료 주차 (vehicle-parking) this spin — one symbol_held event per
+ *  vehicle cell the player picked. EVENT-based so the fee tracks the player's
+ *  pick, not the final board. */
+function parkingHolds(events?: EngineEvent[]): number {
+  if (!events) return 0;
+  return events.filter(
+    (e) => e.type === 'symbol_held' && e.byRuleId === 'vehicle-parking',
+  ).length;
+}
+
+/** Draculas on the (final) board — drives the 가족 만들기 family bonus. */
+function countDraculas(result: SymbolType[]): number {
+  return result.filter((s) => s === 'dracula').length;
 }
 
 // Map an EngineEvent.type to the SetBonus.event tag it satisfies, plus where to
@@ -306,12 +315,21 @@ export function scoreItems(
     }
   }
 
-  // 유료 주차 (vehicle-parking): lose PARKING_FEE_PER per vehicle cell on the
-  // FINAL board (×stacks via copy-above). A negative ScoreItem, like 4 페널티.
-  const parking = countRule(expanded, 'vehicle-parking');
-  const vehicles = countVehicles(result);
-  if (parking > 0 && vehicles > 0) {
-    items.push({ label: `유료 주차 (${vehicles}칸)`, points: -(vehicles * PARKING_FEE_PER * parking) });
+  // 가족 만들기 (monster-family): +DRACULA_FAMILY_PER per dracula on the final
+  // board, ×rule occurrences (copy-above stacks). A positive ScoreItem.
+  const family = countRule(expanded, 'monster-family');
+  const draculas = countDraculas(result);
+  if (family > 0 && draculas > 0) {
+    items.push({ label: `가족 만들기 (드라큘라 ${draculas})`, points: DRACULA_FAMILY_PER * draculas * family });
+  }
+
+  // 유료 주차 (vehicle-parking): lose PARKING_FEE_PER per HELD vehicle cell. Now
+  // EVENT-based — counts symbol_held events from the player's pick, not the final
+  // board (×stacks falls out naturally since copy-above re-runs the select). A
+  // negative ScoreItem, like 4 페널티.
+  const parkHolds = parkingHolds(events);
+  if (parkHolds > 0) {
+    items.push({ label: `유료 주차 (${parkHolds}칸)`, points: -(parkHolds * PARKING_FEE_PER) });
   }
 
   return items;
@@ -347,6 +365,10 @@ export function scoreResult(
   bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 
+  // 가족 만들기 (monster-family): +DRACULA_FAMILY_PER per dracula on the final
+  // board, ×rule occurrences (copy-above stacks).
+  bonusScore += DRACULA_FAMILY_PER * countDraculas(result) * countRule(expanded, 'monster-family');
+
   // FOUR FORTUNE: while active, each 4 scores +FOUR_FORTUNE_PER (×count via
   // copy-above) instead of incurring the normal penalty.
   const fours = countFours(result);
@@ -359,10 +381,10 @@ export function scoreResult(
     penalty = fours * FOUR_PENALTY_PER;
   }
 
-  // 유료 주차 (vehicle-parking): add a per-vehicle fee on the FINAL board to the
-  // penalty (×stacks via copy-above), mirroring the four-penalty handling.
-  const parking = countRule(expanded, 'vehicle-parking');
-  if (parking > 0) penalty += countVehicles(result) * PARKING_FEE_PER * parking;
+  // 유료 주차 (vehicle-parking): add a per-HELD-cell fee to the penalty. Now
+  // EVENT-based — one fee per symbol_held event from the player's pick (NOT the
+  // final board), mirroring the four-penalty handling.
+  penalty += parkingHolds(events) * PARKING_FEE_PER;
 
   const baseRoundScore = sevenPts + handScore + bonusScore - penalty;
 

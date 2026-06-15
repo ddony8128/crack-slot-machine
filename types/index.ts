@@ -53,7 +53,10 @@ export type EngineEvent =
   | { type: 'symbol_moved'; symbolId: SymbolType; fromIndex: number; toIndex: number; byRuleId: string }
   | { type: 'symbol_copied'; symbolId: SymbolType; fromIndex: number; toIndex: number; byRuleId: string }
   | { type: 'symbol_transformed'; fromSymbolId: SymbolType; toSymbolId: SymbolType; index: number; byRuleId: string }
-  | { type: 'symbol_locked'; symbolId: SymbolType; index: number; byRuleId: string };
+  | { type: 'symbol_locked'; symbolId: SymbolType; index: number; byRuleId: string }
+  // A cell flagged to HOLD into the next spin (유료 주차 / vehicle-parking). The
+  // points loss is scored EVENT-based: one symbol_held per chosen vehicle cell.
+  | { type: 'symbol_held'; symbolId: SymbolType; index: number; byRuleId: string };
 
 export type SpinLog = {
   spinIndex: number;        // 0-based
@@ -83,13 +86,14 @@ export type SpinLog = {
   haunted: boolean[];
 };
 
-export type SelectKind = 'copy' | 'swap' | 'reroll';
+export type SelectKind = 'copy' | 'swap' | 'reroll' | 'family' | 'park';
 
 // A `select` rule that paused the cascade for player input.
 export type PendingSelection = {
   kind: SelectKind;
   ruleName: string;
-  count: number;           // cells the player must pick: copy/reroll=1, swap=2
+  // Cells the player must pick: copy/reroll/family=1, swap=2, park=min(2, #vehicles).
+  count: number;
   selectable: boolean[];   // which cells the player may pick (length 5)
 };
 

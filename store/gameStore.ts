@@ -510,7 +510,7 @@ function buildInitializer(initialRng: Rng): Initializer {
           pendingSelection: {
             kind: p.kind,
             ruleName: p.ruleName,
-            count: p.kind === 'swap' ? 2 : 1,
+            count: p.count,
             selectable: [...p.selectable],
           },
           status: 'awaiting-selection',
@@ -529,7 +529,7 @@ function buildInitializer(initialRng: Rng): Initializer {
 
       const { ruleSlots } = state;
       const pending = activeFrame.pending;
-      const expectedCount = pending.kind === 'swap' ? 2 : 1;
+      const expectedCount = pending.count;
 
       // Validate: right count, all distinct, all selectable.
       if (indices.length !== expectedCount) return;
@@ -567,7 +567,7 @@ function buildInitializer(initialRng: Rng): Initializer {
           pendingSelection: {
             kind: p.kind,
             ruleName: p.ruleName,
-            count: p.kind === 'swap' ? 2 : 1,
+            count: p.count,
             selectable: [...p.selectable],
           },
           status: 'awaiting-selection',

@@ -27,9 +27,13 @@ export const BONUS_ALL_RED = 250;         // all 5 cells in RED set
 
 // Four penalty per four. (Season 1 v0.1: -30 per four.)
 export const FOUR_PENALTY_PER = 30;
-// 유료 주차 (vehicle-parking): lose this much per vehicle cell on the FINAL board
-// (×stacks). Treated as a penalty, like the four-penalty.
+// 유료 주차 (vehicle-parking): lose this much per HELD vehicle cell. Now scored
+// EVENT-based — one fee per symbol_held event tagged 'vehicle-parking' (the
+// player directly picks up to 2 vehicle cells). Treated as a penalty.
 export const PARKING_FEE_PER = 30;
+// 가족 만들기 (monster-family): +this per dracula on the FINAL board, per rule
+// occurrence (×stacks via copy-above). Added to the bonus, like a set bonus.
+export const DRACULA_FAMILY_PER = 20;
 // FOUR FORTUNE rule: each 4 scores +this instead of the penalty.
 export const FOUR_FORTUNE_PER = 20;
 

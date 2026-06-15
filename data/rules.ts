@@ -234,10 +234,10 @@ export const RULES: Rule[] = [
   {
     id: 'vehicle-parking',
     name: '유료 주차',
-    type: 'transform',
+    type: 'select',
     phase: 'next-spin',
     build: 'vehicle',
-    description: '교통수단 칸마다 30점을 잃고, 그 칸들은 다음 스핀 첫 굴림에서 유지된다. (유지된 칸은 이후 규칙으로 바뀔 수 있다)',
+    description: '교통수단을 최대 2개까지 직접 골라 칸마다 30점을 잃고, 그 칸들은 다음 스핀 첫 굴림에 유지된다. (유지된 칸은 이후 규칙으로 바뀔 수 있다)',
   },
   {
     id: 'vehicle-surge',
@@ -276,10 +276,10 @@ export const RULES: Rule[] = [
   {
     id: 'monster-family',
     name: '가족 만들기',
-    type: 'transform',
+    type: 'select',
     phase: 'sequential',
     build: 'monster',
-    description: '가장 왼쪽 드라큘라를 가장 왼쪽의 드라큘라가 아닌 칸에 복사한다.',
+    description: '한 칸을 직접 골라 가장 왼쪽 드라큘라를 복사하고, 보드의 드라큘라 수만큼 20점을 얻는다.',
   },
   {
     id: 'monster-infect',

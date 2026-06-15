@@ -29,6 +29,8 @@ export type Pending = {
   kind: SelectKind;
   ruleName: string;
   selectable: boolean[];
+  // Cells the player must pick: copy/reroll/family=1, swap=2, park=min(2, #vehicles).
+  count: number;
 };
 
 /**
@@ -106,7 +108,6 @@ function applyOne(
   ctx: ApplyCtx,
   events: EngineEvent[],
   haunted: boolean[],
-  nextHold: number[],
 ): number[] {
   const { weights, rng } = ctx;
   // ADDITIVE event helpers. They only PUSH to `events`; they never read or change
@@ -359,32 +360,12 @@ function applyOne(
       }
       return [];
     }
-    case 'vehicle-parking': {
-      // NEXT-SPIN HOLD: flag every vehicle cell on the CURRENT board so the next
-      // spin's first roll holds those cells. No board change, no rng, no events —
-      // the points loss is applied at scoring (lib/score.ts). Dedupe defensively.
-      for (let i = 0; i < working.length; i++) {
-        if (VEHICLE_SET.has(working[i]) && !nextHold.includes(i)) nextHold.push(i);
-      }
-      return [];
-    }
-
     // ---- transform (monster) ----
     case 'monster-haunt': {
       // Leftmost monster cell becomes "haunted": at scoring it contributes one
       // extra phantom 'ghost' to the n-of-a-kind counts. No board change, no rng.
       const i = working.findIndex((s) => MONSTER_SET.has(s));
       if (i !== -1) haunted[i] = true;
-      return [];
-    }
-    case 'monster-family': {
-      // Copy the leftmost dracula into the leftmost non-dracula cell.
-      const d = working.findIndex((s) => s === 'dracula');
-      const t = working.findIndex((s) => s !== 'dracula');
-      if (d !== -1 && t !== -1) {
-        write(working, locked, t, 'dracula');
-        emitCopy('dracula', d, t);
-      }
       return [];
     }
     case 'monster-infect': {
@@ -416,6 +397,9 @@ const SELECT_KIND: Record<string, SelectKind> = {
   'select-copy': 'copy',
   'select-swap': 'swap',
   'select-reroll': 'reroll',
+  // The two RULE SLOT rules that became PLAYER-SELECTED (직접 선택).
+  'monster-family': 'family',
+  'vehicle-parking': 'park',
 };
 
 // Inverse of SELECT_KIND: the select rule id for a given kind. Used to tag the
@@ -424,6 +408,8 @@ const SELECT_RULE_ID: Record<SelectKind, string> = {
   copy: 'select-copy',
   swap: 'select-swap',
   reroll: 'select-reroll',
+  family: 'monster-family',
+  park: 'vehicle-parking',
 };
 
 /**
@@ -433,18 +419,36 @@ const SELECT_RULE_ID: Record<SelectKind, string> = {
  * selectable. (`select-copy` still excludes index 0, which has no left neighbour to
  * copy.)
  */
-function selectableFor(kind: SelectKind, locked: boolean[]): boolean[] {
+function selectableFor(kind: SelectKind, locked: boolean[], working: SymbolType[]): boolean[] {
+  // park restricts to non-locked VEHICLE cells; every other kind allows all
+  // non-locked cells (held cells are modifiable, so they stay selectable).
+  if (kind === 'park') {
+    return working.map((sym, i) => !locked[i] && VEHICLE_SET.has(sym));
+  }
   const out = locked.map(() => true);
+  // select-copy excludes index 0 (no left neighbour to copy from).
   if (kind === 'copy') out[0] = false;
   return out;
 }
 
 /** True if the select rule can run at all (else it AUTO-SKIPS, no pause). */
-function isApplicable(kind: SelectKind, selectable: boolean[]): boolean {
+function isApplicable(kind: SelectKind, selectable: boolean[], working: SymbolType[]): boolean {
   const free = selectable.filter(Boolean).length;
   if (kind === 'swap') return free >= 2;
-  // copy & reroll each need at least one eligible cell.
+  // family ALSO requires a dracula on the board (the copy source).
+  if (kind === 'family') return free >= 1 && working.includes('dracula');
+  // copy / reroll / park each need at least one eligible cell (park: ≥1 vehicle).
   return free >= 1;
+}
+
+/**
+ * How many cells the player picks for a select rule. copy/reroll/family pick 1,
+ * swap picks 2, park picks up to 2 (capped by the number of selectable vehicles).
+ */
+function selectCount(kind: SelectKind, selectable: boolean[]): number {
+  if (kind === 'swap') return 2;
+  if (kind === 'park') return Math.min(2, selectable.filter(Boolean).length);
+  return 1;
 }
 
 /**
@@ -588,15 +592,15 @@ export function advanceCascade(
 
     if (rule.type === 'select') {
       const kind = SELECT_KIND[rule.id];
-      const selectable = selectableFor(kind, locked);
+      const selectable = selectableFor(kind, locked, working);
       // The non-interactive (pure) path can never prompt: always auto-skip a
       // select rule there so applyRules stays pure & total.
-      if (opts.autoSkipSelect || !isApplicable(kind, selectable)) {
+      if (opts.autoSkipSelect || !isApplicable(kind, selectable, working)) {
         steps.push({ label: `${rule.name} (건너뜀)`, result: [...working], locked: [...locked] });
         continue;
       }
       // Needs player input: pause here. slotIndex stays on this rule.
-      frame.pending = { kind, ruleName: rule.name, selectable };
+      frame.pending = { kind, ruleName: rule.name, selectable, count: selectCount(kind, selectable) };
       return frame;
     }
 
@@ -615,13 +619,13 @@ export function advanceCascade(
       if (above.type === 'select') {
         // Re-run the above SELECT rule: another interactive pick (or auto-skip).
         const kind = SELECT_KIND[above.id];
-        const selectable = selectableFor(kind, locked);
-        if (opts.autoSkipSelect || !isApplicable(kind, selectable)) {
+        const selectable = selectableFor(kind, locked, working);
+        if (opts.autoSkipSelect || !isApplicable(kind, selectable, working)) {
           steps.push({ label: `COPY ABOVE → ${above.name} (건너뜀)`, result: [...working], locked: [...locked] });
           continue;
         }
         // Pause here (slotIndex stays on the copy-above slot) for the player.
-        frame.pending = { kind, ruleName: `COPY ABOVE → ${above.name}`, selectable };
+        frame.pending = { kind, ruleName: `COPY ABOVE → ${above.name}`, selectable, count: selectCount(kind, selectable) };
         return frame;
       }
       // weight/score rules are not board-changing here; only reroll/transform
@@ -634,7 +638,7 @@ export function advanceCascade(
       if (above.type === 'reroll' || above.type === 'transform') {
         // Events emit NATURALLY from this call, tagged with the above rule's id
         // (the ACTUAL rule applied). No separate emit here -> no double-emit.
-        copyRolled = applyOne(above, working, locked, ctx, frame.events, frame.haunted, frame.nextHold);
+        copyRolled = applyOne(above, working, locked, ctx, frame.events, frame.haunted);
       }
       const copyStep: SpinLogStep = { label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] };
       if (copyRolled.length) copyStep.rerolled = copyRolled;
@@ -642,7 +646,7 @@ export function advanceCascade(
       continue;
     }
 
-    const rolled = applyOne(rule, working, locked, ctx, frame.events, frame.haunted, frame.nextHold);
+    const rolled = applyOne(rule, working, locked, ctx, frame.events, frame.haunted);
     const step: SpinLogStep = { label: rule.name, result: [...working], locked: [...locked] };
     if (rolled.length) step.rerolled = rolled;
     steps.push(step);
@@ -710,6 +714,24 @@ export function resolveSelection(
       if (locked[i]) locked[i] = false; // un-hold the rerolled cell
       frame.events.push({ type: 'symbol_rerolled', symbolId: old, index: i, byRuleId: selectRuleId });
       rerolled = [i];
+      break;
+    }
+    case 'family': {
+      // 가족 만들기: the LEFTMOST dracula is copied into the single chosen cell.
+      // (isApplicable guaranteed a dracula is present.) Scoring adds +20×draculas.
+      const dIdx = working.findIndex((s) => s === 'dracula');
+      const c = indices[0];
+      write(working, locked, c, 'dracula');
+      frame.events.push({ type: 'symbol_copied', symbolId: 'dracula', fromIndex: dIdx, toIndex: c, byRuleId: selectRuleId });
+      break;
+    }
+    case 'park': {
+      // 유료 주차: each chosen vehicle cell is held into the next spin (dedupe) and
+      // emits a symbol_held event. The 30-point fee per cell is scored EVENT-based.
+      for (const i of indices) {
+        if (!frame.nextHold.includes(i)) frame.nextHold.push(i);
+        frame.events.push({ type: 'symbol_held', symbolId: working[i], index: i, byRuleId: selectRuleId });
+      }
       break;
     }
   }

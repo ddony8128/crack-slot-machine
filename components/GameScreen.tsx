@@ -76,12 +76,12 @@ export default function GameScreen() {
       selectCells([i]);
       return;
     }
-    // count === 2 (swap): collect two distinct picks; clicking the first again
-    // deselects it.
+    // count >= 2 (swap / park): collect `count` distinct picks; clicking an
+    // already-chosen cell deselects it. Resolve once `count` cells are chosen.
     setChosen((prev) => {
       if (prev.includes(i)) return prev.filter((x) => x !== i);
       const next = [...prev, i];
-      if (next.length === 2) {
+      if (next.length === count) {
         selectCells(next);
         return [];
       }
@@ -94,7 +94,11 @@ export default function GameScreen() {
       ? "복사할 칸을 선택하세요 (바로 왼쪽 칸이 복사됩니다)"
       : pendingSelection.kind === "swap"
         ? `교체할 두 칸을 선택하세요 (${chosen.length}/2)`
-        : "다시 굴릴 칸을 선택하세요"
+        : pendingSelection.kind === "reroll"
+          ? "다시 굴릴 칸을 선택하세요"
+          : pendingSelection.kind === "family"
+            ? "복사할 칸을 선택하세요 (가장 왼쪽 드라큘라가 복사됩니다)"
+            : `주차할 교통수단 칸을 선택하세요 (${chosen.length}/${pendingSelection.count})`
     : "";
 
   // Celebrations fire once the reveal completes for the latest log.

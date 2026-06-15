@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { Rule, SymbolType } from '@/types';
-import { beginCascade } from '@/lib/cascade';
+import { beginCascade, resolveSelection } from '@/lib/cascade';
 import { computeHand, scoreResult } from '@/lib/score';
 import { RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS } from '@/data/symbols';
+import { DRACULA_FAMILY_PER } from '@/data/scoreTable';
 import type { Rng } from '@/lib/rng';
 
 function queuedRng(values: number[]): Rng {
@@ -73,34 +74,67 @@ describe('phantom-ghost hand — a haunted cell adds one ghost to the counts', (
   });
 });
 
-describe('monster-family — leftmost dracula copies into leftmost non-dracula', () => {
-  it('copies dracula into idx1 and emits a symbol_copied event', () => {
+describe('monster-family — PLAYER picks the target; leftmost dracula is copied in', () => {
+  it('pauses for a single pick; selectable = all non-locked cells', () => {
     const base: SymbolType[] = ['dracula', 'zombie', 'zero', 'cherry', 'four'];
     const frame = beginCascade(base, [RULES_BY_ID['monster-family']], ctxFor());
+    expect(frame.pending?.kind).toBe('family');
+    expect(frame.pending?.count).toBe(1);
+    expect(frame.pending?.selectable).toEqual([true, true, true, true, true]);
+    expect(frame.done).toBe(false);
+  });
 
-    expect(frame.working).toEqual(['dracula', 'dracula', 'zero', 'cherry', 'four']);
+  it('copies the leftmost dracula into the chosen cell + emits symbol_copied', () => {
+    const base: SymbolType[] = ['dracula', 'zombie', 'zero', 'cherry', 'four'];
+    const rules = [RULES_BY_ID['monster-family']];
+    let frame = beginCascade(base, rules, ctxFor());
+    frame = resolveSelection(frame, rules, ctxFor(), [3]); // player picks idx3
+
+    expect(frame.done).toBe(true);
+    expect(frame.working).toEqual(['dracula', 'zombie', 'zero', 'dracula', 'four']);
     const copies = frame.events.filter((e) => e.type === 'symbol_copied');
     expect(copies).toEqual([
-      { type: 'symbol_copied', symbolId: 'dracula', fromIndex: 0, toIndex: 1, byRuleId: 'monster-family' },
+      { type: 'symbol_copied', symbolId: 'dracula', fromIndex: 0, toIndex: 3, byRuleId: 'monster-family' },
     ]);
   });
 
-  it('the copy event yields the +40 monster copy bonus in scoreResult', () => {
+  it('scoreResult adds +20 × dracula count when monster-family is active', () => {
+    // After picking idx3 there are 2 draculas on the final board -> +40.
     const base: SymbolType[] = ['dracula', 'zombie', 'zero', 'cherry', 'four'];
-    const frame = beginCascade(base, [RULES_BY_ID['monster-family']], ctxFor());
+    const rules = [RULES_BY_ID['monster-family']];
+    let frame = beginCascade(base, rules, ctxFor());
+    frame = resolveSelection(frame, rules, ctxFor(), [3]);
+    const final = [...frame.working];
+    const draculas = final.filter((s) => s === 'dracula').length;
+    expect(draculas).toBe(2);
+
+    // Isolate the family bonus: with the rule active vs. not (same events/board).
+    const withRule = scoreResult(final, rules, frame.events, frame.scoreBoards, frame.haunted);
+    const without = scoreResult(final, [], frame.events, frame.scoreBoards, frame.haunted);
+    expect(withRule.bonusScore - without.bonusScore).toBe(DRACULA_FAMILY_PER * draculas); // 40
+  });
+
+  it('the copy event ALSO yields the +40 monster per-event copy bonus', () => {
+    const base: SymbolType[] = ['dracula', 'zombie', 'zero', 'cherry', 'four'];
+    const rules = [RULES_BY_ID['monster-family']];
+    let frame = beginCascade(base, rules, ctxFor());
+    frame = resolveSelection(frame, rules, ctxFor(), [3]);
     const final = [...frame.working];
 
-    // Bonus driven purely by the per-event 'copied' tag on the monster set.
+    // Per-event 'copied' tag on the monster set, independent of rule activation.
     const without = scoreResult(final, [], [], frame.scoreBoards, frame.haunted);
     const withEvents = scoreResult(final, [], frame.events, frame.scoreBoards, frame.haunted);
     expect(withEvents.bonusScore - without.bonusScore).toBe(40);
   });
 
-  it('no dracula on the board -> no-op', () => {
+  it('AUTO-SKIPS (no pause) when no dracula is on the board', () => {
     const base: SymbolType[] = ['zombie', 'ghost', 'zero', 'cherry', 'four'];
     const frame = beginCascade(base, [RULES_BY_ID['monster-family']], ctxFor());
+    expect(frame.pending).toBeNull();
+    expect(frame.done).toBe(true);
     expect(frame.working).toEqual(base);
     expect(frame.events.filter((e) => e.type === 'symbol_copied')).toHaveLength(0);
+    expect(frame.steps.some((s) => s.label.includes('건너뜀'))).toBe(true);
   });
 });
 
