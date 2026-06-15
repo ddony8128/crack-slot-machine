@@ -515,6 +515,49 @@ describe('MemoryDb quick best scores', () => {
   });
 });
 
+describe('MemoryDb reassignGuestQuickRuns', () => {
+  it('attaches the matching guest quick runs to the account, leaving others untouched', async () => {
+    const db = new MemoryDb();
+
+    // 2 quick runs for the guest (player_id null).
+    const g1 = await db.createRun({ mode: 'quick', seed: 's', ...VER });
+    await db.finalizeRun(g1.id, submitInput('게스트-1234', 100, 10));
+    const g2 = await db.createRun({ mode: 'quick', seed: 's', ...VER });
+    await db.finalizeRun(g2.id, submitInput('게스트-1234', 200, 20));
+
+    // 1 quick run for a different nickname.
+    const other = await db.createRun({ mode: 'quick', seed: 's', ...VER });
+    await db.finalizeRun(other.id, submitInput('게스트-9999', 300, 30));
+
+    // 1 non-quick run with the same nickname.
+    const nonQuick = await db.createRun({ mode: 'daily', seed: 's', ...VER });
+    await db.finalizeRun(nonQuick.id, submitInput('게스트-1234', 400, 40));
+
+    const updated = await db.reassignGuestQuickRuns({
+      guestDisplayName: '게스트-1234',
+      playerId: 'p1',
+      nickname: 'alice',
+    });
+    expect(updated).toBe(2);
+
+    // The 2 matched runs are now owned by p1/alice.
+    for (const id of [g1.id, g2.id]) {
+      const r = await db.getRun(id);
+      expect(r?.playerId).toBe('p1');
+      expect(r?.nickname).toBe('alice');
+    }
+
+    // Others untouched.
+    const otherRun = await db.getRun(other.id);
+    expect(otherRun?.playerId).toBeNull();
+    expect(otherRun?.nickname).toBe('게스트-9999');
+
+    const nonQuickRun = await db.getRun(nonQuick.id);
+    expect(nonQuickRun?.playerId).toBeNull();
+    expect(nonQuickRun?.nickname).toBe('게스트-1234');
+  });
+});
+
 describe('MemoryDb spire records', () => {
   it('upsertSpireRecord keeps better: higher stage wins, equal stage higher score wins, worse ignored', async () => {
     const db = new MemoryDb();

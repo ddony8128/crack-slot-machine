@@ -9,6 +9,7 @@ type SignupBody = {
   contactValue?: unknown;
   password?: unknown;
   agree?: unknown;
+  guestName?: unknown;
 };
 
 // POST /api/auth/signup — create a Season 1 player account and sign them in.
@@ -80,6 +81,20 @@ export async function POST(req: Request) {
   }
 
   await setPlayerCookie(player.id);
+
+  // Best-effort guest→account merge: attach the guest's quick runs to the new
+  // account. A failure here must NOT fail the signup.
+  if (typeof body.guestName === 'string' && body.guestName.trim().length > 0) {
+    try {
+      await db.reassignGuestQuickRuns({
+        guestDisplayName: body.guestName.trim(),
+        playerId: player.id,
+        nickname: player.nickname,
+      });
+    } catch (err) {
+      console.error('reassignGuestQuickRuns failed', err);
+    }
+  }
 
   return Response.json(
     { player: { id: player.id, nickname: player.nickname } },
