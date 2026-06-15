@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { RULES } from "@/data/rules";
+import { RULES, RULE_PHASE_LABELS } from "@/data/rules";
 import {
   SEVEN_SCORE,
   HAND_PAIR,
@@ -185,9 +185,14 @@ export default function ReferenceModal({
                       key={rule.id}
                       className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2.5"
                     >
-                      <span className="text-sm font-bold text-emerald-300">
-                        {rule.name}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold text-emerald-300">
+                          {rule.name}
+                        </span>
+                        <span className="rounded-full border border-indigo-700/60 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-indigo-300">
+                          {RULE_PHASE_LABELS[rule.phase]}
+                        </span>
+                      </div>
                       <p className="mt-0.5 text-xs leading-snug text-zinc-400">
                         {rule.description}
                       </p>

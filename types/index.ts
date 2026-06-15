@@ -10,11 +10,18 @@ export type SymbolType =
 
 export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta' | 'select';
 
+// When a rule takes effect during a spin's resolution. 'pre-spin' rules bias the
+// roll before symbols land; 'sequential' rules mutate the board in slot order;
+// 'scoring' rules fire while points are tallied; 'next-spin' is reserved for
+// effects that carry into the following spin (none yet).
+export type RulePhase = 'pre-spin' | 'sequential' | 'scoring' | 'next-spin';
+
 export type Rule = {
   id: string;
   name: string;
   description: string;   // short display text (Korean ok)
   type: RuleType;
+  phase: RulePhase;      // when the rule takes effect during resolution
   build?: string;        // build tag (e.g. '7', 'fruit', 'gem', 'order', 'safe')
 };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Rule } from "@/types";
+import { RULE_PHASE_LABELS } from "@/data/rules";
 
 /** Compact, static rule card body (name + clean description). Used inside slots/bag. */
 export default function RuleCard({
@@ -12,7 +13,12 @@ export default function RuleCard({
 }) {
   return (
     <div className="flex w-full flex-col gap-1">
-      <span className="text-sm font-bold text-emerald-300">{rule.name}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm font-bold text-emerald-300">{rule.name}</span>
+        <span className="rounded-full border border-indigo-700/60 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-indigo-300">
+          {RULE_PHASE_LABELS[rule.phase]}
+        </span>
+      </div>
       {!dense && (
         <span className="text-xs leading-snug text-zinc-400">
           {rule.description}
