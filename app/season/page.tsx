@@ -1,7 +1,10 @@
 import Link from "next/link";
 import SeasonNav from "@/components/SeasonNav";
 import { currentPlayer } from "@/lib/server/playerAuth";
+import { getDb } from "@/lib/db";
 import { SEASON_TITLE, MODE_LABELS } from "@/lib/season/config";
+import { dailyDateKey, dailyAttemptsAllowed } from "@/lib/daily/challenge";
+import { PUZZLES, PUZZLES_BY_KEY } from "@/lib/puzzle/config";
 
 const SEASON_PERIOD = "2026년 6월 15일 낮 12시 ~ 6월 28일 낮 12시 (KST)";
 
@@ -39,8 +42,63 @@ const MODE_CARDS: ModeCard[] = [
   },
 ];
 
+/** Live per-player status lines for a card. `lines[0]` is primary, `lines[1]`
+ *  optional secondary. Keyed by mode href. Only built when logged in + active
+ *  season; otherwise cards fall back to their generic `desc`. */
+type CardStatus = { lines: string[] };
+
+async function buildPlayerStatus(
+  playerId: string,
+  seasonId: string,
+): Promise<Record<string, CardStatus>> {
+  const db = getDb();
+  const dateKey = dailyDateKey(new Date());
+
+  const [dailyStatus, dailyUsed, puzzleRecords, spireRecord] = await Promise.all([
+    db.getDailyUserStatus({ playerId, seasonId, dateKey }),
+    db.countResolvedDailyRuns({ playerId, seasonId, dateKey }),
+    db.listPlayerPuzzleRecords(playerId, seasonId),
+    db.getSpireRecord(playerId, seasonId),
+  ]);
+
+  // ── Daily ──
+  const adRefillUsed = dailyStatus?.adRefillUsed ?? false;
+  const allowed = dailyAttemptsAllowed(adRefillUsed);
+  const remaining = Math.max(0, allowed - dailyUsed);
+  const dailyLines = [`오늘의 도전 ${remaining} / ${allowed}회 남음`];
+  if (!adRefillUsed) dailyLines.push("광고 충전 가능");
+  else dailyLines.push("광고 충전 완료");
+
+  // ── Puzzle ──
+  const clearedCount = puzzleRecords.filter((record) => {
+    const def = PUZZLES_BY_KEY[record.puzzleKey];
+    return def != null && record.bestGoalsAchieved === def.goals.length;
+  }).length;
+  const puzzleLines = [`${clearedCount} / ${PUZZLES.length}문제 클리어`];
+
+  // ── Spire ──
+  const spireLines = spireRecord
+    ? [
+        `최고 도달 ${spireRecord.bestStageReached}스테이지 · 최고 ${spireRecord.bestTotalScore}점`,
+      ]
+    : ["아직 기록 없음"];
+
+  return {
+    "/season/daily": { lines: dailyLines },
+    "/season/puzzle": { lines: puzzleLines },
+    "/season/spire": { lines: spireLines },
+  };
+}
+
 export default async function SeasonHubPage() {
-  const player = await currentPlayer();
+  const [player, season] = await Promise.all([
+    currentPlayer(),
+    getDb().getActiveSeason(),
+  ]);
+
+  // Only show live status when a player is logged in AND a season is active.
+  const statusByHref =
+    player && season ? await buildPlayerStatus(player.id, season.id) : null;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -95,30 +153,55 @@ export default async function SeasonHubPage() {
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2">
-          {MODE_CARDS.map((card) => (
-            <Link
-              key={card.href}
-              href={card.href}
-              className="group flex flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 px-5 py-5 transition hover:border-emerald-500/50 hover:bg-zinc-800/40"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-lg font-bold text-zinc-100">{card.label}</h3>
-                {card.requiresLogin ? (
-                  <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-xs font-semibold text-amber-300">
-                    로그인 필요
-                  </span>
-                ) : (
-                  <span className="rounded-full border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 text-xs font-semibold text-zinc-400">
-                    누구나
-                  </span>
+          {MODE_CARDS.map((card) => {
+            // Quick is always static. Other cards show live status when
+            // available, falling back to the generic description otherwise.
+            const status =
+              card.href === "/quick"
+                ? { lines: ["시즌 랭킹에 반영되지 않습니다."] }
+                : statusByHref?.[card.href] ?? null;
+
+            return (
+              <Link
+                key={card.href}
+                href={card.href}
+                className="group flex flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 px-5 py-5 transition hover:border-emerald-500/50 hover:bg-zinc-800/40"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-lg font-bold text-zinc-100">{card.label}</h3>
+                  {card.requiresLogin ? (
+                    <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-xs font-semibold text-amber-300">
+                      로그인 필요
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 text-xs font-semibold text-zinc-400">
+                      누구나
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-zinc-400">{card.desc}</p>
+                {status && (
+                  <div className="flex flex-col gap-0.5">
+                    {status.lines.map((line, i) => (
+                      <span
+                        key={i}
+                        className={
+                          i === 0
+                            ? "text-xs font-semibold text-amber-300/90"
+                            : "text-xs font-medium text-zinc-500"
+                        }
+                      >
+                        {line}
+                      </span>
+                    ))}
+                  </div>
                 )}
-              </div>
-              <p className="text-sm text-zinc-400">{card.desc}</p>
-              <span className="mt-auto pt-2 text-sm font-semibold text-emerald-400 transition group-hover:text-emerald-300">
-                바로가기 →
-              </span>
-            </Link>
-          ))}
+                <span className="mt-auto pt-2 text-sm font-semibold text-emerald-400 transition group-hover:text-emerald-300">
+                  바로가기 →
+                </span>
+              </Link>
+            );
+          })}
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2">
