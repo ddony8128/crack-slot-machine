@@ -1,5 +1,13 @@
 import type { RecordedAction } from '@/store/gameStore';
 import type { ReplaySpin } from '@/lib/replay';
+import type { SpireAction } from '@/lib/spire/replay';
+
+/**
+ * Actions persisted on a run. Most modes record the per-spin RecordedAction[];
+ * 첨탑 v0 records the higher-level SpireAction[] (which wraps per-stage
+ * RecordedAction[]). Stored as JSON, so the union is just the API-boundary type.
+ */
+export type PersistedActions = RecordedAction[] | SpireAction[];
 
 /** A row in `events`, camelCased for app use. */
 export type EventRow = {
@@ -101,7 +109,7 @@ export type RunRow = {
   seasonPoints: number | null;
   nickname: string | null;
   seed: string;
-  actions: RecordedAction[] | null;
+  actions: PersistedActions | null;
   clientResults: ClientResults | null;
   score: number | null;
   bestSpinScore: number | null;
@@ -151,7 +159,7 @@ export type CreateRunInput = {
 /** Final values written when a run is verified (or rejected). */
 export type FinalizeRunInput = {
   nickname: string;
-  actions: RecordedAction[];
+  actions: PersistedActions;
   clientResults: ClientResults;
   score: number | null;
   bestSpinScore: number | null;
