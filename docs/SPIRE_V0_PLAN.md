@@ -43,11 +43,15 @@ Shop offers seeded from `${runSeed}:shop:${shopVisitIndex}:${rerollCount}`.
 | SP-D | Stage-attempt run config | `stageAttemptSeed`, per-stage RC config from current bag/pool, immediate-clear (stop at target ≤7 spins). | ✅ `7083180` |
 | SP-E | Run replayer + hand-upgrade threading | `SpireAction[]` + `replaySpireRun` (threads state across stages, replays each via existing replayRun); `RunConfig.handUpgrades`→finalize→scoring. Live React controller + recording lands with SP-H. | ✅ `48588a3` |
 | SP-F | Authoritative verification | `verifySpireRun` — replay + claim-match + offered-set anti-tamper. Thin HTTP route + DB persistence land with SP-H (needs the live action stream). | ✅ `ea94332` |
-| SP-G | DB persistence | SpireRunState snapshot + final record (reach stage, totalScore, money, artifacts); widen finalize `actions` to carry `SpireAction[]`. | ☐ |
-| SP-H | Controller + Shop UI + seeded offer generator + submit route wiring | React controller drives stages×attempts×shop and records `SpireAction[]`; shop sections (artifact/symbol/set/rule/hand/reroll) + replace-symbol confirm; seeded shop-offer generator; wire `/api/spire/submit` to `verifySpireRun`. | ☐ |
-| SP-I | First-set selection UI | already partial (choosing phase) — adapt to new state. | ☐ |
-| SP-J | Artifacts | 3/6/9 selection + effects (v0 temp). | ☐ |
-| SP-K | Resume | extend spireResume to the new SpireAction stream. | ☐ |
+| SP-G | DB persistence | widen finalize `actions` to `PersistedActions` (carry `SpireAction[]`); final record via submit route. | ✅ `f5e3cc6` |
+| SP-H1 | Seeded shop-offer generator | `spireShopOffers(state, visit, reroll)`. | ✅ `6be5e4d` |
+| SP-H2/3 | Controller + Shop UI + submit wiring | staged SpireClient (choose-set→play→settle→artifact→shop→next/retry→submit); SpireShop (symbol/set/rule/hand/reroll); `/api/spire/submit`→`verifySpireRun`; spireApi/spireResume on new contract. | ✅ `f8d08bd` |
+| SP-I | First-set selection UI | adapted into SP-H choosing-set screen. | ✅ `f8d08bd` |
+| SP-J | Artifacts | 3/6/9 SELECTION done (choose 1 of 2 / skip). **Effects NOT applied** — v0 temp catalog is flavour text only (spec §10: "아티팩트 파트는 작성 중… v0에서는 임시 아티팩트만"). Effects = a follow-up. | ◐ selection-only |
+| SP-K | Resume | resume at the shop boundary via `replaySpireRun` (mid-stage progress not persisted). | ✅ `f8d08bd` |
+
+### v0 status: PLAYABLE end-to-end
+The whole loop runs (verified: `next build`, tsc 0, 483 tests, lint, live stage-1 screenshot). Only deferral is **artifact effects** (catalog is temporary flavour per the spec). Not E2E-tested via browser: the full stage→clear→shop→next cycle (rule-placement is drag-based) — covered instead by the SP-E greedy-stage replay test + logic review.
 
 ### Progress note (this session)
 Foundation **SP-A–SP-D** complete, tested, pushed (full suite 462+ green, replay-fuzz green, tsc 0). The pure, replay-critical core is done: economy math, all shop/settlement reducers, hand-upgrade scoring, and per-stage seeding/clear. Remaining **SP-E–SP-K** is the integration layer (store state-machine, server replay extension, DB migration, shop UI, artifacts) — larger and interdependent; SP-E (controller) is the keystone that wires the foundation into a playable loop.
