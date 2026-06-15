@@ -45,6 +45,10 @@ export type CascadeFrame = {
   // application order. Read-only data for later set-scoring; emitted alongside the
   // normal board writes and NEVER affects board/score/reveal/replay outcome.
   events: EngineEvent[];
+  // Board snapshot AT each score-rule's slot position (in order), so position-
+  // sensitive score rules (e.g. CLEAN SWEEP) evaluate against the board at their
+  // moment, not the final board. Includes copy-above re-applications of score rules.
+  scoreBoards: Array<{ ruleId: string; board: SymbolType[] }>;
 };
 
 /**
@@ -341,6 +345,7 @@ export function beginCascade(
     done: false,
     interactive: false,
     events,
+    scoreBoards: [],
   };
 
   return advanceCascade(frame, rules, ctx, opts);
@@ -372,6 +377,11 @@ export function advanceCascade(
       rule.type === 'score' ||
       rule.type === 'lock'
     ) {
+      // Score rules don't change the board, but their bonus may depend on the
+      // board AT THIS POSITION (e.g. CLEAN SWEEP). Snapshot it here.
+      if (rule && rule.type === 'score') {
+        frame.scoreBoards.push({ ruleId: rule.id, board: [...working] });
+      }
       continue;
     }
 
@@ -415,6 +425,10 @@ export function advanceCascade(
       }
       // weight/score rules are not board-changing here; only reroll/transform
       // re-apply a post-roll board effect.
+      // A copy-above of a SCORE rule re-applies that score rule at THIS position.
+      if (above.type === 'score') {
+        frame.scoreBoards.push({ ruleId: above.id, board: [...working] });
+      }
       let copyRolled: number[] = [];
       if (above.type === 'reroll' || above.type === 'transform') {
         // Events emit NATURALLY from this call, tagged with the above rule's id

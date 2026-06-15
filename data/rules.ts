@@ -215,7 +215,7 @@ export const RULES: Rule[] = [
     name: 'CLEAN SWEEP',
     type: 'score',
     build: 'score',
-    description: '보드에 4가 하나도 없으면 120점을 더 얻는다.',
+    description: '이 규칙이 적용되는 시점의 보드에 4가 하나도 없으면 120점을 더 얻는다. (이후 규칙으로 4가 생겨도 보너스 유지)',
   },
   {
     id: 'four-fortune',

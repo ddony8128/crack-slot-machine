@@ -208,8 +208,11 @@ function buildInitializer(initialRng: Rng): Initializer {
       // The spin's engine events (same list attached to the SpinLog below) feed
       // per-event SET bonuses (vehicle moved/rerolled, monster copied, ...).
       const events = frame.events ?? [];
-      const score = scoreResult(finalResult, ruleSlots, events);
-      const items = scoreItems(finalResult, ruleSlots, events);
+      // scoreBoards lets position-sensitive rules (CLEAN SWEEP) score against the
+      // board at their slot moment, not the final board.
+      const boards = frame.scoreBoards ?? [];
+      const score = scoreResult(finalResult, ruleSlots, events, boards);
+      const items = scoreItems(finalResult, ruleSlots, events, boards);
       const specials = detectSpecials(finalResult);
       const multiplier = state.nextMultiplier;
       const roundScore = score.baseRoundScore * multiplier;

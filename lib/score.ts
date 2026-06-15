@@ -174,10 +174,33 @@ const HAND_KO: Record<string, string> = {
  * Itemized score breakdown ("why these points"). Sum of points == baseRoundScore
  * (pre-multiplier). Mirrors scoreResult exactly so they never disagree.
  */
+/** Board snapshot at a score rule's slot position (from the cascade frame). */
+export type ScoreBoardSnapshot = { ruleId: string; board: SymbolType[] };
+
+/**
+ * How many CLEAN SWEEP applications pay out. POSITION-AWARE when scoreBoards is
+ * provided: each clean-bonus application checks the board AT ITS OWN slot moment
+ * (4-free there → pays), so rule ORDER matters. Without scoreBoards (pure unit
+ * tests) it falls back to the final board.
+ */
+function cleanSweepCount(
+  expanded: (Rule | null)[],
+  result: SymbolType[],
+  scoreBoards?: ScoreBoardSnapshot[],
+): number {
+  if (scoreBoards) {
+    return scoreBoards.filter(
+      (sb) => sb.ruleId === 'clean-bonus' && countFours(sb.board) === 0,
+    ).length;
+  }
+  return countFours(result) === 0 ? countRule(expanded, 'clean-bonus') : 0;
+}
+
 export function scoreItems(
   result: SymbolType[],
   activeSlotRules: (Rule | null)[] = [],
   events?: EngineEvent[],
+  scoreBoards?: ScoreBoardSnapshot[],
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -198,8 +221,8 @@ export function scoreItems(
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
 
-  const clean = countRule(expanded, 'clean-bonus');
-  if (clean > 0 && countFours(result) === 0)
+  const clean = cleanSweepCount(expanded, result, scoreBoards);
+  if (clean > 0)
     items.push({ label: clean > 1 ? `CLEAN SWEEP ×${clean}` : 'CLEAN SWEEP', points: CLEAN_BONUS * clean });
 
   const fours = countFours(result);
@@ -219,6 +242,7 @@ export function scoreResult(
   result: SymbolType[],
   activeSlotRules: (Rule | null)[] = [],
   events?: EngineEvent[],
+  scoreBoards?: ScoreBoardSnapshot[],
 ): {
   hand: string;
   handScore: number;
@@ -239,9 +263,7 @@ export function scoreResult(
 
   let bonusScore = setBonuses(result, events).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
-  if (countFours(result) === 0) {
-    bonusScore += CLEAN_BONUS * countRule(expanded, 'clean-bonus');
-  }
+  bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 
   // FOUR FORTUNE: while active, each 4 scores +FOUR_FORTUNE_PER (×count via
   // copy-above) instead of incurring the normal penalty.
