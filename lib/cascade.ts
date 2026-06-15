@@ -1,5 +1,5 @@
 import type { EngineEvent, Rule, SelectKind, SpinLogStep, SymbolType } from '@/types';
-import { CATS, FRUITS, GEMS, VEHICLES } from '@/data/symbols';
+import { CATS, FRUITS, GEMS, MONSTERS, VEHICLES } from '@/data/symbols';
 import { rollSymbol, type Rng } from '@/lib/rng';
 
 export type ApplyCtx = {
@@ -11,6 +11,7 @@ export type ApplyCtx = {
 const FRUIT_SET = new Set<SymbolType>(FRUITS);
 const GEM_SET = new Set<SymbolType>(GEMS);
 const CAT_SET = new Set<SymbolType>(CATS);
+const MONSTER_SET = new Set<SymbolType>(MONSTERS);
 
 // VEHICLES = [plane, ship, car]; plane/ship literals drive the vehicle rules.
 const PLANE: SymbolType = VEHICLES[0];
@@ -54,6 +55,10 @@ export type CascadeFrame = {
   // sensitive score rules (e.g. CLEAN SWEEP) evaluate against the board at their
   // moment, not the final board. Includes copy-above re-applications of score rules.
   scoreBoards: Array<{ ruleId: string; board: SymbolType[] }>;
+  // Per-cell "haunted" flags, threaded exactly like `scoreBoards`. A haunted cell
+  // adds ONE phantom 'ghost' to the n-of-a-kind counts at scoring time (E1-lite).
+  // No board/score effect on its own; read-only data consumed by computeHand.
+  haunted: boolean[];
 };
 
 /**
@@ -93,6 +98,7 @@ function applyOne(
   locked: boolean[],
   ctx: ApplyCtx,
   events: EngineEvent[],
+  haunted: boolean[],
 ): number[] {
   const { weights, rng } = ctx;
   // ADDITIVE event helpers. They only PUSH to `events`; they never read or change
@@ -331,6 +337,25 @@ function applyOne(
       return [];
     }
 
+    // ---- transform (monster) ----
+    case 'monster-haunt': {
+      // Leftmost monster cell becomes "haunted": at scoring it contributes one
+      // extra phantom 'ghost' to the n-of-a-kind counts. No board change, no rng.
+      const i = working.findIndex((s) => MONSTER_SET.has(s));
+      if (i !== -1) haunted[i] = true;
+      return [];
+    }
+    case 'monster-family': {
+      // Copy the leftmost dracula into the leftmost non-dracula cell.
+      const d = working.findIndex((s) => s === 'dracula');
+      const t = working.findIndex((s) => s !== 'dracula');
+      if (d !== -1 && t !== -1) {
+        write(working, locked, t, 'dracula');
+        emitCopy('dracula', d, t);
+      }
+      return [];
+    }
+
     // ---- lock rules are handled in the PRE-ROLL HOLD pass, not here. ----
     // ---- select rules are interactive — handled via Pending, not here. ----
 
@@ -457,6 +482,7 @@ export function beginCascade(
     interactive: false,
     events,
     scoreBoards: [],
+    haunted: [false, false, false, false, false],
   };
 
   return advanceCascade(frame, rules, ctx, opts);
@@ -545,7 +571,7 @@ export function advanceCascade(
       if (above.type === 'reroll' || above.type === 'transform') {
         // Events emit NATURALLY from this call, tagged with the above rule's id
         // (the ACTUAL rule applied). No separate emit here -> no double-emit.
-        copyRolled = applyOne(above, working, locked, ctx, frame.events);
+        copyRolled = applyOne(above, working, locked, ctx, frame.events, frame.haunted);
       }
       const copyStep: SpinLogStep = { label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] };
       if (copyRolled.length) copyStep.rerolled = copyRolled;
@@ -553,7 +579,7 @@ export function advanceCascade(
       continue;
     }
 
-    const rolled = applyOne(rule, working, locked, ctx, frame.events);
+    const rolled = applyOne(rule, working, locked, ctx, frame.events, frame.haunted);
     const step: SpinLogStep = { label: rule.name, result: [...working], locked: [...locked] };
     if (rolled.length) step.rerolled = rolled;
     steps.push(step);

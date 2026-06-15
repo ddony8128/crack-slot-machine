@@ -248,6 +248,24 @@ export const RULES: Rule[] = [
     description: '가장 왼쪽 배의 양옆 칸이 그 배 심볼을 복사한다.',
   },
 
+  // ---- monster ----
+  {
+    id: 'monster-haunt',
+    name: '유령 들림',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'monster',
+    description: '가장 왼쪽 괴물 칸이 유령 들린다. (이번 스핀의 족보 계산에서 유령 1개로 추가 계산)',
+  },
+  {
+    id: 'monster-family',
+    name: '가족 만들기',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'monster',
+    description: '가장 왼쪽 드라큘라를 가장 왼쪽의 드라큘라가 아닌 칸에 복사한다.',
+  },
+
   // ---- safe ----
   {
     id: 'no-zero',

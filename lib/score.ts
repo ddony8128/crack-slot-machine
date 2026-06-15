@@ -56,10 +56,21 @@ export function countZeros(result: SymbolType[]): number {
 
 // Best n-of-a-kind over ALL non-number symbols. Numbers (seven/zero/four) are
 // ignored. For legacy boards (only fruits/gems) this is identical to before.
-export function computeHand(result: SymbolType[]): { hand: string; handScore: number } {
+export function computeHand(
+  result: SymbolType[],
+  haunted?: boolean[],
+): { hand: string; handScore: number } {
   const counts = new Map<SymbolType, number>();
   for (const s of result) {
     if (!NUMBER_SET.has(s)) counts.set(s, (counts.get(s) ?? 0) + 1);
+  }
+
+  // E1-lite: each haunted cell adds ONE phantom 'ghost' to the counts. Omitted /
+  // empty `haunted` -> identical to the legacy behaviour.
+  if (haunted) {
+    for (let i = 0; i < haunted.length; i++) {
+      if (haunted[i]) counts.set('ghost', (counts.get('ghost') ?? 0) + 1);
+    }
   }
 
   const values = [...counts.values()];
@@ -201,6 +212,7 @@ export function scoreItems(
   activeSlotRules: (Rule | null)[] = [],
   events?: EngineEvent[],
   scoreBoards?: ScoreBoardSnapshot[],
+  haunted?: boolean[],
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -213,7 +225,7 @@ export function scoreItems(
     items.push({ label: dbl > 0 ? `7 ${sevens}개 (×${2 ** dbl})` : `7 ${sevens}개`, points: pts });
   }
 
-  const { hand, handScore } = computeHand(result);
+  const { hand, handScore } = computeHand(result, haunted);
   if (handScore > 0) items.push({ label: `족보: ${HAND_KO[hand] ?? hand}`, points: handScore });
 
   items.push(...setBonuses(result, events).items);
@@ -243,6 +255,7 @@ export function scoreResult(
   activeSlotRules: (Rule | null)[] = [],
   events?: EngineEvent[],
   scoreBoards?: ScoreBoardSnapshot[],
+  haunted?: boolean[],
 ): {
   hand: string;
   handScore: number;
@@ -254,7 +267,7 @@ export function scoreResult(
   // copy-above duplicates the rule above (including score rules), so expand and
   // COUNT occurrences — each application of a score rule stacks.
   const expanded = expandRules(activeSlotRules);
-  const { hand, handScore } = computeHand(result);
+  const { hand, handScore } = computeHand(result, haunted);
 
   // seven-double: each application doubles the seven portion (×2 per occurrence).
   let sevenPts = SEVEN_SCORE[countSevens(result)] ?? 0;

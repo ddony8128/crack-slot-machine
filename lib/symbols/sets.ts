@@ -123,7 +123,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { id: 'ghost', name: '유령', emoji: '👻' },
     ],
     bonuses: [{ type: 'per-event', event: 'copied', points: 40 }],
-    ruleIds: [], // set rules TODO in a later WU
+    ruleIds: ['monster-haunt', 'monster-family'],
   },
 ];
 

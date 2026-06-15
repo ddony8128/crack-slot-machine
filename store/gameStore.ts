@@ -211,8 +211,11 @@ function buildInitializer(initialRng: Rng): Initializer {
       // scoreBoards lets position-sensitive rules (CLEAN SWEEP) score against the
       // board at their slot moment, not the final board.
       const boards = frame.scoreBoards ?? [];
-      const score = scoreResult(finalResult, ruleSlots, events, boards);
-      const items = scoreItems(finalResult, ruleSlots, events, boards);
+      // haunted cells (E1-lite) add a phantom 'ghost' to the hand counts. Threaded
+      // exactly like `boards`: frame field -> finalize -> scoreResult/scoreItems.
+      const haunted = frame.haunted ?? [];
+      const score = scoreResult(finalResult, ruleSlots, events, boards, haunted);
+      const items = scoreItems(finalResult, ruleSlots, events, boards, haunted);
       const specials = detectSpecials(finalResult);
       const multiplier = state.nextMultiplier;
       const roundScore = score.baseRoundScore * multiplier;
