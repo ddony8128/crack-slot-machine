@@ -52,10 +52,11 @@ export type CascadeFrame = {
 };
 
 /**
- * Write a cell UNLESS it is frozen by a lock. Under the PURE SEQUENTIAL model a
- * later rule freely overwrites whatever an earlier rule wrote — the ONLY cell a
- * rule may never touch is a `locked` (pre-roll held) cell. Returns true if it
- * actually wrote.
+ * Write a cell. Under the PURE SEQUENTIAL + HOLD model a later rule freely
+ * overwrites whatever an earlier rule wrote, INCLUDING a `locked` (pre-roll held)
+ * cell — `locked` now means "held at the first roll (display only)", NOT immutable.
+ * When a held cell is overwritten it is no longer held, so clear its flag. Always
+ * writes; returns true.
  */
 function write(
   working: SymbolType[],
@@ -63,8 +64,8 @@ function write(
   i: number,
   value: SymbolType,
 ): boolean {
-  if (locked[i]) return false;
   working[i] = value;
+  if (locked[i]) locked[i] = false;
   return true;
 }
 
@@ -73,9 +74,10 @@ function write(
  * Mirrors the original applyRules switch. `select` and `lock` are handled
  * elsewhere; weight/score have no board effect.
  *
- * PURE SEQUENTIAL: each rule writes its target(s) freely, overwriting any earlier
- * change; the only off-limits cells are `locked` (pre-roll held) ones. "leftmost
- * X" targeting therefore skips only LOCKED cells, never previously-written ones.
+ * PURE SEQUENTIAL + HOLD: each rule writes its target(s) freely, overwriting any
+ * earlier change, INCLUDING held (`locked`) cells — a held cell is only held on
+ * the first roll, later rules may still change it. Writing a held cell clears its
+ * held flag (un-greys it). "leftmost X" targeting therefore scans every cell.
  *
  * Returns the indices that were given a FRESH RANDOM ROLL (reroll rules only) so
  * the reveal can animate them even when the value repeats. Transforms return [].
@@ -108,7 +110,7 @@ function applyOne(
     case 'four-shield': {
       const rolled: number[] = [];
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'four' && !locked[i]) {
+        if (working[i] === 'four') {
           const old = working[i];
           write(working, locked, i, rollSymbol(weights, rng));
           emitReroll(old, i);
@@ -118,7 +120,7 @@ function applyOne(
       return rolled;
     }
     case 'four-parry': {
-      const idx = working.findIndex((s, i) => s === 'four' && !locked[i]);
+      const idx = working.findIndex((s) => s === 'four');
       if (idx !== -1) {
         const old = working[idx];
         let iter = 0;
@@ -126,13 +128,14 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        if (locked[idx]) locked[idx] = false;
         emitReroll(old, idx);
         return [idx];
       }
       return [];
     }
     case 'gem-shuffle': {
-      const idx = working.findIndex((s, i) => GEM_SET.has(s) && !locked[i]);
+      const idx = working.findIndex((s) => GEM_SET.has(s));
       if (idx !== -1) {
         const old = working[idx];
         let iter = 0;
@@ -140,13 +143,14 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        if (locked[idx]) locked[idx] = false;
         emitReroll(old, idx);
         return [idx];
       }
       return [];
     }
     case 'fruit-fish': {
-      const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !locked[i]);
+      const idx = working.findIndex((s) => !FRUIT_SET.has(s));
       if (idx !== -1) {
         const old = working[idx];
         let iter = 0;
@@ -154,13 +158,14 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        if (locked[idx]) locked[idx] = false;
         emitReroll(old, idx);
         return [idx];
       }
       return [];
     }
     case 'gem-fish': {
-      const idx = working.findIndex((s, i) => !GEM_SET.has(s) && !locked[i]);
+      const idx = working.findIndex((s) => !GEM_SET.has(s));
       if (idx !== -1) {
         const old = working[idx];
         let iter = 0;
@@ -168,6 +173,7 @@ function applyOne(
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        if (locked[idx]) locked[idx] = false;
         emitReroll(old, idx);
         return [idx];
       }
@@ -199,7 +205,7 @@ function applyOne(
     case 'safe-convert':
       for (let i = 0; i < working.length; i++) {
         const old = working[i];
-        if ((old === 'four' || old === 'zero') && !locked[i]) {
+        if (old === 'four' || old === 'zero') {
           if (write(working, locked, i, 'ruby')) emitTransform(old, 'ruby', i);
         }
       }
@@ -207,7 +213,7 @@ function applyOne(
     case 'zero-to-seven':
       for (let i = 0; i < working.length; i++) {
         const old = working[i];
-        if (old === 'zero' && !locked[i]) {
+        if (old === 'zero') {
           if (write(working, locked, i, 'seven')) emitTransform(old, 'seven', i);
         }
       }
@@ -215,7 +221,7 @@ function applyOne(
     case 'red-dye':
       for (let i = 0; i < working.length; i++) {
         const old = working[i];
-        if ((old === 'lemon' || old === 'diamond') && !locked[i]) {
+        if (old === 'lemon' || old === 'diamond') {
           if (write(working, locked, i, 'cherry')) emitTransform(old, 'cherry', i);
         }
       }
@@ -223,7 +229,7 @@ function applyOne(
     case 'blue-dye':
       for (let i = 0; i < working.length; i++) {
         const old = working[i];
-        if ((old === 'lemon' || old === 'diamond') && !locked[i]) {
+        if (old === 'lemon' || old === 'diamond') {
           if (write(working, locked, i, 'sapphire')) emitTransform(old, 'sapphire', i);
         }
       }
@@ -252,14 +258,14 @@ const SELECT_RULE_ID: Record<SelectKind, string> = {
 };
 
 /**
- * Cells the player may pick for the given select rule. The player can act on ANY
- * cell that is not FROZEN by a lock rule. Under the pure sequential model the
- * select rule simply overwrites whatever earlier rules wrote — only the greyed/🔒
- * locked cells are off-limits. (`select-copy` also excludes index 0, which has no
- * left neighbour to copy.)
+ * Cells the player may pick for the given select rule. Under the PURE SEQUENTIAL +
+ * HOLD model a select rule overwrites whatever earlier rules wrote, INCLUDING held
+ * (`locked`) cells — held only means "held at the first roll", so every cell is
+ * selectable. (`select-copy` still excludes index 0, which has no left neighbour to
+ * copy.)
  */
 function selectableFor(kind: SelectKind, locked: boolean[]): boolean[] {
-  const out = locked.map((l) => !l);
+  const out = locked.map(() => true);
   if (kind === 'copy') out[0] = false;
   return out;
 }
@@ -353,8 +359,9 @@ export function beginCascade(
 
 /**
  * Process slots from `frame.slotIndex` onward (top -> bottom) under PURE
- * SEQUENTIAL semantics: each rule overwrites whatever earlier rules wrote, the
- * only off-limits cells being pre-roll `locked` ones. PAUSES (returns with
+ * SEQUENTIAL + HOLD semantics: each rule overwrites whatever earlier rules wrote,
+ * INCLUDING pre-roll held (`locked`) cells (held is first-roll only, modifiable;
+ * writing a held cell un-holds it). PAUSES (returns with
  * `frame.pending` set, slotIndex left on the select rule) when it reaches a
  * `select` rule that needs input. Auto-skips a select rule whose constraint can't
  * be met (pushes a "(건너뜀)" step). When all slots are processed, sets
@@ -454,9 +461,8 @@ export function advanceCascade(
 /**
  * Apply the pending select rule at `frame.slotIndex` with the player's chosen
  * `indices`, push a step, then resume advancing to the next pause or completion.
- * Assumes `indices` were validated by the caller (selectable cells exclude locked
- * ones, so the write is always safe). Under the pure sequential model the select
- * rule simply overwrites the chosen cells.
+ * Under the pure sequential + HOLD model the select rule overwrites the chosen
+ * cells freely; a chosen cell that was held becomes un-held (display un-greys).
  */
 export function resolveSelection(
   frame: CascadeFrame,
@@ -484,8 +490,9 @@ export function resolveSelection(
     case 'copy': {
       const i = indices[0];
       const src = working[i - 1];
-      // cell[i] = cell[i-1].
+      // cell[i] = cell[i-1]. Modifying a held cell un-holds it (display un-greys).
       working[i] = src;
+      if (locked[i]) locked[i] = false;
       frame.events.push({ type: 'symbol_copied', symbolId: src, fromIndex: i - 1, toIndex: i, byRuleId: selectRuleId });
       break;
     }
@@ -494,6 +501,9 @@ export function resolveSelection(
       const tmp = working[a];
       working[a] = working[b];
       working[b] = tmp;
+      // Modifying held cells un-holds them (display un-greys).
+      if (locked[a]) locked[a] = false;
+      if (locked[b]) locked[b] = false;
       // TWO moves: each cell's PRIOR value left it and arrived at the other cell.
       frame.events.push({ type: 'symbol_moved', symbolId: tmp, fromIndex: a, toIndex: b, byRuleId: selectRuleId });
       frame.events.push({ type: 'symbol_moved', symbolId: working[a], fromIndex: b, toIndex: a, byRuleId: selectRuleId });
@@ -503,6 +513,7 @@ export function resolveSelection(
       const i = indices[0];
       const old = working[i];
       working[i] = rollSymbol(ctx.weights, ctx.rng);
+      if (locked[i]) locked[i] = false; // un-hold the rerolled cell
       frame.events.push({ type: 'symbol_rerolled', symbolId: old, index: i, byRuleId: selectRuleId });
       rerolled = [i];
       break;

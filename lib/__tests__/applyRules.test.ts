@@ -103,18 +103,20 @@ describe('applyRules — locks & rerolls', () => {
     expect(finalResult[4]).toBe('lemon');
   });
 
-  it('reroll (four-shield) skips a locked cell', () => {
-    // last-lock locks cell4 = previous[4] = 'four'; four-shield must NOT reroll it.
+  it('reroll (four-shield) CAN reroll a held cell (hold is first-roll only, modifiable)', () => {
+    // last-lock HOLDS cell4 = previous[4] = 'four' on the first roll; four-shield is a
+    // LATER rule and now CAN reroll it (hold is not immutable). Both fours reroll.
     const base: SymbolType[] = ['four', 'cherry', 'cherry', 'cherry', 'cherry'];
     const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['four-shield']];
-    const { finalResult } = applyRules(base, rules, {
+    const { finalResult, locked } = applyRules(base, rules, {
       previousResult: ['a', 'a', 'a', 'a', 'four'] as SymbolType[],
       weights: BASE_WEIGHTS,
       rng: rngForSymbol('lemon'), // any reroll -> lemon
     });
-    // cell0 four -> rerolled to lemon; cell4 locked as four (not rerolled)
+    // cell0 four -> lemon; cell4 was held four but four-shield rerolled it to lemon too.
     expect(finalResult[0]).toBe('lemon');
-    expect(finalResult[4]).toBe('four');
+    expect(finalResult[4]).toBe('lemon'); // held cell WAS modified by the later rule
+    expect(locked[4]).toBe(false); // modifying a held cell un-holds it
   });
 
   it('gem-fish targets the leftmost non-gem cell (loops until a gem)', () => {
@@ -248,8 +250,9 @@ describe('applyRules — copy-above', () => {
 });
 
 describe('applyRules — pre-roll HOLD (locks are absolute, order-independent)', () => {
-  it('lock ABOVE reroll: lock wins and the cell is reported locked', () => {
-    // center-lock (slot0) holds cell2 pre-roll; four-shield (slot1) cannot touch it.
+  it('hold ABOVE reroll: a LATER reroll modifies the held cell and un-holds it', () => {
+    // center-lock (slot0) HOLDS cell2 = four on the first roll; four-shield (slot1)
+    // is a later rule and now rerolls EVERY four — including the held cell2.
     const base: SymbolType[] = ['four', 'cherry', 'four', 'cherry', 'cherry'];
     const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['four-shield']];
     const { finalResult, locked, steps } = applyRules(base, rules, {
@@ -257,14 +260,14 @@ describe('applyRules — pre-roll HOLD (locks are absolute, order-independent)',
       weights: BASE_WEIGHTS,
       rng: rngForSymbol('lemon'),
     });
-    expect(finalResult[2]).toBe('four'); // held, not rerolled
-    expect(finalResult[0]).toBe('lemon'); // other four still rerolled
-    expect(locked[2]).toBe(true);
+    expect(finalResult[2]).toBe('lemon'); // held cell WAS rerolled by the later rule
+    expect(finalResult[0]).toBe('lemon'); // other four rerolled too
+    expect(locked[2]).toBe(false); // rerolling the held cell un-holds it
     // locks push no steps; only four-shield does
     expect(steps).toHaveLength(1);
     expect(steps[0].label).toBe('FOUR SHIELD');
-    // per-step locked snapshot still reflects the held cell for the reveal
-    expect(steps[0].locked[2]).toBe(true);
+    // per-step locked snapshot reflects the now-modified (un-held) cell
+    expect(steps[0].locked[2]).toBe(false);
   });
 
   it('reroll ABOVE lock: the lock STILL wins (pre-roll hold is absolute)', () => {
@@ -281,13 +284,13 @@ describe('applyRules — pre-roll HOLD (locks are absolute, order-independent)',
     expect(locked[4]).toBe(true); // lock took effect regardless of position
   });
 
-  it('fruit-freeze holds the leftmost two FRUIT cells of previousResult (absolute)', () => {
+  it('fruit-freeze holds the leftmost two FRUIT cells; a later rule CAN still change one', () => {
     // previousResult fruits are at indices 0 (lemon) and 2 (cherry); grape at 4 is
     // the third fruit and must NOT be held (only the leftmost two).
     const prev: SymbolType[] = ['lemon', 'four', 'cherry', 'zero', 'grape'];
     const base: SymbolType[] = ['diamond', 'diamond', 'diamond', 'diamond', 'diamond'];
-    // first-cherry would rewrite cell0, four-shield would reroll — neither may touch
-    // the held fruit cells (0 and 2).
+    // first-cherry is a LATER rule and NOW overwrites the held cell0 (hold is not
+    // immutable). cell2 is also held but first-cherry only targets cell0.
     const rules: Rule[] = [
       RULES_BY_ID['fruit-freeze'],
       RULES_BY_ID['first-cherry'],
@@ -297,15 +300,14 @@ describe('applyRules — pre-roll HOLD (locks are absolute, order-independent)',
       weights: BASE_WEIGHTS,
       rng: rngForSymbol('seven'),
     });
-    // leftmost two fruit cells held to their previous values
-    expect(finalResult[0]).toBe('lemon');
+    // cell0 was held (lemon) but first-cherry overwrote it -> cherry, and un-held it.
+    expect(finalResult[0]).toBe('cherry');
+    expect(locked[0]).toBe(false);
+    // cell2 remained held (first-cherry never touches it)
     expect(finalResult[2]).toBe('cherry');
-    expect(locked[0]).toBe(true);
     expect(locked[2]).toBe(true);
     // the third fruit (grape at index 4) was NOT held
     expect(locked[4]).toBe(false);
-    // first-cherry could not overwrite the held cell0 (absolute)
-    expect(finalResult[0]).not.toBe('cherry');
   });
 
   it('fruit-freeze holds fewer cells when previousResult has under two fruits', () => {

@@ -84,7 +84,7 @@ export const RULES: Rule[] = [
     type: 'lock',
     phase: 'pre-spin',
     build: 'order',
-    description: '이전 결과에서 가장 왼쪽 과일 두 개가 유지된다.',
+    description: '이전 결과에서 가장 왼쪽 과일 두 개가 유지된다. (첫 굴림에서만 — 이후 규칙으로 바뀔 수 있다)',
   },
   {
     id: 'gem-fish',
@@ -128,7 +128,7 @@ export const RULES: Rule[] = [
     type: 'lock',
     phase: 'pre-spin',
     build: 'order',
-    description: '세 번째 칸이 이전 스핀의 값으로 고정되어 돌지 않는다.',
+    description: '세 번째 칸이 이전 스핀의 값을 유지한다. (첫 굴림에서만 — 이후 규칙으로 바뀔 수 있다)',
   },
   {
     id: 'last-lock',
@@ -136,7 +136,7 @@ export const RULES: Rule[] = [
     type: 'lock',
     phase: 'pre-spin',
     build: 'order',
-    description: '마지막 칸이 이전 스핀의 값으로 고정되어 돌지 않는다.',
+    description: '마지막 칸이 이전 스핀의 값을 유지한다. (첫 굴림에서만 — 이후 규칙으로 바뀔 수 있다)',
   },
   {
     id: 'left-pair',

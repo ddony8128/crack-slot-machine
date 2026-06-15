@@ -102,8 +102,9 @@ describe('cascade — additive engine event log', () => {
     expect(frame.events).toEqual([]);
   });
 
-  it('a LOCKED cell emits NO transform event (third-mirror blocked by center-lock)', () => {
-    // center-lock holds cell2; third-mirror would set cell2 = cell4 but is blocked.
+  it('a HELD cell DOES emit a transform event when a later rule changes it', () => {
+    // center-lock HOLDS cell2 = ruby on the first roll; third-mirror is a later rule
+    // and now sets cell2 = cell4 (seven), so it emits a copy event (hold is modifiable).
     const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'seven'];
     const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['third-mirror']];
     const frame = beginCascade(base, rules, {
@@ -111,9 +112,11 @@ describe('cascade — additive engine event log', () => {
       weights: BASE_WEIGHTS,
       rng: queuedRng([]),
     });
-    // Only the lock event fires; the blocked copy emits nothing.
+    // The lock event fires at hold time; third-mirror's copy now fires too.
     const copies = frame.events.filter((e) => e.type === 'symbol_copied');
-    expect(copies).toEqual([]);
+    expect(copies).toEqual([
+      { type: 'symbol_copied', symbolId: 'seven', fromIndex: 4, toIndex: 2, byRuleId: 'third-mirror' },
+    ]);
     const locks = frame.events.filter((e: EngineEvent) => e.type === 'symbol_locked');
     expect(locks).toEqual([
       { type: 'symbol_locked', symbolId: 'ruby', index: 2, byRuleId: 'center-lock' },

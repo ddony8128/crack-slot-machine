@@ -84,7 +84,7 @@ describe('cascade — select rules (resumable, interactive)', () => {
     expect(frame.pending?.selectable).toEqual([false, true, true, true, true]);
   });
 
-  it('a LOCKED cell is excluded from selection (last-lock freezes cell4)', () => {
+  it('a HELD cell IS selectable now (hold is modifiable, not immutable)', () => {
     const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'ruby'];
     const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['select-swap']];
     const frame = beginCascade(base, rules, {
@@ -93,29 +93,32 @@ describe('cascade — select rules (resumable, interactive)', () => {
       rng: queuedRng([]),
     });
     expect(frame.pending?.kind).toBe('swap');
-    expect(frame.pending?.selectable[4]).toBe(false); // cell4 locked
-    expect(frame.pending?.selectable.filter(Boolean).length).toBe(4);
+    expect(frame.pending?.selectable[4]).toBe(true); // cell4 held but still selectable
+    expect(frame.pending?.selectable.filter(Boolean).length).toBe(5);
   });
 
-  it('select-swap AUTO-SKIPS only when fewer than two NON-LOCKED cells remain', () => {
-    // fruit-freeze holds the 2 leftmost fruits (cells 0,1), center-lock holds 2,
-    // last-lock holds 4 -> only cell3 is free -> swap needs >= 2 -> auto-skip.
+  it('select-swap does NOT auto-skip just because cells are held (holds are selectable)', () => {
+    // Even with four cells held (fruit-freeze 0,1; center-lock 2; last-lock 4),
+    // holds are now SELECTABLE, so swap has all 5 cells to pick from and PAUSES for
+    // input instead of auto-skipping.
     const base: SymbolType[] = ['seven', 'seven', 'seven', 'seven', 'seven'];
     const rules: Rule[] = [
       RULES_BY_ID['fruit-freeze'], // pre-roll: hold leftmost 2 fruits of prev (0,1)
       RULES_BY_ID['center-lock'],  // hold cell2
       RULES_BY_ID['last-lock'],    // hold cell4
-      RULES_BY_ID['select-swap'],  // only cell3 free -> auto-skip
+      RULES_BY_ID['select-swap'],  // all cells selectable now -> pauses, no skip
     ];
     const frame = beginCascade(base, rules, {
       previousResult: ['cherry', 'lemon', 'grape', 'diamond', 'ruby'] as SymbolType[],
       weights: BASE_WEIGHTS,
       rng: queuedRng([]),
     });
-    expect(frame.done).toBe(true);
-    expect(frame.pending).toBeNull();
+    expect(frame.done).toBe(false);
+    expect(frame.pending?.kind).toBe('swap');
+    // all five cells are selectable despite four being held
+    expect(frame.pending?.selectable).toEqual([true, true, true, true, true]);
     const skip = frame.steps.find((s) => s.label.includes('건너뜀'));
-    expect(skip?.label).toBe('SELECT SWAP (건너뜀)');
+    expect(skip).toBeUndefined();
   });
 
   it('resumes the rest of the cascade after a select rule resolves', () => {
@@ -267,9 +270,9 @@ describe('rule interaction (sequential, lower-wins)', () => {
     expect(finalResult.includes('four')).toBe(false);
   });
 
-  it('lock (pre-roll) + transform targeting the locked cell: transform is BLOCKED', () => {
-    // center-lock holds cell2 = previous[2] = ruby. third-mirror would set cell2 =
-    // cell4, but cell2 is frozen -> blocked.
+  it('hold (pre-roll) + transform targeting the held cell: transform CHANGES it', () => {
+    // center-lock holds cell2 = previous[2] = ruby on the first roll. third-mirror is
+    // a later rule and now sets cell2 = cell4 = seven, overwriting the held value.
     const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'seven'];
     const rules: Rule[] = [RULES_BY_ID['center-lock'], RULES_BY_ID['third-mirror']];
     const { finalResult, locked } = applyRules(base, rules, {
@@ -277,23 +280,24 @@ describe('rule interaction (sequential, lower-wins)', () => {
       weights: BASE_WEIGHTS,
       rng: queuedRng([]),
     });
-    expect(finalResult[2]).toBe('ruby'); // frozen, third-mirror could not write it
-    expect(locked[2]).toBe(true);
+    expect(finalResult[2]).toBe('seven'); // third-mirror copied cell4, overwriting the held ruby
+    expect(locked[2]).toBe(false); // writing the held cell un-holds it
   });
 
-  it('lock (pre-roll) + reroll targeting the locked cell: reroll SKIPS it', () => {
-    // last-lock holds cell4 = previous[4] = four. four-shield rerolls all NON-locked
-    // fours: cell0 -> lemon, but the locked cell4 (also a four) is skipped.
+  it('hold (pre-roll) + reroll targeting the held cell: reroll CHANGES it', () => {
+    // last-lock holds cell4 = previous[4] = four on the first roll. four-shield is a
+    // later rule and rerolls EVERY four, including the held cell4. cell0 -> lemon
+    // (first draw), cell4 -> grape (second draw).
     const base: SymbolType[] = ['four', 'cherry', 'cherry', 'cherry', 'four'];
     const rules: Rule[] = [RULES_BY_ID['last-lock'], RULES_BY_ID['four-shield']];
     const { finalResult, locked } = applyRules(base, rules, {
       previousResult: ['x', 'x', 'x', 'x', 'four'] as SymbolType[],
       weights: BASE_WEIGHTS,
-      rng: queuedRng([rngPoint('lemon')]),
+      rng: queuedRng([rngPoint('lemon'), rngPoint('grape')]),
     });
-    expect(finalResult[0]).toBe('lemon'); // rerolled
-    expect(finalResult[4]).toBe('four'); // locked, skipped
-    expect(locked[4]).toBe(true);
+    expect(finalResult[0]).toBe('lemon'); // rerolled (first four)
+    expect(finalResult[4]).toBe('grape'); // held cell WAS rerolled by the later rule
+    expect(locked[4]).toBe(false); // rerolling the held cell un-holds it
   });
 
   it('third-mirror after last-lock: cell2 copies the HELD cell4 value', () => {
@@ -355,9 +359,10 @@ describe('rule interaction (sequential, lower-wins)', () => {
     expect(done.working[1]).toBe('cherry'); // copied cell0 (cherry), overwriting lemon
   });
 
-  it('select-swap OVERWRITES prior transforms; a locked cell is not selectable', () => {
-    // center-lock holds cell2. left-pair sets cell1 = cell0. select-swap then swaps
-    // two NON-locked cells the player picks (cell2 excluded).
+  it('select-swap OVERWRITES prior transforms; a HELD cell is now selectable too', () => {
+    // center-lock holds cell2. left-pair sets cell1 = cell0. select-swap can swap ANY
+    // two cells the player picks — held cells are now selectable. Here cell2 is held
+    // but the player chooses cells 0 and 4, so cell2 keeps its held value.
     const base: SymbolType[] = ['cherry', 'lemon', 'grape', 'diamond', 'ruby'];
     const rules: Rule[] = [
       RULES_BY_ID['center-lock'],
@@ -371,7 +376,7 @@ describe('rule interaction (sequential, lower-wins)', () => {
     });
     expect(frame.working[1]).toBe('cherry'); // left-pair applied
     expect(frame.pending?.kind).toBe('swap');
-    expect(frame.pending?.selectable[2]).toBe(false); // locked
+    expect(frame.pending?.selectable[2]).toBe(true); // held but selectable now
     const done = resolveSelection(frame, rules, {
       previousResult: ['x', 'x', 'grape', 'x', 'x'] as SymbolType[],
       weights: BASE_WEIGHTS,
@@ -379,7 +384,7 @@ describe('rule interaction (sequential, lower-wins)', () => {
     }, [0, 4]);
     expect(done.working[0]).toBe('ruby'); // swapped from cell4
     expect(done.working[4]).toBe('cherry'); // swapped from cell0
-    expect(done.working[2]).toBe('grape'); // locked, untouched
+    expect(done.working[2]).toBe('grape'); // held and not picked, so untouched
   });
 
   it('select-reroll OVERWRITES a prior transform on the chosen cell', () => {
