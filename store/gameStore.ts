@@ -12,7 +12,7 @@ import {
 import { scoreResult, scoreItems, type HandUpgradeMap } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
 import { RULES, RULES_BY_ID } from '@/data/rules';
-import { BASE_WEIGHTS } from '@/data/symbols';
+import { BASE_WEIGHTS, CATS } from '@/data/symbols';
 
 const MAX_SPINS = 7;
 const SLOT_COUNT = 5;
@@ -113,21 +113,26 @@ function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
 }
 
 /**
- * Offer 3 distinct rules (by id) that are NOT currently in a slot OR the bag.
- * Shuffles the allowed pool with the injected rng and takes the first 3.
- * With 26 rules this never starves a 3-card offer.
+ * Offer `count` distinct rules (by id) that are NOT currently in a slot OR the
+ * bag. Shuffles the allowed pool with the injected rng and takes the first
+ * `count`. With 26 rules this never starves a 3- (or 4-) card offer.
+ *
+ * `count` defaults to OFFER_COUNT; the swiss-knife (맥가이버 칼) artifact bumps it
+ * to 4 (passed via offerCount() at each call site). Config-driven → replays
+ * identically.
  */
 function offerRules(
   rng: Rng,
   slots: Array<Rule | null>,
   bag: Rule[],
   pool: Rule[] = RULES,
+  count: number = OFFER_COUNT,
 ): Rule[] {
   const usedIds = new Set<string>();
   for (const r of slots) if (r != null) usedIds.add(r.id);
   for (const r of bag) usedIds.add(r.id);
   const allowed = pool.filter((r) => !usedIds.has(r.id));
-  return shuffle(allowed, rng).slice(0, OFFER_COUNT);
+  return shuffle(allowed, rng).slice(0, count);
 }
 
 /** Resolve a rule-id list to Rule objects (skips unknown ids). */
@@ -182,6 +187,11 @@ function buildInitializer(initialRng: Rng): Initializer {
     runConfig?.provisioning === 'pool' && runConfig.rulePoolIds
       ? rulesFromIds(runConfig.rulePoolIds)
       : RULES;
+
+  // swiss-knife (맥가이버 칼): 4 rule offers instead of 3. Config-driven, so
+  // replay reproduces the same offer size + draws.
+  const offerCount = (): number =>
+    runConfig?.artifacts?.includes('swiss-knife') ? 4 : OFFER_COUNT;
 
   // The in-progress cascade frame is kept OUT of GameState (it carries the live
   // working/locked arrays threaded across the pause). It only ever
@@ -360,10 +370,12 @@ function buildInitializer(initialRng: Rng): Initializer {
         ruleSlots,
         bag,
         extraRulePickCount: 0,
-        picksLeft: 1,
+        // engine (엔진): +1 rule pick before the FIRST spin of each stage. Only
+        // startGame; subsequent spins via next() are unchanged. Config-driven.
+        picksLeft: 1 + (runConfig?.artifacts?.includes('engine') ? 1 : 0),
         pendingRule: null,
         spinLogs: [],
-        offeredRules: offerRules(rng, ruleSlots, bag, offerPool()),
+        offeredRules: offerRules(rng, ruleSlots, bag, offerPool(), offerCount()),
         status: 'choosing-rule',
       });
     },
@@ -412,7 +424,7 @@ function buildInitializer(initialRng: Rng): Initializer {
           bag: nextBag,
           pendingRule: null,
           picksLeft: remaining,
-          offeredRules: offerRules(rng, nextSlots, nextBag),
+          offeredRules: offerRules(rng, nextSlots, nextBag, offerPool(), offerCount()),
           status: 'choosing-rule',
         });
       } else {
@@ -498,7 +510,15 @@ function buildInitializer(initialRng: Rng): Initializer {
 
       const { ruleSlots, previousResult } = state;
 
-      const weights = computeWeights(ruleSlots, runConfig?.baseWeights ?? BASE_WEIGHTS);
+      let weights = computeWeights(ruleSlots, runConfig?.baseWeights ?? BASE_WEIGHTS);
+      // melted-cat (녹아버린 고양이): no cat symbols on the stage's FIRST spin
+      // (spinIndex 0). Clone the weights and zero every cat-set symbol BEFORE
+      // rolling. Numbers/other sets still have weight, so the bag is never fully
+      // zeroed. Deterministic (config + spinIndex driven) → replays identically.
+      if (runConfig?.artifacts?.includes('melted-cat') && state.spinIndex === 0) {
+        weights = { ...weights };
+        for (const cat of CATS) weights[cat] = 0;
+      }
       const base = rollBoard(ruleSlots, weights, previousResult, rng);
       const ctx: ApplyCtx = { previousResult, weights, rng };
       // Cross-spin HOLD: cells flagged by the previous spin's next-spin rule
@@ -628,7 +648,7 @@ function buildInitializer(initialRng: Rng): Initializer {
         spinIndex: nextSpinIndex,
         picksLeft: 1 + state.extraRulePickCount,
         extraRulePickCount: 0,
-        offeredRules: offerRules(rng, state.ruleSlots, state.bag, offerPool()),
+        offeredRules: offerRules(rng, state.ruleSlots, state.bag, offerPool(), offerCount()),
         pendingRule: null,
         status: 'choosing-rule',
       });

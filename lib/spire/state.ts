@@ -15,7 +15,9 @@
 
 import { createSeededRng } from '@/lib/rng';
 import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { ARTIFACTS_BY_ID, artifactOffered } from '@/lib/spire/artifacts';
 import {
+  SPIRE_ARTIFACT_PRICES,
   SPIRE_START_BAG,
   SPIRE_BASE_RULE_IDS,
   SPIRE_BAG_TOTAL,
@@ -407,6 +409,43 @@ export function buyRule(
 
   const next = cloneState(state);
   next.rulePool = poolResult.pool;
+  next.money -= cost;
+  return { ok: true, state: next };
+}
+
+/**
+ * Buy an artifact from the shop. Validation (all must hold):
+ *  - `cost` is one of the seeded artifact-slot prices (4/5/6),
+ *  - the run has enough money,
+ *  - the artifact is not already owned,
+ *  - `artifactOffered(...)` is satisfied (the id exists, is not owned, and any
+ *    required set is in ownedSetIds).
+ *
+ * On ok: push the artifact, money -= cost. (Offer-slot/price exactness vs the
+ * seeded shop is a known v0 gap — bounding cost to {4,5,6} + eligibility is
+ * enough for v0.)
+ */
+export function buyArtifact(
+  state: SpireRunState,
+  artifactId: string,
+  cost: number,
+): Result {
+  if (!(SPIRE_ARTIFACT_PRICES as readonly number[]).includes(cost)) {
+    return { ok: false, error: `invalid artifact price: ${cost}` };
+  }
+  if (state.money < cost) {
+    return { ok: false, error: `not enough money (need ${cost})` };
+  }
+  if (state.artifacts.includes(artifactId)) {
+    return { ok: false, error: `artifact already owned: ${artifactId}` };
+  }
+  const def = ARTIFACTS_BY_ID[artifactId];
+  if (!def || !artifactOffered(def, state.ownedSetIds, state.artifacts)) {
+    return { ok: false, error: `artifact not eligible: ${artifactId}` };
+  }
+
+  const next = cloneState(state);
+  next.artifacts = [...next.artifacts, artifactId];
   next.money -= cost;
   return { ok: true, state: next };
 }

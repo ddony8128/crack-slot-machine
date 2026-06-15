@@ -19,6 +19,7 @@ import {
   buySymbolIncrement,
   buySymbolSet,
   buyRule,
+  buyArtifact,
   buyHandFlat,
   buyHandDouble,
   rerollShop,
@@ -616,6 +617,13 @@ export default function SpireClient() {
               type: "buy_rule",
               ruleId,
               removedRuleId,
+            })
+          }
+          onBuyArtifact={(id, price) =>
+            applyReducer(buyArtifact(runState, id, price), {
+              type: "buy_artifact",
+              artifactId: id,
+              cost: price,
             })
           }
           onBuyHandFlat={(hand) =>

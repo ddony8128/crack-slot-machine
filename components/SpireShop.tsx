@@ -7,6 +7,7 @@ import type { SpireShopOffers } from "@/lib/spire/shop";
 import { SYMBOL_SETS_BY_ID } from "@/lib/symbols/sets";
 import { SYMBOL_EMOJI } from "@/data/symbols";
 import { RULES_BY_ID } from "@/data/rules";
+import { ARTIFACTS_BY_ID } from "@/lib/spire/artifacts";
 import { SPIRE_ARTIFACTS, SPIRE_RULE_POOL_MAX } from "@/lib/spire/config";
 import type { SymbolType } from "@/types";
 
@@ -34,6 +35,7 @@ export type SpireShopProps = {
   onBuySymbol: (targetSymbolId: string, replacedSymbolId: string) => void;
   onBuySet: (setId: string, replacedSymbolIds: string[], removedRuleIds: string[]) => void;
   onBuyRule: (ruleId: string, removedRuleId?: string) => void;
+  onBuyArtifact: (artifactId: string, price: number) => void;
   onBuyHandFlat: (handType: string) => void;
   onBuyHandDouble: (handType: string) => void;
   onReroll: () => void;
@@ -52,6 +54,7 @@ export default function SpireShop({
   onBuySymbol,
   onBuySet,
   onBuyRule,
+  onBuyArtifact,
   onBuyHandFlat,
   onBuyHandDouble,
   onReroll,
@@ -69,12 +72,40 @@ export default function SpireShop({
         </span>
       </header>
 
-      {/* Owned artifacts (chosen at 3/6/9; no buy section in v0). */}
+      {/* Owned artifacts (chosen at 3/6/9 or bought below). */}
       {runState.artifacts.length > 0 && (
-        <Section title="아티팩트">
+        <Section title="보유 아티팩트">
           <p className="text-sm text-emerald-200">
             {runState.artifacts.map((id) => ARTIFACT_NAME[id] ?? id).join(", ")}
           </p>
+        </Section>
+      )}
+
+      {/* Artifact purchase (seeded offers, prices 6/5/4). */}
+      {offers.artifacts.length > 0 && (
+        <Section title="아티팩트 구매">
+          <div className="flex flex-col gap-2">
+            {offers.artifacts.map((a) => {
+              const def = ARTIFACTS_BY_ID[a.id];
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={a.price > money}
+                  onClick={() => onBuyArtifact(a.id, a.price)}
+                  className="flex flex-col gap-1 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-left text-sm transition enabled:hover:border-emerald-400 disabled:opacity-40"
+                >
+                  <span className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-300">{def?.name ?? a.id}</span>
+                    <span className="font-bold text-amber-200">{a.price}원</span>
+                  </span>
+                  {def?.description && (
+                    <span className="text-xs text-zinc-400">{def.description}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </Section>
       )}
 

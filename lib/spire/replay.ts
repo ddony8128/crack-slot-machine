@@ -20,6 +20,7 @@ import {
   buySymbolIncrement,
   buySymbolSet,
   buyRule,
+  buyArtifact,
   buyHandFlat,
   buyHandDouble,
   rerollShop,
@@ -41,6 +42,7 @@ export type SpireAction =
   | { type: 'buy_symbol'; targetSymbolId: string; replacedSymbolId: string }
   | { type: 'buy_set'; setId: string; replacedSymbolIds: string[]; removedRuleIds?: string[] }
   | { type: 'buy_rule'; ruleId: string; removedRuleId?: string }
+  | { type: 'buy_artifact'; artifactId: string; cost: number }
   | { type: 'buy_hand_flat'; handType: string }
   | { type: 'buy_hand_double'; handType: string }
   | { type: 'reroll_shop' }
@@ -184,6 +186,12 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
       }
       case 'buy_rule': {
         const r = buyRule(state, action.ruleId, action.removedRuleId);
+        if (!r.ok) return fail(r.error);
+        state = r.state;
+        break;
+      }
+      case 'buy_artifact': {
+        const r = buyArtifact(state, action.artifactId, action.cost);
         if (!r.ok) return fail(r.error);
         state = r.state;
         break;
