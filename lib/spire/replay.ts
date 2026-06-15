@@ -117,6 +117,7 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
           state.symbolBag,
           state.rulePool,
           state.handUpgrades,
+          state.artifacts,
         );
         const seed = `${runSeed}:stage-${stage}:attempt-${attempt}`;
         const rr = replayRun(seed, action.actions, cfg);

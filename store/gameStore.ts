@@ -45,6 +45,11 @@ export type RunConfig = {
   // 첨탑 per-hand upgrades, applied to every spin's hand score (other modes
   // leave this unset → scoring is unchanged).
   handUpgrades?: HandUpgradeMap;
+  // 첨탑 owned artifacts — flow into scoring (lib/score) for artifact effects.
+  artifacts?: string[];
+  // Number special hands (4×4/4×5 multiplier, 0≥3 extra rule). Unset → ON
+  // (빠른 게임/legacy); season modes pass {four:false, zero:false}.
+  numberSpecials?: { four: boolean; zero: boolean };
 };
 
 /**
@@ -221,7 +226,7 @@ function buildInitializer(initialRng: Rng): Initializer {
       const ups = runConfig?.handUpgrades;
       const score = scoreResult(finalResult, ruleSlots, events, boards, haunted, ups);
       const items = scoreItems(finalResult, ruleSlots, events, boards, haunted, ups);
-      const specials = detectSpecials(finalResult);
+      const specials = detectSpecials(finalResult, runConfig?.numberSpecials);
       const multiplier = state.nextMultiplier;
       const roundScore = score.baseRoundScore * multiplier;
 

@@ -144,6 +144,7 @@ export default function SpireClient() {
       st.symbolBag,
       st.rulePool,
       st.handUpgrades,
+      st.artifacts,
     );
     beginRun(stageAttemptSeed(seedRef.current, stage, attempt), runIdRef.current, "spire");
     configureRun(cfg);

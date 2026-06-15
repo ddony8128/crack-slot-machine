@@ -51,6 +51,7 @@ export function spireStageRunConfig(
   bag: Record<string, number>,
   rulePool: string[],
   handUpgrades?: HandUpgradeMap,
+  artifacts: string[] = [],
 ): RunConfig {
   const weights = bagToWeights(bag);
   const seed = stageAttemptSeed(runSeed, stage, attempt);
@@ -61,6 +62,12 @@ export function spireStageRunConfig(
     provisioning: 'pool',
     rulePoolIds: [...rulePool],
     handUpgrades,
+    artifacts: [...artifacts],
+    // Number specials are OFF in 첨탑 unless the matching 석상 artifact is owned.
+    numberSpecials: {
+      four: artifacts.includes('four-statue'),
+      zero: artifacts.includes('zero-statue'),
+    },
   };
 }
 

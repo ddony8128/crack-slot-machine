@@ -14,5 +14,7 @@ export function puzzleRunConfig(puzzleKey: string): RunConfig {
     maxSpins: p.spinLimit,
     provisioning: 'fixed',
     rulePoolIds: [...p.availableRuleIds],
+    // Number special hands are 빠른 게임-only.
+    numberSpecials: { four: false, zero: false },
   };
 }
