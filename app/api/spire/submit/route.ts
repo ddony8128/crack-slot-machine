@@ -2,6 +2,7 @@ import { getDb } from '@/lib/db';
 import { currentPlayer } from '@/lib/server/playerAuth';
 import { verifySpireRun } from '@/lib/spire/verify';
 import { spireSeasonScore } from '@/lib/season/scoring';
+import { seasonSnapshot, makeSeasonScoreChange } from '@/lib/server/seasonChange';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
 import type { SpireAction } from '@/lib/spire/replay';
@@ -102,6 +103,9 @@ export async function POST(req: Request) {
   // v2 season score: maxClearedStage×100 + money×10 + unusedSpins×10 (spec §5).
   const seasonPts = spireSeasonScore(v.stagesCleared, v.money, v.unusedSpins);
 
+  // Season total + rank BEFORE the upserts, so the after-difference is this run's grant.
+  const before = await seasonSnapshot(db, run.seasonId!, player.id);
+
   await db.finalizeRun(runId, {
     nickname: player.nickname,
     actions,
@@ -138,10 +142,14 @@ export async function POST(req: Request) {
     runId: run.id,
   });
 
+  const after = await seasonSnapshot(db, run.seasonId!, player.id);
+  const scoreChange = makeSeasonScoreChange(before, after, 'SPIRE_BEST_UPDATED');
+
   return Response.json({
     status: 'submitted',
     stagesCleared: v.stagesCleared,
     totalScore: v.totalScore,
     seasonPoints: seasonPts,
+    scoreChange,
   });
 }

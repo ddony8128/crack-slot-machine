@@ -1,6 +1,20 @@
 import type { BestScoreRow, SeasonRankItem } from '@/lib/db/types';
 import { dailyWindow } from '@/lib/daily/challenge';
 
+/**
+ * A before/after season-total + rank delta for one point-granting submit. Returned
+ * by the spire/puzzle/daily submit endpoints so the result screens can play a
+ * count-up. `delta` may be 0 (e.g. a non-improving best score).
+ */
+export type SeasonScoreChange = {
+  previousSeasonScore: number;
+  newSeasonScore: number;
+  delta: number;
+  previousRank: number | null;
+  newRank: number | null;
+  reason: string;
+};
+
 /** Each mode contributes at most this many season points (total cap 3000). */
 export const SEASON_MODE_CAP = 1000;
 export const DAILY_COUNT_CAP = 10; // only the best N days count

@@ -8,6 +8,8 @@ import {
   type SubmitPuzzleResponse,
 } from "@/lib/client/puzzleApi";
 import { buildClientResults } from "@/lib/clientResults";
+import SeasonScoreRise from "@/components/SeasonScoreRise";
+import type { SeasonScoreChange } from "@/lib/season/scoring";
 
 type SubmitState =
   | { phase: "submitting" }
@@ -16,8 +18,11 @@ type SubmitState =
 
 export default function PuzzleResultScreen({
   puzzleKey,
+  scoreChange,
 }: {
   puzzleKey: string;
+  /** Optional override; otherwise read from this screen's own submit response. */
+  scoreChange?: SeasonScoreChange;
 }) {
   const totalScore = useGameStore((s) => s.totalScore);
   const spinLogs = useGameStore((s) => s.spinLogs);
@@ -104,6 +109,7 @@ export default function PuzzleResultScreen({
     state.phase === "done" && state.result.status === "submitted"
       ? state.result
       : null;
+  const change = scoreChange ?? done?.scoreChange;
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
@@ -149,6 +155,8 @@ export default function PuzzleResultScreen({
           </p>
         )}
       </div>
+
+      {change && <SeasonScoreRise change={change} />}
 
       <Link
         href="/season/puzzle"

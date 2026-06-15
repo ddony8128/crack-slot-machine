@@ -1,4 +1,5 @@
 import type { SpireAction } from '@/lib/spire/replay';
+import type { SeasonScoreChange } from '@/lib/season/scoring';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 export type StartSpireResponse = {
@@ -13,6 +14,7 @@ export type SubmitSpireResponse =
       stagesCleared: number;
       totalScore: number;
       seasonPoints: number;
+      scoreChange?: SeasonScoreChange;
     }
   | { status: 'rejected'; reason: string };
 

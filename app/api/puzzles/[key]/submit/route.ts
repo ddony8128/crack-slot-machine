@@ -3,6 +3,7 @@ import { currentPlayer } from '@/lib/server/playerAuth';
 import { verifySubmission } from '@/lib/server/verifySubmission';
 import { PUZZLES_BY_KEY } from '@/lib/puzzle/config';
 import { puzzleScore } from '@/lib/season/scoring';
+import { seasonSnapshot, makeSeasonScoreChange } from '@/lib/server/seasonChange';
 import { puzzleRunConfig } from '@/lib/puzzle/run';
 import { checkPuzzleRun, type GoalContext } from '@/lib/puzzle/goals';
 import { computeHand } from '@/lib/score';
@@ -129,6 +130,9 @@ export async function POST(
   const cleared = goalsAchieved === totalGoals;
   const spinCount = spins.length;
 
+  // Season total + rank BEFORE the upserts, so the after-difference is this run's grant.
+  const before = await seasonSnapshot(db, run.seasonId!, player.id);
+
   await db.finalizeRun(runId, {
     nickname: player.nickname,
     actions,
@@ -168,6 +172,9 @@ export async function POST(
 
   const distribution = await db.getPuzzleDistribution(run.seasonId!, key);
 
+  const after = await seasonSnapshot(db, run.seasonId!, player.id);
+  const scoreChange = makeSeasonScoreChange(before, after, 'PUZZLE_CLEAR');
+
   return Response.json({
     status: 'submitted',
     goalsAchieved,
@@ -175,5 +182,6 @@ export async function POST(
     cleared,
     spinCount,
     distribution,
+    scoreChange,
   });
 }

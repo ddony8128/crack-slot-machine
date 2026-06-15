@@ -6,6 +6,8 @@ import { useGameStore } from "@/store/gameStore";
 import { submitDaily, type SubmitDailyResponse } from "@/lib/client/dailyApi";
 import { buildClientResults } from "@/lib/clientResults";
 import { useCountUp } from "@/hooks/useCountUp";
+import SeasonScoreRise from "@/components/SeasonScoreRise";
+import type { SeasonScoreChange } from "@/lib/season/scoring";
 
 type SubmitState =
   | { phase: "submitting" }
@@ -20,7 +22,12 @@ function tierMessage(score: number): string {
   return "JACKPOT CONTENDER";
 }
 
-export default function DailyResultScreen() {
+export default function DailyResultScreen({
+  scoreChange,
+}: {
+  /** Optional override; otherwise read from this screen's own submit response. */
+  scoreChange?: SeasonScoreChange;
+} = {}) {
   const nickname = useGameStore((s) => s.nickname);
   const totalScore = useGameStore((s) => s.totalScore);
   const spinLogs = useGameStore((s) => s.spinLogs);
@@ -109,6 +116,11 @@ export default function DailyResultScreen() {
 
   const submitted =
     state.phase === "done" && state.result.status === "submitted";
+  const resultChange =
+    state.phase === "done" && state.result.status === "submitted"
+      ? state.result.scoreChange
+      : undefined;
+  const change = scoreChange ?? resultChange;
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
@@ -147,6 +159,8 @@ export default function DailyResultScreen() {
           </p>
         )}
       </div>
+
+      {submitted && change && <SeasonScoreRise change={change} />}
 
       <section className="w-full">
         <Link

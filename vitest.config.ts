@@ -13,6 +13,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      // `server-only` throws when imported outside an RSC bundle; stub it so
+      // server-only helpers (e.g. lib/server/seasonChange) are unit-testable.
+      'server-only': path.resolve(__dirname, 'test/stubs/server-only.ts'),
     },
   },
 });

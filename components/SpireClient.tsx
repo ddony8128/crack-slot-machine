@@ -39,6 +39,7 @@ import SpireShop from "@/components/SpireShop";
 import SpireResultScreen from "@/components/SpireResultScreen";
 import ModeIntro from "@/components/ModeIntro";
 import type { SymbolType } from "@/types";
+import type { SeasonScoreChange } from "@/lib/season/scoring";
 
 type Phase =
   | "loading"
@@ -90,6 +91,7 @@ export default function SpireClient() {
   const [clearBreakdown, setClearBreakdown] = useState<ClearBreakdown>(null);
   const [submitState, setSubmitState] = useState<SubmitState>("submitting");
   const [seasonPoints, setSeasonPoints] = useState<number | null>(null);
+  const [scoreChange, setScoreChange] = useState<SeasonScoreChange | null>(null);
   const [rejectReason, setRejectReason] = useState<string | null>(null);
 
   const me = useRef<{ nickname: string } | null>(null);
@@ -165,6 +167,7 @@ export default function SpireClient() {
       .then((res) => {
         if (res.status === "submitted") {
           setSeasonPoints(res.seasonPoints);
+          setScoreChange(res.scoreChange ?? null);
           setSubmitState("submitted");
         } else if (res.reason === "version_mismatch") {
           setSubmitState("version_mismatch");
@@ -475,6 +478,7 @@ export default function SpireClient() {
         artifacts={runState.artifacts}
         endReason={runState.currentStage > SPIRE_STAGE_COUNT ? "completed" : "failed-out"}
         seasonPoints={seasonPoints}
+        scoreChange={scoreChange ?? undefined}
         submitState={submitState}
         rejectReason={rejectReason}
         onRetry={startNewGame}

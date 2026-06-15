@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { SPIRE_STAGE_COUNT, SPIRE_ARTIFACTS } from "@/lib/spire/config";
+import SeasonScoreRise from "@/components/SeasonScoreRise";
+import type { SeasonScoreChange } from "@/lib/season/scoring";
 
 export type SpireResultProps = {
   stagesCleared: number;
@@ -10,6 +12,7 @@ export type SpireResultProps = {
   artifacts: string[];
   endReason: "completed" | "failed-out" | "in-progress";
   seasonPoints: number | null;
+  scoreChange?: SeasonScoreChange;
   /** null = still submitting; 'submitted' / 'rejected' / 'error'. */
   submitState: "submitting" | "submitted" | "rejected" | "error" | "version_mismatch";
   rejectReason?: string | null;
@@ -27,6 +30,7 @@ export default function SpireResultScreen({
   artifacts,
   endReason,
   seasonPoints,
+  scoreChange,
   submitState,
   rejectReason,
   onRetry,
@@ -120,6 +124,10 @@ export default function SpireResultScreen({
           </p>
         )}
       </div>
+
+      {submitState === "submitted" && scoreChange && (
+        <SeasonScoreRise change={scoreChange} />
+      )}
 
       <Link
         href="/season"

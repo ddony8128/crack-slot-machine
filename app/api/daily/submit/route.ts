@@ -8,6 +8,7 @@ import {
   resolveDailySetup,
 } from '@/lib/daily/run';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
+import { seasonSnapshot, makeSeasonScoreChange } from '@/lib/server/seasonChange';
 import type { ClientResults } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
 
@@ -109,6 +110,11 @@ export async function POST(req: Request) {
     });
   }
 
+  // Season total + rank BEFORE the upsert. The daily +20 first-play grant is
+  // derived in buildSeasonRanking from the presence of a daily best_scores row,
+  // so capturing before the upsert below is what surfaces it as the delta.
+  const before = await seasonSnapshot(db, run.seasonId!, player.id);
+
   await db.finalizeRun(runId, {
     nickname: player.nickname,
     actions,
@@ -133,11 +139,15 @@ export async function POST(req: Request) {
 
   const attemptsLeft = await dailyAttemptsLeft(db, player.id, run.seasonId!, run.dailyDateKey!);
 
+  const after = await seasonSnapshot(db, run.seasonId!, player.id);
+  const scoreChange = makeSeasonScoreChange(before, after, 'DAILY_FIRST_PLAY');
+
   return Response.json({
     status: 'submitted',
     score: outcome.score,
     bestSpinScore: outcome.bestSpinScore,
     attemptsLeft,
+    scoreChange,
   });
 }
 

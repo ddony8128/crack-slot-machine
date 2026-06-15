@@ -1,5 +1,6 @@
 import type { RecordedAction } from '@/store/gameStore';
 import type { ClientResults } from '@/lib/db/types';
+import type { SeasonScoreChange } from '@/lib/season/scoring';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 /** The day's public setup, used for the §5 pre-game preview. */
@@ -41,7 +42,13 @@ export type StartDailyResponse = {
 };
 
 export type SubmitDailyResponse =
-  | { status: 'submitted'; score: number; bestSpinScore: number; attemptsLeft: number }
+  | {
+      status: 'submitted';
+      score: number;
+      bestSpinScore: number;
+      attemptsLeft: number;
+      scoreChange?: SeasonScoreChange;
+    }
   | { status: 'rejected'; reason: string; attemptsLeft?: number };
 
 export type DailyLeaderboard = {
