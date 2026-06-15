@@ -195,6 +195,32 @@ export const RULES: Rule[] = [
     description: '직접 고른 한 칸을 다시 굴린다.',
   },
 
+  // ---- cat ----
+  {
+    id: 'cat-hold',
+    name: '식빵 굽기',
+    type: 'lock',
+    phase: 'pre-spin',
+    build: 'cat',
+    description: '이전 결과가 고양이였던 칸은 첫 굴림에서 유지된다. (이후 규칙으로 바뀔 수 있다)',
+  },
+  {
+    id: 'cat-zoomies',
+    name: '우다다다',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'cat',
+    description: '가장 오른쪽의 고양이가 1번 칸으로 이동하고, 그 사이의 심볼들은 오른쪽으로 한 칸씩 밀린다.',
+  },
+  {
+    id: 'cat-jump',
+    name: '점프의 달인',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'cat',
+    description: '가장 왼쪽의 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽 칸과 자리를 바꾼다. (가능한 방향 중 무작위)',
+  },
+
   // ---- safe ----
   {
     id: 'no-zero',

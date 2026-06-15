@@ -1,5 +1,5 @@
 import type { EngineEvent, Rule, SelectKind, SpinLogStep, SymbolType } from '@/types';
-import { FRUITS, GEMS } from '@/data/symbols';
+import { CATS, FRUITS, GEMS } from '@/data/symbols';
 import { rollSymbol, type Rng } from '@/lib/rng';
 
 export type ApplyCtx = {
@@ -10,6 +10,7 @@ export type ApplyCtx = {
 
 const FRUIT_SET = new Set<SymbolType>(FRUITS);
 const GEM_SET = new Set<SymbolType>(GEMS);
+const CAT_SET = new Set<SymbolType>(CATS);
 
 /** Max reroll iterations for loop-until-condition rules (fish/shuffle). */
 const REROLL_CAP = 30;
@@ -104,6 +105,9 @@ function applyOne(
     index: number,
   ) => {
     events.push({ type: 'symbol_transformed', fromSymbolId, toSymbolId, index, byRuleId: rule.id });
+  };
+  const emitMove = (symbolId: SymbolType, fromIndex: number, toIndex: number) => {
+    events.push({ type: 'symbol_moved', symbolId, fromIndex, toIndex, byRuleId: rule.id });
   };
   switch (rule.id) {
     // ---- reroll ----
@@ -235,6 +239,52 @@ function applyOne(
       }
       return [];
 
+    // ---- transform (MOVE: a cat relocates, shifting/swapping cells) ----
+    case 'cat-zoomies': {
+      // Rightmost cat moves to index 0; the cells between it shift right by one.
+      let r = -1;
+      for (let i = working.length - 1; i >= 0; i--) {
+        if (CAT_SET.has(working[i])) {
+          r = i;
+          break;
+        }
+      }
+      if (r > 0) {
+        const cat = working[r];
+        // Shift cells [0..r-1] right into [1..r] (highest first so we read before
+        // overwriting), then drop the cat into index 0.
+        for (let i = r - 1; i >= 0; i--) {
+          const moved = working[i];
+          write(working, locked, i + 1, moved);
+          emitMove(moved, i, i + 1);
+        }
+        write(working, locked, 0, cat);
+        emitMove(cat, r, 0);
+      }
+      return [];
+    }
+    case 'cat-jump': {
+      // Leftmost cat swaps with the cell two to its left or two to its right
+      // (uniformly random among the valid directions).
+      const L = working.findIndex((s) => CAT_SET.has(s));
+      if (L !== -1) {
+        const targets: number[] = [];
+        if (L - 2 >= 0) targets.push(L - 2);
+        if (L + 2 <= working.length - 1) targets.push(L + 2);
+        if (targets.length > 0) {
+          const target = targets.length === 2 ? (rng() < 0.5 ? targets[0] : targets[1]) : targets[0];
+          const a = working[L];
+          const b = working[target];
+          // SWAP: each cell's prior value leaves it and arrives at the other.
+          write(working, locked, target, a);
+          write(working, locked, L, b);
+          emitMove(a, L, target);
+          emitMove(b, target, L);
+        }
+      }
+      return [];
+    }
+
     // ---- lock rules are handled in the PRE-ROLL HOLD pass, not here. ----
     // ---- select rules are interactive — handled via Pending, not here. ----
 
@@ -324,6 +374,15 @@ export function beginCascade(
           locked[i] = true;
           events.push({ type: 'symbol_locked', symbolId: working[i], index: i, byRuleId: lockRule.id });
           held += 1;
+        }
+      }
+    } else if (lockRule.id === 'cat-hold') {
+      // Hold EVERY cell whose previous value was a cat (no count limit).
+      for (let i = 0; i < prev.length; i++) {
+        if (CAT_SET.has(prev[i]) && !locked[i]) {
+          working[i] = prev[i];
+          locked[i] = true;
+          events.push({ type: 'symbol_locked', symbolId: working[i], index: i, byRuleId: lockRule.id });
         }
       }
     }

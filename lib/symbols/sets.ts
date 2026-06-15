@@ -98,7 +98,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { type: 'adjacent-penalty', points: -60 },
       { type: 'all-types', points: 200 },
     ],
-    ruleIds: [], // set rules TODO in a later WU
+    ruleIds: ['cat-hold', 'cat-zoomies', 'cat-jump'],
   },
   {
     id: 'vehicle',
