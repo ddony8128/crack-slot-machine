@@ -15,6 +15,7 @@ import GameScreen from "@/components/GameScreen";
 import DailyResultScreen from "@/components/DailyResultScreen";
 import DummyAdModal from "@/components/DummyAdModal";
 import ModeIntro from "@/components/ModeIntro";
+import DailySetupPreview from "@/components/DailySetupPreview";
 
 function startErrorMessage(code: string): string {
   if (code === "daily_attempts_exhausted") return "오늘 도전 횟수를 모두 소진했습니다.";
@@ -150,6 +151,8 @@ export default function DailyClient() {
                 {current.dateKey}
               </p>
             </div>
+
+            {current.setup && <DailySetupPreview setup={current.setup} />}
 
             {current.loggedIn ? (
               <div className="space-y-3">

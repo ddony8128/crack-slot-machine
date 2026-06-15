@@ -2,8 +2,15 @@ import type { RecordedAction } from '@/store/gameStore';
 import type { ClientResults } from '@/lib/db/types';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
+/** The day's public setup, used for the §5 pre-game preview. */
+export type DailySetup = {
+  groupASetId: string;
+  groupBSetId: string;
+  basicRuleSetId: string;
+};
+
 export type DailyCurrent =
-  | { dateKey: string; endsAt: string; loggedIn: false }
+  | { dateKey: string; endsAt: string; loggedIn: false; setup?: DailySetup }
   | {
       dateKey: string;
       endsAt: string;
@@ -14,6 +21,7 @@ export type DailyCurrent =
       allowed?: number;
       adRefillUsed?: boolean;
       canRefill?: boolean;
+      setup?: DailySetup;
     };
 
 export type RefillDailyResponse = {

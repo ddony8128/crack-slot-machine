@@ -33,9 +33,17 @@ export async function GET() {
     config: { basicRuleSetId: setup.basicRuleSetId },
   });
 
+  // The day's setup is public info (spec §5 pre-game preview) — return it for
+  // signed-out visitors too.
+  const setupInfo = {
+    groupASetId: setup.groupASetId,
+    groupBSetId: setup.groupBSetId,
+    basicRuleSetId: setup.basicRuleSetId,
+  };
+
   const player = await currentPlayer();
   if (!player) {
-    return Response.json({ dateKey, endsAt, loggedIn: false });
+    return Response.json({ dateKey, endsAt, loggedIn: false, setup: setupInfo });
   }
 
   const status = await db.getDailyUserStatus({
@@ -61,5 +69,6 @@ export async function GET() {
     allowed,
     adRefillUsed,
     canRefill: !adRefillUsed,
+    setup: setupInfo,
   });
 }
