@@ -112,7 +112,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { type: 'per-event', event: 'moved', points: 20 },
       { type: 'per-event', event: 'rerolled', points: 20 },
     ],
-    ruleIds: [], // set rules TODO in a later WU
+    ruleIds: ['vehicle-surge', 'vehicle-logistics', 'vehicle-bigboat'],
   },
   {
     id: 'monster',

@@ -1,5 +1,5 @@
 import type { Rule, SymbolType } from '@/types';
-import { FRUITS, GEMS } from '@/data/symbols';
+import { FRUITS, GEMS, VEHICLES } from '@/data/symbols';
 import { rollSymbol, rollSymbolFrom, type Rng } from '@/lib/rng';
 import { expandRules } from '@/lib/expandRules';
 
@@ -10,6 +10,10 @@ export function computeWeights(
   base: Record<SymbolType, number>,
 ): Record<SymbolType, number> {
   const weights = { ...base };
+
+  // vehicle-surge multiplies VEHICLES by (ORIGINAL non-null slot rule count + 1).
+  // Counted on the un-expanded slot array per spec, so compute it before expanding.
+  const slotRuleCount = rules.reduce((n, r) => (r ? n + 1 : n), 0);
 
   // copy-above duplicates the rule above (including weight rules), so expand first.
   for (const rule of expandRules(rules)) {
@@ -38,6 +42,9 @@ export function computeWeights(
         break;
       case 'gem-surge':
         for (const g of GEMS) weights[g] *= 3;
+        break;
+      case 'vehicle-surge':
+        for (const v of VEHICLES) weights[v] *= slotRuleCount + 1;
         break;
       case 'no-zero':
         weights.zero = 0;

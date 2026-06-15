@@ -221,6 +221,33 @@ export const RULES: Rule[] = [
     description: '가장 왼쪽의 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽 칸과 자리를 바꾼다. (가능한 방향 중 무작위)',
   },
 
+  // ---- vehicle ----
+  // TODO 유료 주차 — needs next-spin hold infra
+  {
+    id: 'vehicle-surge',
+    name: '러시아워',
+    type: 'weight',
+    phase: 'pre-spin',
+    build: 'vehicle',
+    description: '교통수단이 나올 확률이 (장착한 규칙 수 + 1)배가 된다.',
+  },
+  {
+    id: 'vehicle-logistics',
+    name: '물류 사업',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'vehicle',
+    description: '비행기 수만큼 무작위로 두 칸을 교체한다.',
+  },
+  {
+    id: 'vehicle-bigboat',
+    name: '배 크다',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'vehicle',
+    description: '가장 왼쪽 배의 양옆 칸이 그 배 심볼을 복사한다.',
+  },
+
   // ---- safe ----
   {
     id: 'no-zero',

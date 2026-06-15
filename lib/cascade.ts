@@ -1,5 +1,5 @@
 import type { EngineEvent, Rule, SelectKind, SpinLogStep, SymbolType } from '@/types';
-import { CATS, FRUITS, GEMS } from '@/data/symbols';
+import { CATS, FRUITS, GEMS, VEHICLES } from '@/data/symbols';
 import { rollSymbol, type Rng } from '@/lib/rng';
 
 export type ApplyCtx = {
@@ -11,6 +11,10 @@ export type ApplyCtx = {
 const FRUIT_SET = new Set<SymbolType>(FRUITS);
 const GEM_SET = new Set<SymbolType>(GEMS);
 const CAT_SET = new Set<SymbolType>(CATS);
+
+// VEHICLES = [plane, ship, car]; plane/ship literals drive the vehicle rules.
+const PLANE: SymbolType = VEHICLES[0];
+const SHIP: SymbolType = VEHICLES[1];
 
 /** Max reroll iterations for loop-until-condition rules (fish/shuffle). */
 const REROLL_CAP = 30;
@@ -280,6 +284,48 @@ function applyOne(
           write(working, locked, L, b);
           emitMove(a, L, target);
           emitMove(b, target, L);
+        }
+      }
+      return [];
+    }
+
+    // ---- transform (vehicle) ----
+    case 'vehicle-logistics': {
+      // Swap two distinct random cells, once per plane on the board. N===0 -> no-op.
+      const planes = working.reduce((n, s) => (s === PLANE ? n + 1 : n), 0);
+      const n = working.length;
+      for (let p = 0; p < planes; p++) {
+        const a = Math.floor(rng() * n);
+        let b = Math.floor(rng() * n);
+        // Reroll the second pick until it differs from the first (cap attempts).
+        let iter = 0;
+        while (b === a && iter < REROLL_CAP) {
+          b = Math.floor(rng() * n);
+          iter += 1;
+        }
+        if (b === a) continue; // could not find a distinct index; skip this swap
+        const va = working[a];
+        const vb = working[b];
+        // SWAP: each cell's prior value leaves it and arrives at the other.
+        write(working, locked, a, vb);
+        write(working, locked, b, va);
+        emitMove(va, a, b);
+        emitMove(vb, b, a);
+      }
+      return [];
+    }
+    case 'vehicle-bigboat': {
+      // Leftmost ship copies itself into its immediate neighbours (in range).
+      const s = working.findIndex((sym) => sym === SHIP);
+      if (s !== -1) {
+        const ship = working[s];
+        if (s - 1 >= 0) {
+          write(working, locked, s - 1, ship);
+          emitCopy(ship, s, s - 1);
+        }
+        if (s + 1 <= working.length - 1) {
+          write(working, locked, s + 1, ship);
+          emitCopy(ship, s, s + 1);
         }
       }
       return [];
