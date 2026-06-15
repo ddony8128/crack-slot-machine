@@ -454,9 +454,18 @@ export function buyHandDouble(state: SpireRunState, handType: string): Result {
 /**
  * Reroll the shop offer (SPIRE_REROLL_PRICE). This reducer ONLY deducts money;
  * regenerating the offer is the controller's responsibility.
+ *
+ * chime (차임벨): the first 2 rerolls of each shop visit are FREE. The caller
+ * decides freeness (it owns the per-visit counter) and passes `free`; a free
+ * reroll deducts NOTHING and never fails for affordability. Whether a reroll is
+ * free is DERIVED identically by the live client and the server replayer from
+ * the artifact + the per-visit reroll index, so it is not stored on the action.
  */
-export function rerollShop(state: SpireRunState): Result {
+export function rerollShop(state: SpireRunState, free = false): Result {
   const cost = SPIRE_REROLL_PRICE;
+  if (free) {
+    return { ok: true, state: cloneState(state) };
+  }
   if (state.money < cost) {
     return { ok: false, error: `not enough money (need ${cost})` };
   }
@@ -481,7 +490,10 @@ export function settleClear(
   stageScore: number;
 }> {
   const stage = state.currentStage;
-  const interest = spireInterest(state.money); // PRE-payout balance
+  // ledger (가계부): interest is doubled when owned. Reads state.artifacts only,
+  // so the reducer stays pure + deterministic under replay.
+  const interest =
+    spireInterest(state.money) * (state.artifacts.includes('ledger') ? 2 : 1); // PRE-payout balance
   const spinBonus = spireSpinBonus(remainingSpins);
   const payout = spireClearPayout(stage);
 

@@ -31,6 +31,7 @@ import {
   spireStageRunConfig,
   spireStageOutcome,
   spireStageTarget,
+  goldBarMoney,
 } from '@/lib/spire/stage';
 import { SPIRE_STAGE_COUNT } from '@/lib/spire/config';
 
@@ -75,6 +76,9 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
   const stageResults: SpireStageResult[] = [];
   let runEnded = false;
   let endReason: SpireReplayResult['endReason'] = 'in-progress';
+  // chime (차임벨): rerolls used in the CURRENT shop visit (the buys after one
+  // play_stage). Reset to 0 right after each play_stage; the first 2 are free.
+  let shopRerolls = 0;
 
   const fail = (reason: string): SpireReplayResult => ({
     ok: false,
@@ -136,6 +140,16 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
           remainingSpins: outcome.remainingSpins,
         });
 
+        // gold-bar (금괴): accrue +1 per spin with ≥4 gems at STAGE END, BEFORE
+        // settlement, for BOTH clear and fail (so ledger interest counts it).
+        const goldBar = goldBarMoney(
+          rr.spins.map((s) => s.finalBoard),
+          state.artifacts,
+        );
+        state = { ...state, money: state.money + goldBar };
+        // A new shop visit begins after this stage — reset the chime counter.
+        shopRerolls = 0;
+
         if (outcome.cleared) {
           const r = settleClear(state, outcome.remainingSpins, outcome.stageScore);
           if (!r.ok) return fail(r.error);
@@ -187,7 +201,11 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
         break;
       }
       case 'reroll_shop': {
-        const r = rerollShop(state);
+        // chime: first 2 rerolls of this shop visit are free. Freeness is DERIVED
+        // (artifact + per-visit index), never read from the parameterless action.
+        const free = state.artifacts.includes('chime') && shopRerolls < 2;
+        shopRerolls += 1;
+        const r = rerollShop(state, free);
         if (!r.ok) return fail(r.error);
         state = r.state;
         break;

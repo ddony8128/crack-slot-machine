@@ -31,6 +31,7 @@ import {
   spireStageRunConfig,
   spireStageOutcome,
   spireStageTarget,
+  goldBarMoney,
 } from "@/lib/spire/stage";
 import { spireShopOffers, type SpireShopOffers } from "@/lib/spire/shop";
 import { replaySpireRun, type SpireAction } from "@/lib/spire/replay";
@@ -197,8 +198,19 @@ export default function SpireClient() {
         target,
       );
 
+      // gold-bar (금괴): mirror replaySpireRun exactly — accrue +1 per spin with
+      // ≥4 gems at STAGE END, BEFORE settlement, for BOTH clear and fail, using
+      // the SAME pure helper over the store's per-spin final boards.
+      const goldBar = goldBarMoney(
+        spinLogs.map((l) => l.finalResult),
+        st.artifacts,
+      );
+      const stForSettle: SpireRunState =
+        goldBar > 0 ? { ...st, money: st.money + goldBar } : st;
+      runStateRef.current = stForSettle;
+
       if (cleared) {
-        const r = settleClear(st, outcome.remainingSpins, outcome.stageScore);
+        const r = settleClear(stForSettle, outcome.remainingSpins, outcome.stageScore);
         if (!r.ok) {
           setError(r.error);
           setPhase("error");
@@ -220,7 +232,7 @@ export default function SpireClient() {
           setPhase("shop");
         }
       } else {
-        const r = settleFail(st);
+        const r = settleFail(stForSettle);
         if (!r.ok) {
           setError(r.error);
           setPhase("error");
@@ -613,7 +625,14 @@ export default function SpireClient() {
             applyReducer(buyHandDouble(runState, hand), { type: "buy_hand_double", handType: hand })
           }
           onReroll={() => {
-            const r = rerollShop(runState);
+            // chime (차임벨): first 2 rerolls of this shop visit are free. rerollCount
+            // resets to 0 on leaveShop, so it IS the per-visit index — derived the
+            // SAME way the server replayer derives `free` from shopRerolls. The
+            // recorded action stays parameterless; the free reroll still re-seeds
+            // offers because rerollCount increments below.
+            const free =
+              runState.artifacts.includes("chime") && rerollCount < 2;
+            const r = rerollShop(runState, free);
             if (!r.ok) return;
             runStateRef.current = r.state;
             setRunState(r.state);

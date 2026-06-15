@@ -524,6 +524,59 @@ describe('SpinLog.haunted (RULE SLOT monster-haunt wiring)', () => {
   });
 });
 
+describe('time-capsule artifact (타임캡슐)', () => {
+  // All-cherry weights → Five of a Kind every spin, fixed (no rule offers) so we
+  // can drive 7 deterministic spins. With time-capsule: spin 0 scores 0, spin 6
+  // (the 7th) scores ×2; spinIndex is deterministic so this replays identically.
+  function allCherry(): Record<SymbolType, number> {
+    return Object.fromEntries(
+      (Object.keys(BASE_WEIGHTS) as SymbolType[]).map((k) => [k, k === 'cherry' ? 1 : 0]),
+    ) as Record<SymbolType, number>;
+  }
+
+  function configuredRun() {
+    const store = createGameStore(loopingRng([RNG_CHERRY]));
+    store.getState().setNickname('cap');
+    store.getState().configureRun({
+      baseWeights: allCherry(),
+      provisioning: 'fixed',
+      rulePoolIds: [],
+      maxSpins: 7,
+      artifacts: ['time-capsule'],
+    });
+    store.getState().startGame();
+    return store;
+  }
+
+  it('spin 0 (first spin) scores 0 despite a non-zero base', () => {
+    const store = configuredRun();
+    expect(store.getState().status).toBe('ready-to-spin');
+    store.getState().spin();
+    const log = store.getState().spinLogs[0];
+    expect(log.spinIndex).toBe(0);
+    expect(log.baseRoundScore).toBeGreaterThan(0); // Five of a Kind has a base score
+    expect(log.roundScore).toBe(0); // ...but time-capsule zeroes spin 1
+    expect(store.getState().totalScore).toBe(0);
+  });
+
+  it('spin 6 (7th spin) scores ×2', () => {
+    const store = configuredRun();
+    // Drive through all 7 spins (fixed provisioning → spin/next, no offers).
+    for (let i = 0; i < 7; i++) {
+      store.getState().spin();
+      if (i < 6) store.getState().next();
+    }
+    const logs = store.getState().spinLogs;
+    expect(logs).toHaveLength(7);
+    const spin6 = logs[6];
+    expect(spin6.spinIndex).toBe(6);
+    // multiplier is 1 here, so roundScore = baseRoundScore × 2 from time-capsule.
+    expect(spin6.roundScore).toBe(spin6.baseRoundScore * spin6.multiplier * 2);
+    // a middle spin (e.g. spin 3) is unaffected.
+    expect(logs[3].roundScore).toBe(logs[3].baseRoundScore * logs[3].multiplier);
+  });
+});
+
 describe('reset', () => {
   it('preserves nickname and clears state', () => {
     const store = createGameStore(loopingRng([RNG_CHERRY]));

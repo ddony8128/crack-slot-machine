@@ -229,7 +229,16 @@ function buildInitializer(initialRng: Rng): Initializer {
       const items = scoreItems(finalResult, ruleSlots, events, boards, haunted, ups, arts);
       const specials = detectSpecials(finalResult, runConfig?.numberSpecials);
       const multiplier = state.nextMultiplier;
-      const roundScore = score.baseRoundScore * multiplier;
+      let roundScore = score.baseRoundScore * multiplier;
+      // time-capsule (타임캡슐): the stage's 1st spin (spinIndex 0) scores 0; the
+      // 7th/last spin (spinIndex 6) scores ×2. Applied AFTER the existing
+      // multiplier. spinIndex is deterministic, so this replays identically; if
+      // the stage clears before spin 7, spin 6 never runs and the ×2 simply
+      // doesn't occur.
+      if (arts.includes('time-capsule')) {
+        if (spinIndex === 0) roundScore = 0;
+        else if (spinIndex === 6) roundScore *= 2;
+      }
 
       const log: SpinLog = {
         spinIndex,

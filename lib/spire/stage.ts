@@ -12,7 +12,33 @@ import type { RunConfig } from '@/store/gameStore';
 import type { HandUpgradeMap } from '@/lib/score';
 import { BASE_WEIGHTS } from '@/data/symbols';
 import { initialBoardFor } from '@/lib/board/initialBoard';
+import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { symbolInSet } from '@/lib/symbols/tags';
 import { SPIRE_SPINS_PER_STAGE, SPIRE_STAGES } from '@/lib/spire/config';
+
+/**
+ * gold-bar (금괴): +1 money per spin whose final board has ≥4 gem-set symbols.
+ *
+ * Pure + deterministic, shared by BOTH the live client (SpireClient.finalizeStage,
+ * over the store's spinLogs[].finalResult) AND the server replayer
+ * (replaySpireRun, over rr.spins[].finalBoard) so the two AGREE on the per-stage
+ * gold-bar money exactly. Returns 0 unless the run owns 'gold-bar'.
+ *
+ * @param boards the stage's per-spin FINAL boards (one SymbolType[] per spin)
+ */
+export function goldBarMoney(boards: SymbolType[][], artifacts: string[]): number {
+  if (!artifacts.includes('gold-bar')) return 0;
+  const gemSet = SYMBOL_SETS_BY_ID['gem'];
+  let money = 0;
+  for (const board of boards) {
+    let gems = 0;
+    for (const sym of board) {
+      if (symbolInSet(sym, gemSet)) gems += 1;
+    }
+    if (gems >= 4) money += 1;
+  }
+  return money;
+}
 
 /** `${runSeed}:stage-${stage}:attempt-${attempt}` — stable per attempt. */
 export function stageAttemptSeed(runSeed: string, stage: number, attempt: number): string {

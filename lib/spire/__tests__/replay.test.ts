@@ -10,7 +10,9 @@ import {
   spireStageRunConfig,
   spireStageOutcome,
   spireStageTarget,
+  goldBarMoney,
 } from '@/lib/spire/stage';
+import { rerollShop } from '@/lib/spire/state';
 import { spireInterest, spireSpinBonus, spireClearPayout, SPIRE_FAIL_SUPPORT } from '@/lib/spire/config';
 
 /** Drive a real store through a stage greedily (pick first offer → slot 0 →
@@ -45,7 +47,11 @@ function playStage(seed: string, config: RunConfig, target: number) {
       break;
     }
   }
-  return { actions: s().getActions() as RecordedAction[], scores: s().spinLogs.map((l) => l.roundScore) };
+  return {
+    actions: s().getActions() as RecordedAction[],
+    scores: s().spinLogs.map((l) => l.roundScore),
+    boards: s().spinLogs.map((l) => l.finalResult),
+  };
 }
 
 const RUN = 'spire-replay-test';
@@ -135,5 +141,65 @@ describe('replaySpireRun — stage consistency + settlement threading', () => {
       { type: 'buy_hand_double', handType: 'Pair' }, // cost 3, money 0
     ]);
     expect(res.ok).toBe(false);
+  });
+});
+
+describe('replaySpireRun — gold-bar accrual is deterministic', () => {
+  it('adds exactly goldBarMoney(stage boards) before settlement', () => {
+    // Use the GEM set so boards can contain gem symbols at all.
+    const choice = applyInitialSetChoice(initialSpireState(RUN), 'gem');
+    if (!choice.ok) throw new Error('setup');
+    const cfg = spireStageRunConfig(
+      RUN, 1, 1, choice.state.symbolBag, choice.state.rulePool, choice.state.handUpgrades,
+    );
+    const seed = `${RUN}:stage-1:attempt-1`;
+    const target = spireStageTarget(1);
+    const played = playStage(seed, cfg, target);
+    const outcome = spireStageOutcome(played.scores, target);
+
+    const base: SpireAction[] = [
+      { type: 'choose_set', chosenSetId: 'gem' },
+      { type: 'play_stage', actions: played.actions },
+    ];
+    // gold-bar does NOT affect board generation (only number-specials do), so the
+    // SAME stage boards are produced with or without it — the only state delta is
+    // the accrued money (+ any interest it pushes up). Inject the artifact via
+    // choose_artifact (v0 replay appends it) so both streams share identical play.
+    const withGold: SpireAction[] = [
+      { type: 'choose_artifact', artifactId: 'gold-bar' },
+      ...base,
+    ];
+
+    const baseRes = replaySpireRun(RUN, base);
+    const goldRes = replaySpireRun(RUN, withGold);
+    expect(baseRes.ok && goldRes.ok).toBe(true);
+
+    const expectedGold = goldBarMoney(played.boards, ['gold-bar']);
+    // gold-bar is added BEFORE settlement. Pre-settle money is 0 for stage 1, so
+    // on a CLEAR the extra interest is spireInterest(expectedGold) (ledger not
+    // owned); on a FAIL no interest applies.
+    const extraInterest = outcome.cleared ? spireInterest(expectedGold) : 0;
+    expect(goldRes.finalState.money - baseRes.finalState.money).toBe(
+      expectedGold + extraInterest,
+    );
+  });
+});
+
+describe('chime (차임벨) — free-reroll determinism (direct reducer)', () => {
+  it('first 2 rerolls free, 3rd deducts (per-visit index, no action field)', () => {
+    // Mirror replaySpireRun's shopRerolls derivation exactly: a "shop visit" is
+    // the rerolls after one stage; the first 2 are free when chime is owned.
+    let state = initialSpireState(RUN);
+    state = { ...state, money: 1, artifacts: ['chime'] };
+    let shopRerolls = 0;
+    for (let n = 0; n < 3; n++) {
+      const free = state.artifacts.includes('chime') && shopRerolls < 2;
+      shopRerolls += 1;
+      const r = rerollShop(state, free);
+      expect(r.ok).toBe(true);
+      if (r.ok) state = r.state;
+    }
+    // 2 free (money unchanged) + 1 paid (1 → 0).
+    expect(state.money).toBe(0);
   });
 });
