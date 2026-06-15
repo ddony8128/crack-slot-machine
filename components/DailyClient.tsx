@@ -14,6 +14,7 @@ import { dailyRunConfigFromParts } from "@/lib/daily/run";
 import GameScreen from "@/components/GameScreen";
 import DailyResultScreen from "@/components/DailyResultScreen";
 import DummyAdModal from "@/components/DummyAdModal";
+import ModeIntro from "@/components/ModeIntro";
 
 function startErrorMessage(code: string): string {
   if (code === "daily_attempts_exhausted") return "오늘 도전 횟수를 모두 소진했습니다.";
@@ -113,6 +114,15 @@ export default function DailyClient() {
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
+      <ModeIntro
+        storageKey="daily"
+        title="일일 도전"
+        lines={[
+          "오늘 정해진 심볼 세트와 규칙으로 점수를 겨룹니다.",
+          "공식 도전은 하루 5회이며, 광고를 보면 5회 추가 도전할 수 있습니다.",
+          "오늘의 최고 점수만 랭킹에 반영됩니다.",
+        ]}
+      />
       <header className="space-y-2">
         <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
           <span className="text-emerald-400">DAILY</span>{" "}

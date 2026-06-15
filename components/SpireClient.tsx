@@ -12,6 +12,7 @@ import { SYMBOL_SETS_BY_ID } from "@/lib/symbols/sets";
 import { SPIRE_STAGES, SPIRE_SPINS_PER_STAGE, SPIRE_STAGE_COUNT } from "@/lib/spire/config";
 import GameScreen from "@/components/GameScreen";
 import SpireResultScreen from "@/components/SpireResultScreen";
+import ModeIntro from "@/components/ModeIntro";
 import type { SymbolType } from "@/types";
 
 type Phase =
@@ -230,6 +231,14 @@ export default function SpireClient() {
   if (phase.kind === "choosing") {
     return (
       <main className="fade-rise mx-auto flex w-full max-w-2xl flex-1 flex-col items-center gap-6 px-4 py-10">
+        <ModeIntro
+          storageKey="spire"
+          title="첨탑 오르기"
+          lines={[
+            "숫자 세트로 시작해, 첫 스테이지 전에 심볼 세트 하나를 선택합니다.",
+            "선택한 세트의 심볼과 규칙을 활용해 10개의 스테이지를 올라가세요.",
+          ]}
+        />
         <header className="text-center">
           <h1 className="text-3xl font-black tracking-tight">
             <span className="text-emerald-400">첨탑</span>{" "}

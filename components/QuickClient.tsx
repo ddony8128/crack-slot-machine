@@ -7,6 +7,7 @@ import { fetchMe } from "@/lib/client/authApi";
 import { ensureGuest, startQuick } from "@/lib/client/quickApi";
 import GameScreen from "@/components/GameScreen";
 import QuickResultScreen from "@/components/QuickResultScreen";
+import ModeIntro from "@/components/ModeIntro";
 
 function startErrorMessage(code: string): string {
   if (code === "no_active_season") return "진행 중인 시즌이 없습니다.";
@@ -74,6 +75,14 @@ export default function QuickClient() {
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
+      <ModeIntro
+        storageKey="quick"
+        title="빠른 게임"
+        lines={[
+          "매 스핀마다 규칙을 고르고 배치해 높은 점수를 노리는 모드입니다.",
+          "빠른 게임 점수는 시즌 랭킹에 반영되지 않습니다.",
+        ]}
+      />
       <header className="text-center">
         <h1 className="text-5xl font-black tracking-tight sm:text-6xl">
           <span className="text-emerald-400">RULE</span>{" "}

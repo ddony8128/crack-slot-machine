@@ -9,6 +9,7 @@ import { PUZZLES_BY_KEY } from "@/lib/puzzle/config";
 import { fetchMe } from "@/lib/client/authApi";
 import GameScreen from "@/components/GameScreen";
 import PuzzleResultScreen from "@/components/PuzzleResultScreen";
+import ModeIntro from "@/components/ModeIntro";
 
 function startErrorMessage(code: string): string {
   if (code === "unauthorized") return "로그인이 필요합니다.";
@@ -104,6 +105,14 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
+      <ModeIntro
+        storageKey="puzzle"
+        title="퍼즐 모드"
+        lines={[
+          "주어진 규칙을 사용해 제한된 횟수 안에 목표 조합을 달성하세요.",
+          "규칙은 랜덤으로 나오지 않고, 처음부터 가방에 들어 있습니다.",
+        ]}
+      />
       <header className="space-y-2">
         <span className="font-mono text-xs font-bold text-emerald-400">
           #{puzzle.index}
