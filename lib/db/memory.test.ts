@@ -139,3 +139,182 @@ describe('MemoryDb leaderboard', () => {
     expect(page.totalCount).toBe(0);
   });
 });
+
+describe('MemoryDb players', () => {
+  it('creates a player and fetches it by id (active or soft-deleted)', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Alice',
+      contactType: 'email',
+      contactValue: 'a@example.com',
+      passwordHash: 'hash',
+    });
+    expect(p.deletedAt).toBeNull();
+    const fetched = await db.getPlayerById(p.id);
+    expect(fetched?.nickname).toBe('Alice');
+    expect(await db.getPlayerById('missing')).toBeNull();
+  });
+
+  it('getPlayerByNickname is case-insensitive and excludes soft-deleted', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Bob',
+      contactType: 'phone',
+      contactValue: '010',
+      passwordHash: 'h',
+    });
+    expect((await db.getPlayerByNickname('bob'))?.id).toBe(p.id);
+    expect((await db.getPlayerByNickname('BOB'))?.id).toBe(p.id);
+    expect(await db.getPlayerByNickname('nobody')).toBeNull();
+
+    // soft-delete -> excluded from getPlayerByNickname, still visible by id
+    const fetched = await db.getPlayerById(p.id);
+    fetched!.deletedAt = new Date().toISOString();
+    expect(await db.getPlayerByNickname('bob')).toBeNull();
+    expect((await db.getPlayerById(p.id))?.deletedAt).not.toBeNull();
+  });
+});
+
+describe('MemoryDb seasons', () => {
+  it('getActiveSeason returns the seeded Season 1; getSeasonBySlug matches', async () => {
+    const db = new MemoryDb();
+    const active = await db.getActiveSeason();
+    expect(active?.slug).toBe('2026-06-season-1');
+    expect(active?.title).toBe('RULE SLOT Season 1');
+    expect(active?.rulesetVersion).toBe(2);
+    expect(active?.isActive).toBe(true);
+
+    const bySlug = await db.getSeasonBySlug('2026-06-season-1');
+    expect(bySlug?.id).toBe(active?.id);
+    expect(await db.getSeasonBySlug('nope')).toBeNull();
+  });
+});
+
+describe('MemoryDb daily challenges', () => {
+  it('upsertDailyChallenge is idempotent on (seasonId, dateKey)', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const input = {
+      seasonId: season!.id,
+      dateKey: '2026-06-15',
+      startsAt: '2026-06-15T03:00:00Z',
+      endsAt: '2026-06-16T03:00:00Z',
+      seed: 'seed-1',
+      groupASetId: 'A',
+      groupBSetId: 'B',
+    };
+    const first = await db.upsertDailyChallenge(input);
+    const second = await db.upsertDailyChallenge({ ...input, seed: 'seed-2' });
+    expect(second.id).toBe(first.id);
+    expect(second.seed).toBe('seed-1'); // existing kept, not overwritten
+    expect((await db.getDailyChallenge(season!.id, '2026-06-15'))?.id).toBe(first.id);
+  });
+
+  it('countResolvedDailyRuns counts only submitted/rejected daily runs', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const player = await db.createPlayer({
+      nickname: 'C',
+      contactType: 'email',
+      contactValue: 'c@e.com',
+      passwordHash: 'h',
+    });
+    const dateKey = '2026-06-15';
+    const base = {
+      playerId: player.id,
+      seasonId: season!.id,
+      mode: 'daily' as const,
+      dailyDateKey: dateKey,
+      seed: 's',
+      ...VER,
+    };
+    // submitted
+    const r1 = await db.createRun(base);
+    await db.finalizeRun(r1.id, submitInput('C', 100, 10));
+    // rejected
+    const r2 = await db.createRun(base);
+    await db.finalizeRun(r2.id, {
+      ...submitInput('C', 0, 0),
+      status: 'rejected',
+      verified: false,
+      rejectReason: 'x',
+    });
+    // pending -> not counted
+    await db.createRun(base);
+    // different date -> not counted
+    const other = await db.createRun({ ...base, dailyDateKey: '2026-06-16' });
+    await db.finalizeRun(other.id, submitInput('C', 5, 1));
+    // event-mode run -> not counted
+    await db.createRun({ ...base, mode: 'event' });
+
+    const count = await db.countResolvedDailyRuns({
+      playerId: player.id,
+      seasonId: season!.id,
+      dateKey,
+    });
+    expect(count).toBe(2);
+  });
+});
+
+describe('MemoryDb best scores', () => {
+  it('upsertBestScore keeps the higher score and cleared is sticky-true', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const scope = {
+      playerId: 'p1',
+      seasonId: season!.id,
+      mode: 'daily' as const,
+      scopeKey: '2026-06-15',
+    };
+    const a = await db.upsertBestScore({ ...scope, score: 100, seasonPoints: 10, cleared: false, runId: 'r1' });
+    expect(a.score).toBe(100);
+    expect(a.cleared).toBe(false);
+
+    // lower score -> score kept, but cleared becomes sticky true
+    const b = await db.upsertBestScore({ ...scope, score: 50, seasonPoints: 5, cleared: true, runId: 'r2' });
+    expect(b.score).toBe(100);
+    expect(b.seasonPoints).toBe(10);
+    expect(b.runId).toBe('r1');
+    expect(b.cleared).toBe(true);
+
+    // higher score -> replaced; cleared stays true even if new is false
+    const c = await db.upsertBestScore({ ...scope, score: 200, seasonPoints: 20, cleared: false, runId: 'r3' });
+    expect(c.score).toBe(200);
+    expect(c.seasonPoints).toBe(20);
+    expect(c.runId).toBe('r3');
+    expect(c.cleared).toBe(true);
+  });
+
+  it('listDailyBestScores orders by score desc then updatedAt asc', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const dateKey = '2026-06-15';
+    const mk = (playerId: string, score: number) =>
+      db.upsertBestScore({
+        playerId,
+        seasonId: season!.id,
+        mode: 'daily',
+        scopeKey: dateKey,
+        score,
+        seasonPoints: 0,
+        runId: null,
+      });
+    await mk('p1', 100);
+    await mk('p2', 300);
+    await mk('p3', 300); // ties p2 on score, inserted later -> ranks after p2
+
+    const rows = await db.listDailyBestScores(season!.id, dateKey);
+    expect(rows.map((r) => r.playerId)).toEqual(['p2', 'p3', 'p1']);
+  });
+
+  it('listSeasonBestScores returns all rows; listPlayerBestScores filters by player', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    await db.upsertBestScore({ playerId: 'p1', seasonId: season!.id, mode: 'daily', scopeKey: 'd1', score: 1, seasonPoints: 0, runId: null });
+    await db.upsertBestScore({ playerId: 'p1', seasonId: season!.id, mode: 'puzzle', scopeKey: 'pz1', score: 2, seasonPoints: 0, runId: null });
+    await db.upsertBestScore({ playerId: 'p2', seasonId: season!.id, mode: 'daily', scopeKey: 'd1', score: 3, seasonPoints: 0, runId: null });
+
+    expect((await db.listSeasonBestScores(season!.id)).length).toBe(3);
+    expect((await db.listPlayerBestScores('p1', season!.id)).length).toBe(2);
+  });
+});

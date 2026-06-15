@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { TOTAL_SLUG } from "@/lib/db/types";
 
-// The root sends players to the combined "total" event board.
+// The root sends players to the Season 1 hub.
 export default function Home() {
-  redirect(`/e/${TOTAL_SLUG}`);
+  redirect("/season");
 }

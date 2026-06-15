@@ -9,5 +9,8 @@
  * Leaderboards only show records whose stored versions match these, so scores
  * from different rule sets never mix.
  */
-export const CLIENT_VERSION = '1.0.0';
-export const RULESET_VERSION = 1;
+export const CLIENT_VERSION = '2.0.0';
+export const RULESET_VERSION = 2;
+
+/** The active season slug (see seasons table / lib/season/config). */
+export const SEASON_SLUG = '2026-06-season-1';

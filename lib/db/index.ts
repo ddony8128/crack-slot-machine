@@ -7,7 +7,10 @@ import { MemoryDb } from '@/lib/db/memory';
 export * from '@/lib/db/types';
 
 // A process-wide MemoryDb so local dev without Supabase keeps data within a run.
-let memorySingleton: MemoryDb | null = null;
+// Stored on globalThis so every bundle (route handlers AND page RSCs) and HMR
+// reloads share ONE instance in dev — a module-scoped singleton would otherwise
+// give pages and routes separate in-memory stores.
+const globalForDb = globalThis as unknown as { __ruleSlotMemoryDb?: MemoryDb };
 
 /**
  * The active Db: Supabase when credentials are present, otherwise an in-memory
@@ -15,6 +18,6 @@ let memorySingleton: MemoryDb | null = null;
  */
 export function getDb(): Db {
   if (hasSupabaseEnv()) return new SupabaseDb();
-  if (!memorySingleton) memorySingleton = new MemoryDb();
-  return memorySingleton;
+  if (!globalForDb.__ruleSlotMemoryDb) globalForDb.__ruleSlotMemoryDb = new MemoryDb();
+  return globalForDb.__ruleSlotMemoryDb;
 }

@@ -6,6 +6,11 @@ import type {
   FinalizeRunInput,
   LeaderboardItem,
   LeaderboardPage,
+  PlayerRow,
+  SeasonRow,
+  DailyChallengeRow,
+  BestScoreRow,
+  RunMode,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
 
@@ -19,6 +24,23 @@ function seedEvents(): EventRow[] {
   ];
 }
 
+/** Seed Season 1 mirroring the seed in supabase/migrations/0002_season1.sql. */
+function seedSeasons(): SeasonRow[] {
+  return [
+    {
+      id: 'season-1',
+      slug: '2026-06-season-1',
+      title: 'RULE SLOT Season 1',
+      startsAt: '2026-06-15T03:00:00Z',
+      endsAt: '2026-06-28T03:00:00Z',
+      clientVersion: '2.0.0',
+      rulesetVersion: 2,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
 /**
  * In-memory Db for tests and local dev without Supabase credentials. Replicates
  * the SQL filtering/sorting semantics. Not persistent across process restarts.
@@ -26,10 +48,15 @@ function seedEvents(): EventRow[] {
 export class MemoryDb implements Db {
   private events: EventRow[];
   private runs: RunRow[] = [];
+  private players: PlayerRow[] = [];
+  private seasons: SeasonRow[];
+  private dailyChallenges: DailyChallengeRow[] = [];
+  private bestScores: BestScoreRow[] = [];
   private counter = 0;
 
   constructor(events?: EventRow[]) {
     this.events = events ?? seedEvents();
+    this.seasons = seedSeasons();
   }
 
   private id(prefix: string): string {
@@ -92,7 +119,16 @@ export class MemoryDb implements Db {
   async createRun(input: CreateRunInput): Promise<RunRow> {
     const row: RunRow = {
       id: this.id('run'),
-      eventId: input.eventId,
+      eventId: input.eventId ?? null,
+      playerId: input.playerId ?? null,
+      seasonId: input.seasonId ?? null,
+      mode: input.mode ?? 'event',
+      dailyDateKey: input.dailyDateKey ?? null,
+      puzzleKey: input.puzzleKey ?? null,
+      stageIndex: input.stageIndex ?? null,
+      cleared: null,
+      clearedStageCount: null,
+      seasonPoints: null,
       nickname: null,
       seed: input.seed,
       actions: null,
@@ -130,6 +166,9 @@ export class MemoryDb implements Db {
     row.verified = input.verified;
     row.rejectReason = input.rejectReason;
     row.submittedAt = input.submittedAt;
+    row.cleared = input.cleared ?? null;
+    row.clearedStageCount = input.clearedStageCount ?? null;
+    row.seasonPoints = input.seasonPoints ?? null;
     return row;
   }
 
@@ -176,9 +215,183 @@ export class MemoryDb implements Db {
         score: r.score ?? 0,
         bestSpinScore: r.bestSpinScore ?? 0,
         submittedAt: r.submittedAt ?? '',
-        eventSlug: eventBySlug.get(r.eventId)?.slug ?? '',
+        eventSlug: (r.eventId ? eventBySlug.get(r.eventId) : undefined)?.slug ?? '',
       }));
 
     return { page, pageSize, totalCount, items };
+  }
+
+  // ── Season 1: accounts ─────────────────────────────────────────────────────
+  async createPlayer(input: {
+    nickname: string;
+    contactType: 'email' | 'phone';
+    contactValue: string;
+    passwordHash: string;
+  }): Promise<PlayerRow> {
+    const row: PlayerRow = {
+      id: this.id('player'),
+      nickname: input.nickname,
+      contactType: input.contactType,
+      contactValue: input.contactValue,
+      passwordHash: input.passwordHash,
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+    };
+    this.players.push(row);
+    return row;
+  }
+
+  async getPlayerById(id: string): Promise<PlayerRow | null> {
+    return this.players.find((p) => p.id === id) ?? null;
+  }
+
+  async getPlayerByNickname(nickname: string): Promise<PlayerRow | null> {
+    const lower = nickname.toLowerCase();
+    return (
+      this.players.find(
+        (p) => p.deletedAt === null && p.nickname.toLowerCase() === lower,
+      ) ?? null
+    );
+  }
+
+  // ── Season 1: seasons ──────────────────────────────────────────────────────
+  async getSeasonBySlug(slug: string): Promise<SeasonRow | null> {
+    return this.seasons.find((s) => s.slug === slug) ?? null;
+  }
+
+  async getActiveSeason(): Promise<SeasonRow | null> {
+    const active = this.seasons.filter((s) => s.isActive);
+    if (active.length === 0) return null;
+    active.sort((a, b) => (a.createdAt > b.createdAt ? -1 : a.createdAt < b.createdAt ? 1 : 0));
+    return active[0];
+  }
+
+  // ── Season 1: daily challenges ─────────────────────────────────────────────
+  async getDailyChallenge(
+    seasonId: string,
+    dateKey: string,
+  ): Promise<DailyChallengeRow | null> {
+    return (
+      this.dailyChallenges.find(
+        (d) => d.seasonId === seasonId && d.dateKey === dateKey,
+      ) ?? null
+    );
+  }
+
+  async upsertDailyChallenge(input: {
+    seasonId: string;
+    dateKey: string;
+    startsAt: string;
+    endsAt: string;
+    seed: string;
+    groupASetId: string;
+    groupBSetId: string;
+    config?: unknown;
+  }): Promise<DailyChallengeRow> {
+    const existing = await this.getDailyChallenge(input.seasonId, input.dateKey);
+    if (existing) return existing;
+    const row: DailyChallengeRow = {
+      id: this.id('daily'),
+      seasonId: input.seasonId,
+      dateKey: input.dateKey,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      seed: input.seed,
+      groupASetId: input.groupASetId,
+      groupBSetId: input.groupBSetId,
+      config: input.config ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    this.dailyChallenges.push(row);
+    return row;
+  }
+
+  async countResolvedDailyRuns(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<number> {
+    return this.runs.filter(
+      (r) =>
+        r.playerId === input.playerId &&
+        r.seasonId === input.seasonId &&
+        r.mode === 'daily' &&
+        r.dailyDateKey === input.dateKey &&
+        (r.status === 'submitted' || r.status === 'rejected'),
+    ).length;
+  }
+
+  // ── Season 1: best scores / ranking ────────────────────────────────────────
+  async upsertBestScore(input: {
+    playerId: string;
+    seasonId: string;
+    mode: RunMode;
+    scopeKey: string;
+    score: number;
+    seasonPoints: number;
+    cleared?: boolean | null;
+    runId: string | null;
+  }): Promise<BestScoreRow> {
+    const existing = this.bestScores.find(
+      (b) =>
+        b.playerId === input.playerId &&
+        b.seasonId === input.seasonId &&
+        b.mode === input.mode &&
+        b.scopeKey === input.scopeKey,
+    );
+    if (!existing) {
+      const row: BestScoreRow = {
+        id: this.id('best'),
+        playerId: input.playerId,
+        seasonId: input.seasonId,
+        mode: input.mode,
+        scopeKey: input.scopeKey,
+        score: input.score,
+        seasonPoints: input.seasonPoints,
+        cleared: !!input.cleared,
+        runId: input.runId,
+        updatedAt: new Date().toISOString(),
+      };
+      this.bestScores.push(row);
+      return row;
+    }
+    if (input.score > existing.score) {
+      existing.score = input.score;
+      existing.seasonPoints = input.seasonPoints;
+      existing.runId = input.runId;
+      existing.updatedAt = new Date().toISOString();
+    }
+    existing.cleared = !!existing.cleared || !!input.cleared;
+    return existing;
+  }
+
+  async listPlayerBestScores(
+    playerId: string,
+    seasonId: string,
+  ): Promise<BestScoreRow[]> {
+    return this.bestScores.filter(
+      (b) => b.playerId === playerId && b.seasonId === seasonId,
+    );
+  }
+
+  async listSeasonBestScores(seasonId: string): Promise<BestScoreRow[]> {
+    return this.bestScores.filter((b) => b.seasonId === seasonId);
+  }
+
+  async listDailyBestScores(
+    seasonId: string,
+    dateKey: string,
+  ): Promise<BestScoreRow[]> {
+    return this.bestScores
+      .filter(
+        (b) =>
+          b.seasonId === seasonId &&
+          b.mode === 'daily' &&
+          b.scopeKey === dateKey,
+      )
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0;
+      });
   }
 }

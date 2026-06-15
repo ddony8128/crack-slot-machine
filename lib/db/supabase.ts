@@ -11,6 +11,11 @@ import type {
   LeaderboardItem,
   LeaderboardPage,
   ClientResults,
+  PlayerRow,
+  SeasonRow,
+  DailyChallengeRow,
+  BestScoreRow,
+  RunMode,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
@@ -32,7 +37,16 @@ function toEvent(row: any): EventRow {
 function toRun(row: any): RunRow {
   return {
     id: row.id,
-    eventId: row.event_id,
+    eventId: row.event_id ?? null,
+    playerId: row.player_id ?? null,
+    seasonId: row.season_id ?? null,
+    mode: row.mode as RunMode,
+    dailyDateKey: row.daily_date_key ?? null,
+    puzzleKey: row.puzzle_key ?? null,
+    stageIndex: row.stage_index ?? null,
+    cleared: row.cleared ?? null,
+    clearedStageCount: row.cleared_stage_count ?? null,
+    seasonPoints: row.season_points ?? null,
     nickname: row.nickname ?? null,
     seed: row.seed,
     actions: (row.actions ?? null) as RecordedAction[] | null,
@@ -46,6 +60,62 @@ function toRun(row: any): RunRow {
     rejectReason: row.reject_reason ?? null,
     createdAt: row.created_at,
     submittedAt: row.submitted_at ?? null,
+  };
+}
+
+function toPlayer(row: any): PlayerRow {
+  return {
+    id: row.id,
+    nickname: row.nickname,
+    contactType: row.contact_type,
+    contactValue: row.contact_value,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at,
+    deletedAt: row.deleted_at ?? null,
+  };
+}
+
+function toSeason(row: any): SeasonRow {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    clientVersion: row.client_version,
+    rulesetVersion: row.ruleset_version,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  };
+}
+
+function toDailyChallenge(row: any): DailyChallengeRow {
+  return {
+    id: row.id,
+    seasonId: row.season_id,
+    dateKey: row.date_key,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    seed: row.seed,
+    groupASetId: row.group_a_set_id,
+    groupBSetId: row.group_b_set_id,
+    config: row.config ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+function toBestScore(row: any): BestScoreRow {
+  return {
+    id: row.id,
+    playerId: row.player_id,
+    seasonId: row.season_id,
+    mode: row.mode as RunMode,
+    scopeKey: row.scope_key,
+    score: row.score,
+    seasonPoints: row.season_points,
+    cleared: row.cleared ?? null,
+    runId: row.run_id ?? null,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -138,7 +208,13 @@ export class SupabaseDb implements Db {
     const { data, error } = await this.sb
       .from('game_runs')
       .insert({
-        event_id: input.eventId,
+        event_id: input.eventId ?? null,
+        player_id: input.playerId ?? null,
+        season_id: input.seasonId ?? null,
+        mode: input.mode ?? 'event',
+        daily_date_key: input.dailyDateKey ?? null,
+        puzzle_key: input.puzzleKey ?? null,
+        stage_index: input.stageIndex ?? null,
         seed: input.seed,
         client_version: input.clientVersion,
         ruleset_version: input.rulesetVersion,
@@ -177,6 +253,9 @@ export class SupabaseDb implements Db {
         verified: input.verified,
         reject_reason: input.rejectReason,
         submitted_at: input.submittedAt,
+        cleared: input.cleared ?? null,
+        cleared_stage_count: input.clearedStageCount ?? null,
+        season_points: input.seasonPoints ?? null,
       })
       .eq('id', runId)
       .select('*')
@@ -226,5 +305,230 @@ export class SupabaseDb implements Db {
     }));
 
     return { page, pageSize, totalCount: count ?? items.length, items };
+  }
+
+  // ── Season 1: accounts ─────────────────────────────────────────────────────
+  async createPlayer(input: {
+    nickname: string;
+    contactType: 'email' | 'phone';
+    contactValue: string;
+    passwordHash: string;
+  }): Promise<PlayerRow> {
+    const { data, error } = await this.sb
+      .from('players')
+      .insert({
+        nickname: input.nickname,
+        contact_type: input.contactType,
+        contact_value: input.contactValue,
+        password_hash: input.passwordHash,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toPlayer(data);
+  }
+
+  async getPlayerById(id: string): Promise<PlayerRow | null> {
+    const { data, error } = await this.sb
+      .from('players')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toPlayer(data) : null;
+  }
+
+  async getPlayerByNickname(nickname: string): Promise<PlayerRow | null> {
+    const { data, error } = await this.sb
+      .from('players')
+      .select('*')
+      .is('deleted_at', null)
+      .ilike('nickname', nickname)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toPlayer(data) : null;
+  }
+
+  // ── Season 1: seasons ──────────────────────────────────────────────────────
+  async getSeasonBySlug(slug: string): Promise<SeasonRow | null> {
+    const { data, error } = await this.sb
+      .from('seasons')
+      .select('*')
+      .eq('slug', slug)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toSeason(data) : null;
+  }
+
+  async getActiveSeason(): Promise<SeasonRow | null> {
+    const { data, error } = await this.sb
+      .from('seasons')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toSeason(data) : null;
+  }
+
+  // ── Season 1: daily challenges ─────────────────────────────────────────────
+  async getDailyChallenge(
+    seasonId: string,
+    dateKey: string,
+  ): Promise<DailyChallengeRow | null> {
+    const { data, error } = await this.sb
+      .from('daily_challenges')
+      .select('*')
+      .eq('season_id', seasonId)
+      .eq('date_key', dateKey)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toDailyChallenge(data) : null;
+  }
+
+  async upsertDailyChallenge(input: {
+    seasonId: string;
+    dateKey: string;
+    startsAt: string;
+    endsAt: string;
+    seed: string;
+    groupASetId: string;
+    groupBSetId: string;
+    config?: unknown;
+  }): Promise<DailyChallengeRow> {
+    const existing = await this.getDailyChallenge(input.seasonId, input.dateKey);
+    if (existing) return existing;
+    const { data, error } = await this.sb
+      .from('daily_challenges')
+      .insert({
+        season_id: input.seasonId,
+        date_key: input.dateKey,
+        starts_at: input.startsAt,
+        ends_at: input.endsAt,
+        seed: input.seed,
+        group_a_set_id: input.groupASetId,
+        group_b_set_id: input.groupBSetId,
+        config: input.config ?? null,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toDailyChallenge(data);
+  }
+
+  async countResolvedDailyRuns(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<number> {
+    const { count, error } = await this.sb
+      .from('game_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('player_id', input.playerId)
+      .eq('season_id', input.seasonId)
+      .eq('mode', 'daily')
+      .eq('daily_date_key', input.dateKey)
+      .in('status', ['submitted', 'rejected']);
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  // ── Season 1: best scores / ranking ────────────────────────────────────────
+  async upsertBestScore(input: {
+    playerId: string;
+    seasonId: string;
+    mode: RunMode;
+    scopeKey: string;
+    score: number;
+    seasonPoints: number;
+    cleared?: boolean | null;
+    runId: string | null;
+  }): Promise<BestScoreRow> {
+    const { data: existingRow, error: selectError } = await this.sb
+      .from('best_scores')
+      .select('*')
+      .eq('player_id', input.playerId)
+      .eq('season_id', input.seasonId)
+      .eq('mode', input.mode)
+      .eq('scope_key', input.scopeKey)
+      .maybeSingle();
+    if (selectError) throw selectError;
+
+    if (!existingRow) {
+      const { data, error } = await this.sb
+        .from('best_scores')
+        .insert({
+          player_id: input.playerId,
+          season_id: input.seasonId,
+          mode: input.mode,
+          scope_key: input.scopeKey,
+          score: input.score,
+          season_points: input.seasonPoints,
+          cleared: !!input.cleared,
+          run_id: input.runId,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return toBestScore(data);
+    }
+
+    const existing = toBestScore(existingRow);
+    const patch: Record<string, unknown> = {
+      cleared: !!existing.cleared || !!input.cleared,
+    };
+    if (input.score > existing.score) {
+      patch.score = input.score;
+      patch.season_points = input.seasonPoints;
+      patch.run_id = input.runId;
+      patch.updated_at = new Date().toISOString();
+    }
+    const { data, error } = await this.sb
+      .from('best_scores')
+      .update(patch)
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toBestScore(data);
+  }
+
+  async listPlayerBestScores(
+    playerId: string,
+    seasonId: string,
+  ): Promise<BestScoreRow[]> {
+    const { data, error } = await this.sb
+      .from('best_scores')
+      .select('*')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId);
+    if (error) throw error;
+    return (data ?? []).map(toBestScore);
+  }
+
+  async listSeasonBestScores(seasonId: string): Promise<BestScoreRow[]> {
+    const { data, error } = await this.sb
+      .from('best_scores')
+      .select('*')
+      .eq('season_id', seasonId);
+    if (error) throw error;
+    return (data ?? []).map(toBestScore);
+  }
+
+  async listDailyBestScores(
+    seasonId: string,
+    dateKey: string,
+  ): Promise<BestScoreRow[]> {
+    const { data, error } = await this.sb
+      .from('best_scores')
+      .select('*')
+      .eq('season_id', seasonId)
+      .eq('mode', 'daily')
+      .eq('scope_key', dateKey)
+      .order('score', { ascending: false })
+      .order('updated_at', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(toBestScore);
   }
 }

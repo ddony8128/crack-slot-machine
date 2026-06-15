@@ -1,31 +1,37 @@
 import { getDb } from '@/lib/db';
-import { sanitizeNickname } from '@/lib/server/validation';
+import { currentPlayer } from '@/lib/server/playerAuth';
 import { verifySubmission } from '@/lib/server/verifySubmission';
+import { MAX_DAILY_ATTEMPTS } from '@/lib/daily/challenge';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
 
 type SubmitBody = {
-  nickname?: unknown;
+  runId?: unknown;
   actions?: RecordedAction[];
   clientResults?: ClientResults;
   clientVersion?: string;
   rulesetVersion?: number;
 };
 
-// POST /api/runs/[runId]/submit — server replays the run and only stores its own
-// computed score. Mismatch => rejected (client shows "치팅 감지").
-export async function POST(
-  req: Request,
-  ctx: { params: Promise<{ runId: string }> },
-) {
-  const { runId } = await ctx.params;
+// POST /api/daily/submit — server replays a finished daily run, stores only its
+// own computed score, and (on success) updates the player's daily best.
+export async function POST(req: Request) {
+  const player = await currentPlayer();
+  if (!player) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
+  }
 
   let body: SubmitBody;
   try {
     body = (await req.json()) as SubmitBody;
   } catch {
     return Response.json({ error: 'invalid_json' }, { status: 400 });
+  }
+
+  const runId = typeof body.runId === 'string' ? body.runId : '';
+  if (!runId) {
+    return Response.json({ error: 'invalid_run_id' }, { status: 400 });
   }
 
   const db = getDb();
@@ -36,27 +42,19 @@ export async function POST(
   if (run.status !== 'pending') {
     return Response.json({ error: 'run_already_resolved' }, { status: 409 });
   }
-
-  if (!run.eventId) {
-    // This endpoint serves the legacy event flow only; season-mode runs submit
-    // through their own endpoints (e.g. /api/daily/submit).
-    return Response.json({ error: 'not_an_event_run' }, { status: 400 });
+  if (run.mode !== 'daily') {
+    return Response.json({ error: 'not_a_daily_run' }, { status: 400 });
   }
-  const event = await db.getEventById(run.eventId);
-  if (!event) {
-    return Response.json({ error: 'event_not_found' }, { status: 404 });
-  }
-  if (!event.isActive) {
-    return Response.json({ error: 'event_inactive' }, { status: 403 });
+  if (run.playerId !== player.id) {
+    return Response.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  const nickname = sanitizeNickname(body.nickname);
   const actions = Array.isArray(body.actions) ? body.actions : [];
   const clientResults = body.clientResults ?? null;
   const now = new Date().toISOString();
 
-  // Version gate: only current-version runs may register (keeps leaderboards
-  // comparable). A mismatch resolves the run as rejected.
+  // Version gate: only current-version runs may register, keeping the daily
+  // leaderboard comparable. A mismatch resolves the run as rejected.
   const versionOk =
     body.clientVersion === CLIENT_VERSION &&
     body.rulesetVersion === RULESET_VERSION &&
@@ -65,7 +63,7 @@ export async function POST(
 
   if (!versionOk) {
     await db.finalizeRun(runId, {
-      nickname,
+      nickname: player.nickname,
       actions,
       clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
       score: null,
@@ -82,7 +80,7 @@ export async function POST(
 
   if (outcome.status === 'rejected') {
     await db.finalizeRun(runId, {
-      nickname,
+      nickname: player.nickname,
       actions,
       clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
       score: null,
@@ -92,11 +90,20 @@ export async function POST(
       rejectReason: outcome.reason,
       submittedAt: now,
     });
-    return Response.json({ status: 'rejected', reason: outcome.reason });
+    const used = await db.countResolvedDailyRuns({
+      playerId: player.id,
+      seasonId: run.seasonId!,
+      dateKey: run.dailyDateKey!,
+    });
+    return Response.json({
+      status: 'rejected',
+      reason: outcome.reason,
+      attemptsLeft: Math.max(0, MAX_DAILY_ATTEMPTS - used),
+    });
   }
 
   await db.finalizeRun(runId, {
-    nickname,
+    nickname: player.nickname,
     actions,
     clientResults: clientResults!,
     score: outcome.score,
@@ -107,10 +114,26 @@ export async function POST(
     submittedAt: now,
   });
 
+  await db.upsertBestScore({
+    playerId: player.id,
+    seasonId: run.seasonId!,
+    mode: 'daily',
+    scopeKey: run.dailyDateKey!,
+    score: outcome.score,
+    seasonPoints: 0,
+    runId: run.id,
+  });
+
+  const used = await db.countResolvedDailyRuns({
+    playerId: player.id,
+    seasonId: run.seasonId!,
+    dateKey: run.dailyDateKey!,
+  });
+
   return Response.json({
     status: 'submitted',
     score: outcome.score,
     bestSpinScore: outcome.bestSpinScore,
-    eventSlug: event.slug,
+    attemptsLeft: Math.max(0, MAX_DAILY_ATTEMPTS - used),
   });
 }

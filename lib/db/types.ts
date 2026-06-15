@@ -14,6 +14,61 @@ export type EventRow = {
 
 export type RunStatus = 'pending' | 'submitted' | 'rejected';
 
+/** Which game mode a run belongs to. 'event' is the legacy per-event flow. */
+export type RunMode = 'event' | 'daily' | 'puzzle' | 'spire';
+
+/** A row in `players` (Season 1 accounts), camelCased. */
+export type PlayerRow = {
+  id: string;
+  nickname: string;
+  contactType: 'email' | 'phone';
+  contactValue: string;
+  passwordHash: string;
+  createdAt: string;
+  deletedAt: string | null;
+};
+
+/** A row in `seasons`. */
+export type SeasonRow = {
+  id: string;
+  slug: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  clientVersion: string;
+  rulesetVersion: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
+/** A row in `daily_challenges`. */
+export type DailyChallengeRow = {
+  id: string;
+  seasonId: string;
+  dateKey: string;
+  startsAt: string;
+  endsAt: string;
+  seed: string;
+  groupASetId: string;
+  groupBSetId: string;
+  config: unknown | null;
+  createdAt: string;
+};
+
+/** A row in `best_scores` — the ranking source of truth (one per scope). */
+export type BestScoreRow = {
+  id: string;
+  playerId: string;
+  seasonId: string;
+  mode: RunMode;
+  scopeKey: string;
+  score: number;
+  seasonPoints: number;
+  cleared: boolean | null;
+  runId: string | null;
+  updatedAt: string;
+};
+
 /** The client's submitted result snapshot (compared against server replay). */
 export type ClientResults = {
   spins: ReplaySpin[];
@@ -24,7 +79,16 @@ export type ClientResults = {
 /** A row in `game_runs`, camelCased for app use. */
 export type RunRow = {
   id: string;
-  eventId: string;
+  eventId: string | null;
+  playerId: string | null;
+  seasonId: string | null;
+  mode: RunMode;
+  dailyDateKey: string | null;
+  puzzleKey: string | null;
+  stageIndex: number | null;
+  cleared: boolean | null;
+  clearedStageCount: number | null;
+  seasonPoints: number | null;
   nickname: string | null;
   seed: string;
   actions: RecordedAction[] | null;
@@ -56,9 +120,19 @@ export type LeaderboardPage = {
   items: LeaderboardItem[];
 };
 
-/** Fields needed to open a pending run (seed is server-generated). */
+/**
+ * Fields needed to open a pending run (seed is server-generated). `eventId` is
+ * used by the legacy event flow; season modes pass `playerId`/`seasonId`/`mode`
+ * (+ the mode's scope key) instead.
+ */
 export type CreateRunInput = {
-  eventId: string;
+  eventId?: string | null;
+  playerId?: string | null;
+  seasonId?: string | null;
+  mode?: RunMode;
+  dailyDateKey?: string | null;
+  puzzleKey?: string | null;
+  stageIndex?: number | null;
   seed: string;
   clientVersion: string;
   rulesetVersion: number;
@@ -75,6 +149,10 @@ export type FinalizeRunInput = {
   verified: boolean;
   rejectReason: string | null;
   submittedAt: string;
+  // Season-mode extras (optional; ignored by the event flow).
+  cleared?: boolean | null;
+  clearedStageCount?: number | null;
+  seasonPoints?: number | null;
 };
 
 /**
@@ -111,6 +189,79 @@ export interface Db {
     clientVersion: string;
     rulesetVersion: number;
   }): Promise<LeaderboardPage>;
+
+  // ── Season 1: accounts ─────────────────────────────────────────────────────
+  createPlayer(input: {
+    nickname: string;
+    contactType: 'email' | 'phone';
+    contactValue: string;
+    passwordHash: string;
+  }): Promise<PlayerRow>;
+  getPlayerById(id: string): Promise<PlayerRow | null>;
+  /** Active (not soft-deleted) player by nickname, case-insensitive. */
+  getPlayerByNickname(nickname: string): Promise<PlayerRow | null>;
+
+  // ── Season 1: seasons ──────────────────────────────────────────────────────
+  getSeasonBySlug(slug: string): Promise<SeasonRow | null>;
+  getActiveSeason(): Promise<SeasonRow | null>;
+
+  // ── Season 1: daily challenges ─────────────────────────────────────────────
+  getDailyChallenge(seasonId: string, dateKey: string): Promise<DailyChallengeRow | null>;
+  /** Idempotent lazy-create of a day's challenge (no cron needed). */
+  upsertDailyChallenge(input: {
+    seasonId: string;
+    dateKey: string;
+    startsAt: string;
+    endsAt: string;
+    seed: string;
+    groupASetId: string;
+    groupBSetId: string;
+    config?: unknown;
+  }): Promise<DailyChallengeRow>;
+  /** Count a player's RESOLVED (submitted|rejected) daily runs for a date. */
+  countResolvedDailyRuns(input: {
+    playerId: string;
+    seasonId: string;
+    dateKey: string;
+  }): Promise<number>;
+
+  // ── Season 1: best scores / ranking ────────────────────────────────────────
+  /** Insert or update the player's best for a scope IF the new score is higher. */
+  upsertBestScore(input: {
+    playerId: string;
+    seasonId: string;
+    mode: RunMode;
+    scopeKey: string;
+    score: number;
+    seasonPoints: number;
+    cleared?: boolean | null;
+    runId: string | null;
+  }): Promise<BestScoreRow>;
+  /** All of a player's best_scores rows for a season (for /me + season total). */
+  listPlayerBestScores(playerId: string, seasonId: string): Promise<BestScoreRow[]>;
+  /** Every best_scores row for a season (caller aggregates the season ranking). */
+  listSeasonBestScores(seasonId: string): Promise<BestScoreRow[]>;
+  /** Daily ranking for one date: best score per player, highest first. */
+  listDailyBestScores(seasonId: string, dateKey: string): Promise<BestScoreRow[]>;
 }
+
+/** One row of a season-points ranking (nickname resolved). */
+export type SeasonRankItem = {
+  rank: number;
+  playerId: string;
+  nickname: string;
+  seasonPoints: number;
+  spirePoints: number;
+  puzzlePoints: number;
+  dailyPoints: number;
+};
+
+/** One row of a daily ranking. */
+export type DailyRankItem = {
+  rank: number;
+  playerId: string;
+  nickname: string;
+  score: number;
+};
 
 export const TOTAL_SLUG = 'total';
