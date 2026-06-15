@@ -15,9 +15,12 @@ symbols → daily ad-refill → puzzle → spire**.
 | 4 | Engine event log | `EngineEvent` type; cascade emits rerolled/transformed/moved/copied/locked; attach to SpinLog; tests. | med | ✅ b9cfd5d |
 | 5 | Config-driven scoring | `score.ts` generalized: hands over all non-number symbols in active sets; per-set bonuses (fruit/gem 3종·올, cat neighbor, vehicle move/reroll via events, monster copy via events). | high | ✅ ef90fe0 |
 | 6 | New symbols in engine | extend `SymbolType` + `BASE_WEIGHTS` + `SymbolView` for cat/vehicle/monster; tests. | med | ✅ 9413270 |
-| 7 | Daily ad-refill | migration `0003`; `daily_user_status`; 5 base +5 ad → 10 max; dummy-ad modal + refill API; attempts UI; tests. | med | ☐ NEXT |
-| 8 | Puzzle engine | fixed board/seed/rule-bag; goal checker (`PuzzleGoal`); `/api/puzzles/[key]/{start,submit}`; play client; achievement distribution; `puzzle_user_records`; tests. | high | ☐ |
-| 9 | Spire v0 | start with number set; choose 1 of 2 seed-picked sets (symbols replace 0s, rules unlock); seed start board; 10 stages; bag UI; `/api/spire/{start,submit-stage,finish}`; `spire_user_records`; tests. | high | ☐ |
+| 7 | Daily ad-refill | migration `0003`; `daily_user_status`; 5 base +5 ad → 10 max; dummy-ad modal + refill API; attempts UI; tests. | med | ✅ `0a8d0b6` |
+| 8a | Puzzle core | goal checker (`PuzzleGoal` 6-type union) + `checkPuzzleRun`; evolved config (goals/seed/initialBoard/availableRuleIds); `puzzle_user_records` + distribution; tests. | high | ✅ `a98a30d`,`058c802` |
+| 8b | Puzzle play | `/api/puzzles/[key]/{start,submit}` + play client + distribution UI. Needs WU-RC. | high | ☐ |
+| 9a | Spire core | seed set-choice + bag mutation (`lib/spire/run.ts`) + `spire_user_records`; tests. | high | ✅ `53dbabe`,`058c802` |
+| 9b | Spire play | set-choice UI + bag UI + 10-stage loop + `/api/spire/{start,submit-stage,finish}`. Needs WU-RC. | high | ☐ |
+| RC | Configurable-run store mode | extend the store/replay/verify to start a run from a config { initialBoard, weights/bag, maxSpins, rule provisioning: offer vs fixed-bag vs restricted-pool } reconstructable server-side from the run record. Shared prerequisite for 8b + 9b, and lets daily/spire use the seed start board. | high | ☐ NEXT |
 
 Deferred (post-v0.1): spire rewards/artifacts; full puzzle 10-set; per-set extra rules
 (cat/vehicle/monster rule pools); daily rotation tuning; season-points reflection per mode;
