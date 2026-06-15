@@ -2,22 +2,86 @@
  *  and artifact catalogs are code-driven; run/reward resolution is a follow-up. */
 
 export const SPIRE_STAGE_COUNT = 10;
-export const SPIRE_SPINS_PER_STAGE = 5;
+/** v0: each stage runs at most this many spins; reaching the target clears early. */
+export const SPIRE_SPINS_PER_STAGE = 7;
 
 export type SpireStage = { index: number; targetScore: number };
 
 export const SPIRE_STAGES: SpireStage[] = [
-  { index: 1, targetScore: 300 },
-  { index: 2, targetScore: 600 },
-  { index: 3, targetScore: 900 },
-  { index: 4, targetScore: 1300 },
-  { index: 5, targetScore: 1800 },
-  { index: 6, targetScore: 2400 },
-  { index: 7, targetScore: 3100 },
-  { index: 8, targetScore: 4000 },
-  { index: 9, targetScore: 5200 },
-  { index: 10, targetScore: 6500 },
+  { index: 1, targetScore: 500 },
+  { index: 2, targetScore: 1000 },
+  { index: 3, targetScore: 2000 },
+  { index: 4, targetScore: 4000 },
+  { index: 5, targetScore: 6000 },
+  { index: 6, targetScore: 8000 },
+  { index: 7, targetScore: 10000 },
+  { index: 8, targetScore: 12000 },
+  { index: 9, targetScore: 15000 },
+  { index: 10, targetScore: 20000 },
 ];
+
+// ---- v0 economy (docs/SPIRE_V0_PLAN.md) ----
+
+export const SPIRE_START_MONEY = 0;
+export const SPIRE_MAX_FAILURES = 3;       // 3rd failure ends the run
+export const SPIRE_BAG_TOTAL = 20;         // symbol bag is ALWAYS this total
+export const SPIRE_RULE_POOL_MAX = 10;     // rule pool cap (remove-on-overflow)
+
+export const SPIRE_SPIN_BONUS_PER = 2;     // +money per UNUSED spin on clear
+export const SPIRE_INTEREST_DIVISOR = 5;   // interest = floor(balance / this)
+export const SPIRE_FAIL_SUPPORT = 5;       // money granted on a non-final failure
+
+// Stage clear payout: st1–3 = 4, st4–6 = 6, st7–9 = 8, st10 = 0 (final, no shop).
+export const SPIRE_CLEAR_PAYOUT: Record<number, number> = {
+  1: 4, 2: 4, 3: 4,
+  4: 6, 5: 6, 6: 6,
+  7: 8, 8: 8, 9: 8,
+  10: 0,
+};
+
+// Stages whose clear triggers an artifact choice.
+export const SPIRE_ARTIFACT_STAGES = [3, 6, 9];
+
+// The 8 base rules every spire run starts with (before the chosen-set's 2 rules).
+export const SPIRE_BASE_RULE_IDS: string[] = [
+  'center-lock',
+  'last-lock',
+  'seven-fever',
+  'four-shield',
+  'seven-double',
+  'select-swap',
+  'select-reroll',
+  'select-copy',
+];
+
+// ---- shop prices ----
+export const SPIRE_ARTIFACT_PRICES = [6, 5, 4] as const; // slots 1..3
+export const SPIRE_SET_PRICE = 3;
+export const SPIRE_RULE_PRICE = 1;
+export const SPIRE_HAND_FLAT_PRICE = 1;
+export const SPIRE_HAND_FLAT_BONUS = 50;  // +this per flat upgrade
+export const SPIRE_HAND_DOUBLE_PRICE = 3; // ×2 per double upgrade
+export const SPIRE_REROLL_PRICE = 1;
+
+/** Stage clear payout (0 if out of range / final stage). */
+export function spireClearPayout(stage: number): number {
+  return SPIRE_CLEAR_PAYOUT[stage] ?? 0;
+}
+
+/** Interest granted on clear, computed from the PRE-payout balance. */
+export function spireInterest(balance: number): number {
+  return Math.floor(Math.max(0, balance) / SPIRE_INTEREST_DIVISOR);
+}
+
+/** Remaining-spin bonus on clear (+SPIRE_SPIN_BONUS_PER per unused spin). */
+export function spireSpinBonus(remainingSpins: number): number {
+  return Math.max(0, remainingSpins) * SPIRE_SPIN_BONUS_PER;
+}
+
+/** Price to add +1 of a symbol = its CURRENT count in the bag (escalating). */
+export function spireBuySymbolPrice(currentCount: number): number {
+  return Math.max(0, currentCount);
+}
 
 export type SpireRewardType = 'add-rule' | 'remove-rule' | 'adjust-bag' | 'artifact';
 
