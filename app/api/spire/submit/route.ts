@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/db';
 import { currentPlayer } from '@/lib/server/playerAuth';
 import { verifySpireRun } from '@/lib/spire/verify';
-import { spireSeasonPoints } from '@/lib/season/scoring';
+import { spireSeasonScore } from '@/lib/season/scoring';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
 import type { SpireAction } from '@/lib/spire/replay';
@@ -99,7 +99,8 @@ export async function POST(req: Request) {
     return Response.json({ status: 'rejected', reason: v.reason });
   }
 
-  const seasonPts = spireSeasonPoints(v.stagesCleared, v.totalScore);
+  // v2 season score: maxClearedStage×100 + money×10 + unusedSpins×10 (spec §5).
+  const seasonPts = spireSeasonScore(v.stagesCleared, v.money, v.unusedSpins);
 
   await db.finalizeRun(runId, {
     nickname: player.nickname,
@@ -124,12 +125,14 @@ export async function POST(req: Request) {
     runId: run.id,
   });
 
+  // best_scores keeps the run with the highest SEASON score (the spire record
+  // table retains the raw totalScore for display).
   await db.upsertBestScore({
     playerId: player.id,
     seasonId: run.seasonId!,
     mode: 'spire',
     scopeKey: '',
-    score: v.totalScore,
+    score: seasonPts,
     seasonPoints: seasonPts,
     cleared: v.stagesCleared > 0,
     runId: run.id,

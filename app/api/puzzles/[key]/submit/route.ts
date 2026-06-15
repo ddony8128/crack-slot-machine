@@ -1,7 +1,8 @@
 import { getDb } from '@/lib/db';
 import { currentPlayer } from '@/lib/server/playerAuth';
 import { verifySubmission } from '@/lib/server/verifySubmission';
-import { PUZZLES_BY_KEY, PUZZLE_POINTS_EACH } from '@/lib/puzzle/config';
+import { PUZZLES_BY_KEY } from '@/lib/puzzle/config';
+import { puzzleScore } from '@/lib/season/scoring';
 import { puzzleRunConfig } from '@/lib/puzzle/run';
 import { checkPuzzleRun, type GoalContext } from '@/lib/puzzle/goals';
 import { computeHand } from '@/lib/score';
@@ -141,13 +142,17 @@ export async function POST(
     cleared,
   });
 
+  // v2 season score: 100 + leftover-spins×10 on clear (spec §3). best_scores
+  // keeps the highest, so a faster (more-leftover) clear replaces an earlier one.
+  const seasonScore = cleared ? puzzleScore(puzzle.spinLimit, spinCount) : 0;
+
   await db.upsertBestScore({
     playerId: player.id,
     seasonId: run.seasonId!,
     mode: 'puzzle',
     scopeKey: key,
-    score: goalsAchieved,
-    seasonPoints: cleared ? PUZZLE_POINTS_EACH : 0,
+    score: seasonScore,
+    seasonPoints: seasonScore,
     cleared,
     runId: run.id,
   });

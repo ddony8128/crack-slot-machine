@@ -1,4 +1,5 @@
 import type { BestScoreRow, SeasonRankItem } from '@/lib/db/types';
+import { dailyWindow } from '@/lib/daily/challenge';
 
 /** Each mode contributes at most this many season points (total cap 3000). */
 export const SEASON_MODE_CAP = 1000;
@@ -92,29 +93,32 @@ export function seasonDailyTotal(dailyPoints: number[]): number {
 // ── season aggregation across all players (pure) ─────────────────────────────
 
 /**
- * Build the season ranking from every best_scores row in the season. Daily
- * points are derived from each day's cross-player ranking (not stored), spire
- * points come from the stored per-run value, puzzle points from cleared count.
+ * Build the season ranking from every best_scores row in the season (v2 spec).
+ * Spire/puzzle points are the per-row `seasonPoints` stored at submit (spire =
+ * the best run; puzzle = summed over each puzzle's best). Daily = +20 per played
+ * day (first-play) plus a rank reward for days whose window has ENDED relative to
+ * `now` (lazy settlement) — ongoing days pay only the +20. No per-mode caps.
  */
 export function buildSeasonRanking(
   rows: BestScoreRow[],
   nicknameOf: (playerId: string) => string,
+  now: Date = new Date(),
 ): SeasonRankItem[] {
   const players = new Set<string>();
   for (const r of rows) players.add(r.playerId);
 
   // spire: best stored seasonPoints per player
   const spire = new Map<string, number>();
-  // puzzle: count cleared puzzles per player
-  const puzzleCleared = new Map<string, number>();
-  // daily: group scores by date for ranking
+  // puzzle: sum of stored seasonPoints (each row is that puzzle's best)
+  const puzzleSum = new Map<string, number>();
+  // daily: group rows by date for cross-player ranking
   const byDate = new Map<string, BestScoreRow[]>();
 
   for (const r of rows) {
     if (r.mode === 'spire') {
       spire.set(r.playerId, Math.max(spire.get(r.playerId) ?? 0, r.seasonPoints));
     } else if (r.mode === 'puzzle') {
-      if (r.cleared) puzzleCleared.set(r.playerId, (puzzleCleared.get(r.playerId) ?? 0) + 1);
+      puzzleSum.set(r.playerId, (puzzleSum.get(r.playerId) ?? 0) + r.seasonPoints);
     } else if (r.mode === 'daily') {
       const list = byDate.get(r.scopeKey) ?? [];
       list.push(r);
@@ -122,22 +126,24 @@ export function buildSeasonRanking(
     }
   }
 
-  // daily points per player = top-10 of their per-day ranking points
-  const dailyPointsByPlayer = new Map<string, number[]>();
-  for (const list of byDate.values()) {
-    const sorted = [...list].sort((a, b) => b.score - a.score || a.updatedAt.localeCompare(b.updatedAt));
+  // daily points: +DAILY_FIRST_PLAY per played day, + rank reward for SETTLED days.
+  const nowIso = now.toISOString();
+  const dailyByPlayer = new Map<string, number>();
+  for (const [dateKey, list] of byDate.entries()) {
+    const settled = dailyWindow(dateKey).endsAt <= nowIso;
+    const sorted = [...list].sort(
+      (a, b) => b.score - a.score || a.updatedAt.localeCompare(b.updatedAt),
+    );
     sorted.forEach((row, i) => {
-      const pts = dailyPointsForRank(i + 1, sorted.length);
-      const arr = dailyPointsByPlayer.get(row.playerId) ?? [];
-      arr.push(pts);
-      dailyPointsByPlayer.set(row.playerId, arr);
+      const reward = settled ? dailyRankReward(i + 1, sorted.length) : 0;
+      dailyByPlayer.set(row.playerId, (dailyByPlayer.get(row.playerId) ?? 0) + DAILY_FIRST_PLAY + reward);
     });
   }
 
   const items: SeasonRankItem[] = [...players].map((playerId) => {
-    const spirePoints = Math.min(SEASON_MODE_CAP, spire.get(playerId) ?? 0);
-    const puzzlePoints = puzzleSeasonPoints(puzzleCleared.get(playerId) ?? 0);
-    const dailyPoints = seasonDailyTotal(dailyPointsByPlayer.get(playerId) ?? []);
+    const spirePoints = spire.get(playerId) ?? 0;
+    const puzzlePoints = puzzleSum.get(playerId) ?? 0;
+    const dailyPoints = dailyByPlayer.get(playerId) ?? 0;
     return {
       rank: 0,
       playerId,

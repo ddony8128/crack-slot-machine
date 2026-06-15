@@ -18,6 +18,8 @@ export type SpireVerifyResult =
       status: 'submitted';
       stagesCleared: number;
       totalScore: number;
+      money: number;       // run-end balance (→ season points)
+      unusedSpins: number; // spins banked over CLEARED stages (→ season points)
       runEnded: boolean;
       endReason: string;
       stageResults: SpireStageResult[];
@@ -53,10 +55,18 @@ export function verifySpireRun(
     if (claim.totalScore !== r.totalRunScore) return { status: 'rejected', reason: 'score_mismatch' };
   }
 
+  // Unused spins count ONLY from cleared stages (spec §5) — failed attempts bank
+  // nothing.
+  const unusedSpins = r.stageResults
+    .filter((s) => s.cleared)
+    .reduce((sum, s) => sum + s.remainingSpins, 0);
+
   return {
     status: 'submitted',
     stagesCleared: r.stagesCleared,
     totalScore: r.totalRunScore,
+    money: r.finalState.money,
+    unusedSpins,
     runEnded: r.runEnded,
     endReason: r.endReason,
     stageResults: r.stageResults,
