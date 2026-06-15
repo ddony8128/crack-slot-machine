@@ -11,6 +11,7 @@ import {
 } from '@/lib/cascade';
 import { scoreResult, scoreItems, type HandUpgradeMap } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
+import { rulePlayable } from '@/lib/rules/playable';
 import { RULES, RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS, CATS } from '@/data/symbols';
 
@@ -127,11 +128,15 @@ function offerRules(
   bag: Rule[],
   pool: Rule[] = RULES,
   count: number = OFFER_COUNT,
+  weights: Record<SymbolType, number> = BASE_WEIGHTS,
 ): Rule[] {
   const usedIds = new Set<string>();
   for (const r of slots) if (r != null) usedIds.add(r.id);
   for (const r of bag) usedIds.add(r.id);
-  const allowed = pool.filter((r) => !usedIds.has(r.id));
+  // Only offer rules whose symbols can actually roll in this run's bag — keeps
+  // cat/vehicle/monster rules out of 빠른 게임/이벤트 offers (their bag rolls
+  // none), while season pools (already curated to the run's sets) are unchanged.
+  const allowed = pool.filter((r) => !usedIds.has(r.id) && rulePlayable(r, weights));
   return shuffle(allowed, rng).slice(0, count);
 }
 
@@ -223,6 +228,11 @@ function buildInitializer(initialRng: Rng): Initializer {
   // replay reproduces the same offer size + draws.
   const offerCount = (): number =>
     runConfig?.artifacts?.includes('swiss-knife') ? 4 : OFFER_COUNT;
+
+  // The run's symbol bag (as weights) — drives which rules are offerable
+  // (rulePlayable). Defaults to BASE_WEIGHTS for legacy event/quick runs.
+  const bagWeights = (): Record<SymbolType, number> =>
+    runConfig?.baseWeights ?? BASE_WEIGHTS;
 
   // The in-progress cascade frame is kept OUT of GameState (it carries the live
   // working/locked arrays threaded across the pause). It only ever
@@ -418,7 +428,7 @@ function buildInitializer(initialRng: Rng): Initializer {
         picksLeft: 1 + (runConfig?.artifacts?.includes('engine') ? 1 : 0),
         pendingRule: null,
         spinLogs: [],
-        offeredRules: offerRules(rng, ruleSlots, bag, offerPool(), offerCount()),
+        offeredRules: offerRules(rng, ruleSlots, bag, offerPool(), offerCount(), bagWeights()),
         status: 'choosing-rule',
       });
     },
@@ -467,7 +477,7 @@ function buildInitializer(initialRng: Rng): Initializer {
           bag: nextBag,
           pendingRule: null,
           picksLeft: remaining,
-          offeredRules: offerRules(rng, nextSlots, nextBag, offerPool(), offerCount()),
+          offeredRules: offerRules(rng, nextSlots, nextBag, offerPool(), offerCount(), bagWeights()),
           status: 'choosing-rule',
         });
       } else {
@@ -700,7 +710,7 @@ function buildInitializer(initialRng: Rng): Initializer {
         spinIndex: nextSpinIndex,
         picksLeft: 1 + state.extraRulePickCount,
         extraRulePickCount: 0,
-        offeredRules: offerRules(rng, state.ruleSlots, state.bag, offerPool(), offerCount()),
+        offeredRules: offerRules(rng, state.ruleSlots, state.bag, offerPool(), offerCount(), bagWeights()),
         pendingRule: null,
         status: 'choosing-rule',
       });
