@@ -1,5 +1,4 @@
-import type { RecordedAction } from '@/store/gameStore';
-import type { ClientResults } from '@/lib/db/types';
+import type { SpireAction } from '@/lib/spire/replay';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 export type StartSpireResponse = {
@@ -14,7 +13,6 @@ export type SubmitSpireResponse =
       stagesCleared: number;
       totalScore: number;
       seasonPoints: number;
-      stageScores: number[];
     }
   | { status: 'rejected'; reason: string };
 
@@ -34,9 +32,9 @@ export async function startSpire(): Promise<StartSpireResponse> {
 export async function submitSpire(
   runId: string,
   payload: {
-    chosenSetId: string;
-    actions: RecordedAction[];
-    clientResults: ClientResults;
+    actions: SpireAction[];
+    stagesCleared: number;
+    totalScore: number;
   },
 ): Promise<SubmitSpireResponse> {
   const res = await fetch('/api/spire/submit', {

@@ -1,28 +1,68 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useGameStore } from "@/store/gameStore";
-import { RULES_BY_ID } from "@/data/rules";
-import { startSpire } from "@/lib/client/spireApi";
+import { startSpire, submitSpire } from "@/lib/client/spireApi";
 import { fetchMe } from "@/lib/client/authApi";
 import { saveSpire, loadSpire, clearSpire, type SpireSave } from "@/lib/client/spireResume";
-import { spireRunConfig } from "@/lib/spire/run";
 import { SYMBOL_SETS_BY_ID } from "@/lib/symbols/sets";
-import { SPIRE_STAGES, SPIRE_SPINS_PER_STAGE, SPIRE_STAGE_COUNT } from "@/lib/spire/config";
+import { SYMBOL_EMOJI } from "@/data/symbols";
+import {
+  SPIRE_STAGE_COUNT,
+  SPIRE_ARTIFACT_STAGES,
+  SPIRE_ARTIFACTS,
+} from "@/lib/spire/config";
+import {
+  initialSpireState,
+  applyInitialSetChoice,
+  buySymbolIncrement,
+  buySymbolSet,
+  buyRule,
+  buyHandFlat,
+  buyHandDouble,
+  rerollShop,
+  settleClear,
+  settleFail,
+  type SpireRunState,
+} from "@/lib/spire/state";
+import {
+  stageAttemptSeed,
+  spireStageRunConfig,
+  spireStageOutcome,
+  spireStageTarget,
+} from "@/lib/spire/stage";
+import { spireShopOffers, type SpireShopOffers } from "@/lib/spire/shop";
+import { replaySpireRun, type SpireAction } from "@/lib/spire/replay";
 import GameScreen from "@/components/GameScreen";
+import SpireShop from "@/components/SpireShop";
 import SpireResultScreen from "@/components/SpireResultScreen";
 import ModeIntro from "@/components/ModeIntro";
 import type { SymbolType } from "@/types";
 
 type Phase =
-  | { kind: "loading" }
-  | { kind: "error"; message: string }
-  | { kind: "resume"; save: SpireSave }
-  | { kind: "choosing"; runId: string; seed: string; choices: [string, string] }
-  | { kind: "playing"; chosenSetId: string; seed: string };
+  | "loading"
+  | "error"
+  | "resume"
+  | "choosing-set"
+  | "playing"
+  | "cleared"
+  | "artifact"
+  | "shop"
+  | "result";
+
+type ClearBreakdown = { interest: number; spinBonus: number; payout: number } | null;
+type SubmitState = "submitting" | "submitted" | "rejected" | "error" | "version_mismatch";
+
+const ARTIFACT_BY_ID = Object.fromEntries(SPIRE_ARTIFACTS.map((a) => [a.id, a]));
+
+/** Emoji for a symbol id, falling back to the id itself. */
+function emojiFor(id: string): string {
+  return SYMBOL_EMOJI[id as SymbolType] ?? id;
+}
 
 export default function SpireClient() {
+  // Active-stage store (one RC run per stage attempt).
   const status = useGameStore((s) => s.status);
   const spinLogs = useGameStore((s) => s.spinLogs);
   const beginRun = useGameStore((s) => s.beginRun);
@@ -30,161 +70,306 @@ export default function SpireClient() {
   const startGame = useGameStore((s) => s.startGame);
   const setNickname = useGameStore((s) => s.setNickname);
   const reset = useGameStore((s) => s.reset);
-
   const getActions = useGameStore((s) => s.getActions);
-  const selectRule = useGameStore((s) => s.selectRule);
-  const cancelSelection = useGameStore((s) => s.cancelSelection);
-  const placePending = useGameStore((s) => s.placePending);
-  const moveRule = useGameStore((s) => s.moveRule);
-  const spin = useGameStore((s) => s.spin);
-  const selectCells = useGameStore((s) => s.selectCells);
-  const nextTurn = useGameStore((s) => s.next);
 
-  // Read any saved run during the first render (loadSpire is SSR-guarded). A
-  // save opens the 이어하기/새로 시작 screen; otherwise we auto-start fresh in the
-  // mount effect below. Resolving this lazily avoids a synchronous setState in
-  // the effect (which would trigger a cascading render).
-  const [phase, setPhase] = useState<Phase>(() => {
-    const save = loadSpire();
-    return save ? { kind: "resume", save } : { kind: "loading" };
-  });
+  // Resolve any saved run during the first render (loadSpire is SSR-guarded).
+  const [phase, setPhase] = useState<Phase>(() =>
+    loadSpire() ? "resume" : "loading",
+  );
+  const [error, setError] = useState<string>("");
+  const [runId, setRunId] = useState<string>("");
+  const [seed, setSeed] = useState<string>("");
+  const [choices, setChoices] = useState<[string, string] | null>(null);
+  const [resumeSave, setResumeSave] = useState<SpireSave | null>(() => loadSpire());
+
+  const [runState, setRunState] = useState<SpireRunState | null>(null);
+  const [spireActions, setSpireActions] = useState<SpireAction[]>([]);
+  const [shopVisitIndex, setShopVisitIndex] = useState(0);
+  const [rerollCount, setRerollCount] = useState(0);
+
+  const [clearBreakdown, setClearBreakdown] = useState<ClearBreakdown>(null);
+  const [submitState, setSubmitState] = useState<SubmitState>("submitting");
+  const [seasonPoints, setSeasonPoints] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState<string | null>(null);
+
+  const me = useRef<{ nickname: string } | null>(null);
   const startedRef = useRef(false);
+  const submittedRef = useRef(false);
 
-  /** Kick off a fresh server-issued run and move to the set-choice screen. */
-  function startFresh() {
-    startSpire()
-      .then((r) => setPhase({ kind: "choosing", runId: r.runId, seed: r.seed, choices: r.choices }))
-      .catch((e) =>
-        setPhase({
-          kind: "error",
-          message:
-            e instanceof Error && e.message === "unauthorized"
-              ? "로그인이 필요합니다."
-              : "첨탑을 시작할 수 없습니다.",
-        }),
+  // Latest mutable copies for use inside callbacks without re-subscribing. These
+  // are write-through: callbacks update both the ref (read synchronously by a
+  // later callback in the same tick) and the state (for render). An effect below
+  // also re-syncs them after every commit so they never drift.
+  const runStateRef = useRef<SpireRunState | null>(null);
+  const actionsRef = useRef<SpireAction[]>(spireActions);
+  const runIdRef = useRef(runId);
+  const seedRef = useRef(seed);
+  useEffect(() => {
+    runStateRef.current = runState;
+    actionsRef.current = spireActions;
+    runIdRef.current = runId;
+    seedRef.current = seed;
+  });
+
+  /** Append a SpireAction and persist the in-progress run (when not over). */
+  const recordAction = useCallback((action: SpireAction) => {
+    setSpireActions((prev) => {
+      const next = [...prev, action];
+      actionsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  /** Persist the current run snapshot (no-op when nothing to save). */
+  const persist = useCallback(() => {
+    if (!runIdRef.current || !seedRef.current) return;
+    saveSpire({ seed: seedRef.current, runId: runIdRef.current, actions: actionsRef.current });
+  }, []);
+
+  /** Begin the ACTIVE-stage store for the run's current stage/attempt. */
+  const startStage = useCallback(() => {
+    const st = runStateRef.current;
+    if (!st) return;
+    const stage = st.currentStage;
+    const attempt = st.currentStageAttempt;
+    reset();
+    const cfg = spireStageRunConfig(
+      seedRef.current,
+      stage,
+      attempt,
+      st.symbolBag,
+      st.rulePool,
+      st.handUpgrades,
+    );
+    beginRun(stageAttemptSeed(seedRef.current, stage, attempt), runIdRef.current, "spire");
+    configureRun(cfg);
+    if (me.current) setNickname(me.current.nickname);
+    startGame();
+    setClearBreakdown(null);
+    setPhase("playing");
+  }, [reset, beginRun, configureRun, setNickname, startGame]);
+
+  /** Submit the finished run, clear the save, show the result. */
+  const endRun = useCallback(() => {
+    const st = runStateRef.current;
+    if (!st) return;
+    setPhase("result");
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    setSubmitState("submitting");
+    submitSpire(runIdRef.current, {
+      actions: actionsRef.current,
+      stagesCleared: st.currentStage - 1,
+      totalScore: st.totalRunScore,
+    })
+      .then((res) => {
+        if (res.status === "submitted") {
+          setSeasonPoints(res.seasonPoints);
+          setSubmitState("submitted");
+        } else if (res.reason === "version_mismatch") {
+          setSubmitState("version_mismatch");
+        } else {
+          setRejectReason(res.reason);
+          setSubmitState("rejected");
+        }
+      })
+      .catch(() => setSubmitState("error"));
+    clearSpire();
+  }, []);
+
+  /** Settle the just-played stage and route to artifact / shop / next / result. */
+  const finalizeStage = useCallback(
+    (cleared: boolean) => {
+      const st = runStateRef.current;
+      if (!st) return;
+      const stage = st.currentStage;
+      const target = spireStageTarget(stage);
+      const actions = getActions();
+      recordAction({ type: "play_stage", actions });
+      const outcome = spireStageOutcome(
+        spinLogs.map((l) => l.roundScore),
+        target,
       );
-  }
+
+      if (cleared) {
+        const r = settleClear(st, outcome.remainingSpins, outcome.stageScore);
+        if (!r.ok) {
+          setError(r.error);
+          setPhase("error");
+          return;
+        }
+        runStateRef.current = r.state;
+        setRunState(r.state);
+        setClearBreakdown({
+          interest: r.breakdown.interest,
+          spinBonus: r.breakdown.spinBonus,
+          payout: r.breakdown.payout,
+        });
+        persist();
+        if (stage >= SPIRE_STAGE_COUNT) {
+          endRun();
+        } else if (SPIRE_ARTIFACT_STAGES.includes(stage)) {
+          setPhase("artifact");
+        } else {
+          setPhase("shop");
+        }
+      } else {
+        const r = settleFail(st);
+        if (!r.ok) {
+          setError(r.error);
+          setPhase("error");
+          return;
+        }
+        runStateRef.current = r.state;
+        setRunState(r.state);
+        persist();
+        if (r.breakdown.ended) {
+          endRun();
+        } else {
+          setPhase("shop");
+        }
+      }
+    },
+    [getActions, recordAction, spinLogs, persist, endRun],
+  );
+
+  // ── start / resume bootstrap ───────────────────────────────────────────────
+
+  const startFresh = useCallback(() => {
+    startSpire()
+      .then(async (r) => {
+        me.current = await fetchMe().catch(() => null);
+        setRunId(r.runId);
+        runIdRef.current = r.runId;
+        setSeed(r.seed);
+        seedRef.current = r.seed;
+        setChoices(r.choices);
+        setPhase("choosing-set");
+      })
+      .catch((e) => {
+        setError(
+          e instanceof Error && e.message === "unauthorized"
+            ? "로그인이 필요합니다."
+            : "첨탑을 시작할 수 없습니다.",
+        );
+        setPhase("error");
+      });
+  }, []);
 
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
     reset();
-    // A saved run was already detected during render (phase 'resume'); in that
-    // case wait for the player's choice. Otherwise auto-start a fresh run.
-    if (loadSpire()) return;
+    if (loadSpire()) return; // wait for the player's resume choice
     startFresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Resume a saved run: rebuild the exact run config + rng (beginRun re-seeds),
-   * start the game, then re-dispatch the recorded actions IN ORDER. Because the
-   * store is re-seeded with the same seed, replaying the actions reproduces the
-   * identical rng stream/boards — so the resumed run still verifies server-side.
-   * Any error means a stale/incompatible save → discard it and start fresh.
-   */
-  async function resume(save: SpireSave) {
-    try {
-      const me = await fetchMe().catch(() => null);
-      configureRun(spireRunConfig(save.seed, save.chosenSetId));
-      beginRun(save.seed, save.runId, "spire");
-      if (me) setNickname(me.nickname);
-      startGame();
-      for (const action of save.actions) {
-        switch (action.type) {
-          case "selectRule": {
-            const rule = RULES_BY_ID[action.ruleId];
-            if (rule) selectRule(rule); // skip unknown ids (mirror of replay)
-            break;
-          }
-          case "cancelSelection":
-            cancelSelection();
-            break;
-          case "placePending":
-            placePending(action.target);
-            break;
-          case "moveRule":
-            moveRule(action.from, action.to);
-            break;
-          case "spin":
-            spin();
-            break;
-          case "selectCells":
-            selectCells(action.indices);
-            break;
-          case "next":
-            nextTurn();
-            break;
-        }
+  /** Replay a saved run and resume at the shop boundary (or submit if ended). */
+  const doResume = useCallback(
+    async (save: SpireSave) => {
+      const r = replaySpireRun(save.seed, save.actions);
+      if (!r.ok) {
+        clearSpire();
+        reset();
+        startFresh();
+        return;
       }
-      setPhase({ kind: "playing", chosenSetId: save.chosenSetId, seed: save.seed });
-    } catch {
-      clearSpire();
-      reset();
-      startFresh();
-      setPhase({ kind: "loading" });
-    }
-  }
+      me.current = await fetchMe().catch(() => null);
+      setRunId(save.runId);
+      runIdRef.current = save.runId;
+      setSeed(save.seed);
+      seedRef.current = save.seed;
+      setSpireActions(save.actions);
+      actionsRef.current = save.actions;
+      runStateRef.current = r.finalState;
+      setRunState(r.finalState);
+      if (r.runEnded) {
+        endRun();
+      } else {
+        // Safe boundary: the player resumes at the shop before their next stage;
+        // mid-stage progress was never persisted.
+        setShopVisitIndex(Math.max(0, r.finalState.currentStage - 1));
+        setRerollCount(0);
+        setPhase("shop");
+      }
+    },
+    [reset, startFresh, endRun],
+  );
 
-  /** Discard the saved run and start the normal set-choice flow. */
   function startNewGame() {
     clearSpire();
     reset();
-    setPhase({ kind: "loading" });
+    setResumeSave(null);
+    setPhase("loading");
     startFresh();
   }
 
-  async function choose(setId: string) {
-    if (phase.kind !== "choosing") return;
-    const { runId, seed } = phase;
-    const me = await fetchMe().catch(() => null);
-    if (me) setNickname(me.nickname);
-    configureRun(spireRunConfig(seed, setId));
-    beginRun(seed, runId, "spire");
-    startGame();
-    setPhase({ kind: "playing", chosenSetId: setId, seed });
-  }
+  // ── set choice ─────────────────────────────────────────────────────────────
 
-  // Persist the in-progress run while playing so the player can 이어하기 later.
-  // Re-runs whenever the recorded actions could have changed (status/spinLogs)
-  // and writes the current seed + chosenSetId + runId + getActions() snapshot.
-  // Skips once the run is over (a resume of a finished run is pointless) and
-  // clears the save so the result screen / next visit starts clean.
-  useEffect(() => {
-    if (phase.kind !== "playing") return;
-    const roundScores = spinLogs.map((l) => l.roundScore);
-    const completed = Math.floor(roundScores.length / SPIRE_SPINS_PER_STAGE);
-    let didFail = false;
-    for (let k = 0; k < completed; k++) {
-      const sum = roundScores
-        .slice(k * SPIRE_SPINS_PER_STAGE, k * SPIRE_SPINS_PER_STAGE + SPIRE_SPINS_PER_STAGE)
-        .reduce((a, b) => a + b, 0);
-      if (sum < SPIRE_STAGES[k].targetScore) {
-        didFail = true;
-        break;
-      }
-    }
-    const over = status === "finished" || didFail || completed >= SPIRE_STAGE_COUNT;
-    if (over) {
-      clearSpire();
+  function chooseSet(setId: string) {
+    const r = applyInitialSetChoice(initialSpireState(seedRef.current), setId);
+    if (!r.ok) {
+      setError(r.error);
+      setPhase("error");
       return;
     }
-    saveSpire({
-      seed: phase.seed,
-      chosenSetId: phase.chosenSetId,
-      runId: useGameStore.getState().runId ?? "",
-      actions: getActions(),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, status, spinLogs]);
+    recordAction({ type: "choose_set", chosenSetId: setId });
+    runStateRef.current = r.state;
+    setRunState(r.state);
+    persist();
+    startStage();
+  }
 
-  if (phase.kind === "loading") {
+  // ── in-stage watcher: immediate clear or finish ─────────────────────────────
+
+  const finalizedRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "playing") {
+      finalizedRef.current = false;
+      return;
+    }
+    const st = runStateRef.current;
+    if (!st) return;
+    const target = spireStageTarget(st.currentStage);
+    const cumulative = spinLogs.reduce((a, l) => a + l.roundScore, 0);
+    if (finalizedRef.current) return;
+    if (status === "spin-result" && cumulative >= target) {
+      finalizedRef.current = true;
+      setPhase("cleared");
+    } else if (status === "finished") {
+      finalizedRef.current = true;
+      finalizeStage(cumulative >= target);
+    }
+  }, [phase, status, spinLogs, finalizeStage]);
+
+  // ── shop handlers (apply reducer, reflect new state, persist) ───────────────
+
+  const applyReducer = useCallback(
+    (r: { ok: true; state: SpireRunState } | { ok: false; error: string }, action: SpireAction) => {
+      if (!r.ok) return; // illegal buy (e.g. unaffordable) — ignore
+      runStateRef.current = r.state;
+      setRunState(r.state);
+      recordAction(action);
+      persist();
+    },
+    [recordAction, persist],
+  );
+
+  const offers: SpireShopOffers | null = runState
+    ? spireShopOffers(runState, shopVisitIndex, rerollCount)
+    : null;
+
+  // ── render ──────────────────────────────────────────────────────────────────
+
+  if (phase === "loading") {
     return <Centered>첨탑을 준비하는 중…</Centered>;
   }
-  if (phase.kind === "error") {
+
+  if (phase === "error") {
     return (
       <Centered>
-        <p className="text-rose-400">{phase.message}</p>
+        <p className="text-rose-400">{error || "오류가 발생했습니다."}</p>
         <Link href="/login" className="text-emerald-400 underline">
           로그인하기
         </Link>
@@ -192,9 +377,10 @@ export default function SpireClient() {
     );
   }
 
-  if (phase.kind === "resume") {
-    const { save } = phase;
-    const set = SYMBOL_SETS_BY_ID[save.chosenSetId];
+  if (phase === "resume" && resumeSave) {
+    const set = SYMBOL_SETS_BY_ID[
+      resumeSave.actions.find((a) => a.type === "choose_set")?.chosenSetId ?? ""
+    ];
     return (
       <Centered>
         <h1 className="text-2xl font-black tracking-tight">
@@ -208,7 +394,7 @@ export default function SpireClient() {
         <div className="flex w-full flex-col gap-3">
           <button
             type="button"
-            onClick={() => resume(save)}
+            onClick={() => doResume(resumeSave)}
             className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-zinc-950 transition hover:bg-emerald-400"
           >
             이어하기
@@ -228,7 +414,7 @@ export default function SpireClient() {
     );
   }
 
-  if (phase.kind === "choosing") {
+  if (phase === "choosing-set" && choices) {
     return (
       <main className="fade-rise mx-auto flex w-full max-w-2xl flex-1 flex-col items-center gap-6 px-4 py-10">
         <ModeIntro
@@ -250,14 +436,14 @@ export default function SpireClient() {
           </p>
         </header>
         <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-          {phase.choices.map((id) => {
+          {choices.map((id) => {
             const set = SYMBOL_SETS_BY_ID[id];
             if (!set) return null;
             return (
               <button
                 key={id}
                 type="button"
-                onClick={() => choose(id)}
+                onClick={() => chooseSet(id)}
                 className="flex flex-col gap-3 rounded-2xl border border-zinc-700 bg-zinc-900/60 p-5 text-left transition hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-zinc-800/60"
               >
                 <span className="text-lg font-bold text-emerald-300">{set.name} 세트</span>
@@ -280,60 +466,170 @@ export default function SpireClient() {
     );
   }
 
-  // playing
-  const roundScores = spinLogs.map((l) => l.roundScore);
-  const completedStages = Math.floor(roundScores.length / SPIRE_SPINS_PER_STAGE);
-  let clearedSoFar = 0;
-  let failed = false;
-  for (let k = 0; k < completedStages; k++) {
-    const sum = roundScores
-      .slice(k * SPIRE_SPINS_PER_STAGE, k * SPIRE_SPINS_PER_STAGE + SPIRE_SPINS_PER_STAGE)
-      .reduce((a, b) => a + b, 0);
-    if (sum >= SPIRE_STAGES[k].targetScore) clearedSoFar += 1;
-    else {
-      failed = true;
-      break;
-    }
-  }
-  const runOver =
-    status === "finished" || failed || completedStages >= SPIRE_STAGE_COUNT;
-
-  if (runOver) {
-    return <SpireResultScreen chosenSetId={phase.chosenSetId} />;
+  if (phase === "result" && runState) {
+    return (
+      <SpireResultScreen
+        stagesCleared={runState.currentStage - 1}
+        totalScore={runState.totalRunScore}
+        money={runState.money}
+        artifacts={runState.artifacts}
+        endReason={runState.currentStage > SPIRE_STAGE_COUNT ? "completed" : "failed-out"}
+        seasonPoints={seasonPoints}
+        submitState={submitState}
+        rejectReason={rejectReason}
+        onRetry={startNewGame}
+      />
+    );
   }
 
-  const currentStage = Math.min(clearedSoFar + 1, SPIRE_STAGE_COUNT);
-  const target = SPIRE_STAGES[currentStage - 1].targetScore;
-  const weights = spireRunConfig(phase.seed, phase.chosenSetId).baseWeights ?? {};
-  const bag = (Object.entries(weights) as [SymbolType, number][])
-    .filter(([, w]) => w > 0)
-    .map(([s, w]) => `${SYMBOL_SETS_BY_ID_emoji(s)}×${w}`)
-    .join("  ");
+  if (phase === "cleared" && runState) {
+    return (
+      <Centered>
+        <h1 className="text-3xl font-black tracking-tight text-emerald-300">
+          스테이지 {runState.currentStage} 클리어!
+        </h1>
+        <button
+          type="button"
+          onClick={() => finalizeStage(true)}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+        >
+          계속
+        </button>
+      </Centered>
+    );
+  }
 
-  return (
-    <>
-      <div className="mx-auto w-full max-w-2xl px-4 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-2 text-sm">
-          <span className="font-bold text-amber-300">
-            스테이지 {currentStage} / {SPIRE_STAGE_COUNT}
-          </span>
-          <span className="text-zinc-300">목표 {target}점</span>
-          <span className="text-emerald-300">클리어 {clearedSoFar}</span>
+  if (phase === "artifact" && runState && offers) {
+    const arts = offers.artifacts.slice(0, 2);
+    const choose = (id: string | null) => {
+      recordAction({ type: "choose_artifact", artifactId: id });
+      if (id) {
+        const next = { ...runState, artifacts: [...runState.artifacts, id] };
+        runStateRef.current = next;
+        setRunState(next);
+      }
+      persist();
+      setPhase("shop");
+    };
+    return (
+      <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center gap-6 px-4 py-10">
+        <h1 className="text-2xl font-black tracking-tight text-amber-300">아티팩트 선택</h1>
+        <div className="grid w-full grid-cols-1 gap-3">
+          {arts.map((a) => {
+            const def = ARTIFACT_BY_ID[a.id];
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => choose(a.id)}
+                className="flex flex-col gap-1 rounded-2xl border border-zinc-700 bg-zinc-900/60 p-4 text-left transition hover:border-emerald-400"
+              >
+                <span className="font-bold text-emerald-300">{def?.name ?? a.id}</span>
+                <span className="text-sm text-zinc-400">{def?.effect}</span>
+              </button>
+            );
+          })}
         </div>
-        <p className="mt-1 text-center text-xs text-zinc-500">심볼 주머니: {bag}</p>
-      </div>
-      <GameScreen />
-    </>
-  );
-}
-
-/** Emoji for a symbol id via the set catalog (numbers fall back to the glyph). */
-function SYMBOL_SETS_BY_ID_emoji(id: string): string {
-  for (const set of Object.values(SYMBOL_SETS_BY_ID)) {
-    const sym = set.symbols.find((s) => s.id === id);
-    if (sym) return sym.emoji;
+        <button
+          type="button"
+          onClick={() => choose(null)}
+          className="text-sm text-zinc-400 underline"
+        >
+          건너뛰기
+        </button>
+      </main>
+    );
   }
-  return id;
+
+  if (phase === "shop" && runState && offers) {
+    return (
+      <>
+        {clearBreakdown && (
+          <div className="mx-auto mt-3 w-full max-w-md px-4">
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-2 text-center text-xs text-emerald-200">
+              이자 +{clearBreakdown.interest} · 스핀 보너스 +{clearBreakdown.spinBonus} · 클리어 보상 +{clearBreakdown.payout}
+            </div>
+          </div>
+        )}
+        <SpireShop
+          runState={runState}
+          offers={offers}
+          onBuySymbol={(target, replaced) =>
+            applyReducer(buySymbolIncrement(runState, target, replaced), {
+              type: "buy_symbol",
+              targetSymbolId: target,
+              replacedSymbolId: replaced,
+            })
+          }
+          onBuySet={(setId, replacedSymbolIds, removedRuleIds) =>
+            applyReducer(buySymbolSet(runState, setId, replacedSymbolIds, removedRuleIds), {
+              type: "buy_set",
+              setId,
+              replacedSymbolIds,
+              removedRuleIds,
+            })
+          }
+          onBuyRule={(ruleId, removedRuleId) =>
+            applyReducer(buyRule(runState, ruleId, removedRuleId), {
+              type: "buy_rule",
+              ruleId,
+              removedRuleId,
+            })
+          }
+          onBuyHandFlat={(hand) =>
+            applyReducer(buyHandFlat(runState, hand), { type: "buy_hand_flat", handType: hand })
+          }
+          onBuyHandDouble={(hand) =>
+            applyReducer(buyHandDouble(runState, hand), { type: "buy_hand_double", handType: hand })
+          }
+          onReroll={() => {
+            const r = rerollShop(runState);
+            if (!r.ok) return;
+            runStateRef.current = r.state;
+            setRunState(r.state);
+            recordAction({ type: "reroll_shop" });
+            setRerollCount((c) => c + 1);
+            persist();
+          }}
+          onLeave={() => {
+            setShopVisitIndex((i) => i + 1);
+            setRerollCount(0);
+            startStage();
+          }}
+        />
+      </>
+    );
+  }
+
+  // playing
+  if (phase === "playing" && runState) {
+    const stage = runState.currentStage;
+    const target = spireStageTarget(stage);
+    const cumulative = spinLogs.reduce((a, l) => a + l.roundScore, 0);
+    const bag = Object.entries(runState.symbolBag)
+      .filter(([, c]) => c > 0)
+      .map(([id, c]) => `${emojiFor(id)}×${c}`)
+      .join("  ");
+    return (
+      <>
+        <div className="mx-auto w-full max-w-2xl px-4 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-2 text-sm">
+            <span className="font-bold text-amber-300">
+              스테이지 {stage} / {SPIRE_STAGE_COUNT}
+            </span>
+            <span className="text-zinc-300">목표 {target}점</span>
+            <span className="text-emerald-300">누적 {cumulative}</span>
+            <span className="text-amber-200">돈 {runState.money}원</span>
+            <span className="text-zinc-400">클리어 {stage - 1}</span>
+          </div>
+          <p className="mt-1 text-center text-xs text-zinc-500">심볼 주머니: {bag}</p>
+        </div>
+        <GameScreen />
+      </>
+    );
+  }
+
+  return <Centered>첨탑을 준비하는 중…</Centered>;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

@@ -2,24 +2,25 @@
  * Client-only persistence for an in-progress 첨탑(spire) run so the player can
  * 이어하기(resume) after leaving the page.
  *
- * A spire run is exactly ONE RC run: a seed + chosen set id + the ordered list
- * of recorded actions. Re-dispatching those actions against a fresh store that
- * has been re-seeded with the same seed reproduces the identical rng stream, so
- * the resumed run still verifies under server-side replay (lib/replay.ts).
+ * A spire run is the run seed + the ordered list of staged SpireAction[] the
+ * controller has recorded so far (choose_set / play_stage / shop buys / …).
+ * Replaying those actions from the same seed via replaySpireRun reproduces the
+ * identical run state, so the resumed run still verifies under server-side
+ * replay (lib/spire/replay.ts). The chosen set is now the FIRST action, so it is
+ * no longer stored separately.
  *
  * Stored in localStorage as a single JSON blob under KEY. All accessors guard
  * `typeof window` so importing this module is safe on the server.
  */
 
-import type { RecordedAction } from '@/store/gameStore';
+import type { SpireAction } from '@/lib/spire/replay';
 
 const KEY = 'rule-slot-spire-run';
 
 export type SpireSave = {
   seed: string;
-  chosenSetId: string;
   runId: string;
-  actions: RecordedAction[];
+  actions: SpireAction[];
 };
 
 /** Persist the current spire run snapshot. No-op outside the browser. */
@@ -34,8 +35,9 @@ export function saveSpire(s: SpireSave): void {
 
 /**
  * Load a saved spire run, or null if absent/corrupt. Validates the shape
- * (seed + chosenSetId + runId strings, actions array) so a malformed blob never
- * crashes the resume flow.
+ * (seed + runId strings, actions array) so a malformed blob never crashes the
+ * resume flow. Action contents are not deeply validated here — replaySpireRun
+ * rejects any structurally invalid stream on resume.
  */
 export function loadSpire(): SpireSave | null {
   if (typeof window === 'undefined') return null;
@@ -47,7 +49,6 @@ export function loadSpire(): SpireSave | null {
     const o = parsed as Record<string, unknown>;
     if (
       typeof o.seed !== 'string' ||
-      typeof o.chosenSetId !== 'string' ||
       typeof o.runId !== 'string' ||
       !Array.isArray(o.actions)
     ) {
@@ -55,9 +56,8 @@ export function loadSpire(): SpireSave | null {
     }
     return {
       seed: o.seed,
-      chosenSetId: o.chosenSetId,
       runId: o.runId,
-      actions: o.actions as RecordedAction[],
+      actions: o.actions as SpireAction[],
     };
   } catch {
     return null;

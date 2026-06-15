@@ -1,31 +1,26 @@
 import { getDb } from '@/lib/db';
 import { currentPlayer } from '@/lib/server/playerAuth';
-import { verifySubmission } from '@/lib/server/verifySubmission';
-import {
-  pickSpireSetChoices,
-  spireRunConfig,
-  spireProgress,
-} from '@/lib/spire/run';
+import { verifySpireRun } from '@/lib/spire/verify';
 import { spireSeasonPoints } from '@/lib/season/scoring';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
-import type { RecordedAction } from '@/store/gameStore';
+import type { SpireAction } from '@/lib/spire/replay';
 
 type SubmitBody = {
   runId?: unknown;
-  chosenSetId?: unknown;
-  actions?: RecordedAction[];
-  clientResults?: ClientResults;
+  actions?: SpireAction[];
+  stagesCleared?: unknown;
+  totalScore?: unknown;
   clientVersion?: string;
   rulesetVersion?: number;
 };
 
 const EMPTY_RESULTS: ClientResults = { spins: [], finalScore: 0, bestSpinScore: 0 };
 
-// POST /api/spire/submit — server replays a finished spire run with the chosen
-// set's config, scores it from its OWN replayed spins, interprets stage gating
-// over the per-spin scores, and (on success) updates the player's spire record /
-// best score.
+// POST /api/spire/submit — server re-derives the whole staged spire run from the
+// seed + SpireAction[] via verifySpireRun (replay), NEVER trusting the client's
+// economy/score numbers. The client's reported stagesCleared/totalScore are only
+// a claim that must match the replay, or the run is rejected.
 export async function POST(req: Request) {
   const player = await currentPlayer();
   if (!player) {
@@ -43,7 +38,6 @@ export async function POST(req: Request) {
   if (!runId) {
     return Response.json({ error: 'invalid_run_id' }, { status: 400 });
   }
-  const chosenSetId = typeof body.chosenSetId === 'string' ? body.chosenSetId : '';
 
   const db = getDb();
   const run = await db.getRun(runId);
@@ -60,15 +54,9 @@ export async function POST(req: Request) {
     return Response.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  // The chosen set must be one of the two the seed offered before stage 1;
-  // anything else means the client tampered with the choice.
-  const choices = pickSpireSetChoices(run.seed);
-  if (!choices.includes(chosenSetId)) {
-    return Response.json({ error: 'invalid_set_choice' }, { status: 400 });
-  }
-
   const actions = Array.isArray(body.actions) ? body.actions : [];
-  const clientResults = body.clientResults ?? null;
+  const stagesCleared = typeof body.stagesCleared === 'number' ? body.stagesCleared : 0;
+  const totalScore = typeof body.totalScore === 'number' ? body.totalScore : 0;
   const now = new Date().toISOString();
 
   // Version gate: only current-version runs may register, keeping spire records
@@ -83,7 +71,7 @@ export async function POST(req: Request) {
     await db.finalizeRun(runId, {
       nickname: player.nickname,
       actions,
-      clientResults: clientResults ?? EMPTY_RESULTS,
+      clientResults: EMPTY_RESULTS,
       score: null,
       bestSpinScore: null,
       status: 'rejected',
@@ -94,52 +82,45 @@ export async function POST(req: Request) {
     return Response.json({ status: 'rejected', reason: 'version_mismatch' });
   }
 
-  // The chosen set's fixed board / rule pool / symbol bag / spin limit. The same
-  // config is applied on the client, so the server replay produces identical
-  // boards and scores.
-  const config = spireRunConfig(run.seed, chosenSetId);
-  const outcome = verifySubmission(run.seed, actions, clientResults, config);
+  const v = verifySpireRun(run.seed, actions, { stagesCleared, totalScore });
 
-  if (outcome.status === 'rejected') {
+  if (v.status === 'rejected') {
     await db.finalizeRun(runId, {
       nickname: player.nickname,
       actions,
-      clientResults: clientResults ?? EMPTY_RESULTS,
+      clientResults: EMPTY_RESULTS,
       score: null,
       bestSpinScore: null,
       status: 'rejected',
       verified: false,
-      rejectReason: outcome.reason,
+      rejectReason: v.reason,
       submittedAt: now,
     });
-    return Response.json({ status: 'rejected', reason: outcome.reason });
+    return Response.json({ status: 'rejected', reason: v.reason });
   }
 
-  // verifySubmission has confirmed clientResults.spins matches the replay, so we
-  // can trust these per-spin scores to interpret the stage gating.
-  const roundScores = clientResults!.spins.map((s) => s.spinScore);
-  const prog = spireProgress(roundScores);
-  const seasonPts = spireSeasonPoints(prog.stagesCleared, outcome.score);
+  const seasonPts = spireSeasonPoints(v.stagesCleared, v.totalScore);
 
   await db.finalizeRun(runId, {
     nickname: player.nickname,
     actions,
-    clientResults: clientResults!,
-    score: outcome.score,
-    bestSpinScore: outcome.bestSpinScore,
+    clientResults: { spins: [], finalScore: v.totalScore, bestSpinScore: 0 },
+    score: v.totalScore,
+    bestSpinScore: 0,
     status: 'submitted',
     verified: true,
     rejectReason: null,
     submittedAt: now,
-    clearedStageCount: prog.stagesCleared,
+    cleared: v.stagesCleared > 0,
+    clearedStageCount: v.stagesCleared,
     seasonPoints: seasonPts,
   });
 
   await db.upsertSpireRecord({
     playerId: player.id,
     seasonId: run.seasonId!,
-    stageReached: prog.stagesCleared,
-    totalScore: outcome.score,
+    stageReached: v.stagesCleared,
+    totalScore: v.totalScore,
     runId: run.id,
   });
 
@@ -148,17 +129,16 @@ export async function POST(req: Request) {
     seasonId: run.seasonId!,
     mode: 'spire',
     scopeKey: '',
-    score: outcome.score,
+    score: v.totalScore,
     seasonPoints: seasonPts,
-    cleared: prog.stagesCleared > 0,
+    cleared: v.stagesCleared > 0,
     runId: run.id,
   });
 
   return Response.json({
     status: 'submitted',
-    stagesCleared: prog.stagesCleared,
-    totalScore: outcome.score,
+    stagesCleared: v.stagesCleared,
+    totalScore: v.totalScore,
     seasonPoints: seasonPts,
-    stageScores: prog.stageScores,
   });
 }

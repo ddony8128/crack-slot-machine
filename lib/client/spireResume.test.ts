@@ -5,14 +5,20 @@ const KEY = 'rule-slot-spire-run';
 
 const sample: SpireSave = {
   seed: 'seed-abc',
-  chosenSetId: 'fruit',
   runId: 'run-123',
   actions: [
-    { type: 'selectRule', ruleId: 'r1' },
-    { type: 'placePending', target: { type: 'slot', index: 0 } },
-    { type: 'spin' },
-    { type: 'selectCells', indices: [1, 2] },
-    { type: 'next' },
+    { type: 'choose_set', chosenSetId: 'fruit' },
+    {
+      type: 'play_stage',
+      actions: [
+        { type: 'selectRule', ruleId: 'r1' },
+        { type: 'placePending', target: { type: 'slot', index: 0 } },
+        { type: 'spin' },
+        { type: 'selectCells', indices: [1, 2] },
+        { type: 'next' },
+      ],
+    },
+    { type: 'buy_hand_flat', handType: 'Pair' },
   ],
 };
 
@@ -38,7 +44,7 @@ describe('spireResume', () => {
   it('returns null when required fields are missing', () => {
     window.localStorage.setItem(
       KEY,
-      JSON.stringify({ seed: 'x', chosenSetId: 'fruit' }), // no runId / actions
+      JSON.stringify({ seed: 'x' }), // no runId / actions
     );
     expect(loadSpire()).toBeNull();
   });
@@ -46,7 +52,7 @@ describe('spireResume', () => {
   it('returns null when actions is not an array', () => {
     window.localStorage.setItem(
       KEY,
-      JSON.stringify({ seed: 'x', chosenSetId: 'fruit', runId: 'r', actions: 'nope' }),
+      JSON.stringify({ seed: 'x', runId: 'r', actions: 'nope' }),
     );
     expect(loadSpire()).toBeNull();
   });
