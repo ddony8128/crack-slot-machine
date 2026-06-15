@@ -1,6 +1,7 @@
 import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
 import { NUMBERS } from '@/data/symbols';
-import { SYMBOL_SETS } from '@/lib/symbols/sets';
+import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { PAIR_RULES } from '@/lib/pairRules';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
   SEVEN_SCORE,
@@ -207,6 +208,34 @@ function cleanSweepCount(
   return countFours(result) === 0 ? countRule(expanded, 'clean-bonus') : 0;
 }
 
+/** Does the board contain ≥1 member of the given symbol set? */
+function boardHasSet(result: SymbolType[], setId: string): boolean {
+  const set = SYMBOL_SETS_BY_ID[setId];
+  if (!set) return false;
+  const members = new Set<SymbolType>(set.symbols.map((s) => s.id as SymbolType));
+  return result.some((s) => members.has(s));
+}
+
+/**
+ * Generic A–B pair bonus. For each PairRule active in `expanded` (n = count,
+ * so copy-above stacks), pay points*n iff the board has ≥1 member of BOTH sets.
+ * Returns the running sum + labeled line items so scoreResult/scoreItems agree.
+ */
+function pairBonus(
+  expanded: (Rule | null)[],
+  result: SymbolType[],
+): { sum: number; items: ScoreItem[] } {
+  const items: ScoreItem[] = [];
+  for (const pair of PAIR_RULES) {
+    const n = countRule(expanded, pair.id);
+    if (n <= 0) continue;
+    if (!boardHasSet(result, pair.setA) || !boardHasSet(result, pair.setB)) continue;
+    items.push({ label: n > 1 ? `${pair.name} ×${n}` : pair.name, points: pair.points * n });
+  }
+  const sum = items.reduce((a, it) => a + it.points, 0);
+  return { sum, items };
+}
+
 export function scoreItems(
   result: SymbolType[],
   activeSlotRules: (Rule | null)[] = [],
@@ -232,6 +261,8 @@ export function scoreItems(
 
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
+
+  items.push(...pairBonus(expanded, result).items);
 
   const clean = cleanSweepCount(expanded, result, scoreBoards);
   if (clean > 0)
@@ -276,6 +307,7 @@ export function scoreResult(
 
   let bonusScore = setBonuses(result, events).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
+  bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 
   // FOUR FORTUNE: while active, each 4 scores +FOUR_FORTUNE_PER (×count via

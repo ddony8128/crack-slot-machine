@@ -1,4 +1,5 @@
 import type { Rule, RulePhase } from '@/types';
+import { PAIR_RULES } from '@/lib/pairRules';
 
 // Player-facing labels for each trigger-timing phase (the "발동 시점" badge).
 export const RULE_PHASE_LABELS: Record<RulePhase, string> = {
@@ -333,6 +334,16 @@ export const RULES: Rule[] = [
     build: 'score',
     description: '4가 나올 확률이 네 배가 되고, 이번 스핀에서 4는 감점 대신 개당 +20점이 된다.',
   },
+
+  // ---- pair (A–B conditional bonus; DATA in lib/pairRules.ts) ----
+  ...PAIR_RULES.map((p) => ({
+    id: p.id,
+    name: p.name,
+    type: 'score' as const,
+    phase: 'scoring' as const,
+    build: 'pair',
+    description: p.description,
+  })),
 ];
 
 export const RULES_BY_ID: Record<string, Rule> = Object.fromEntries(
