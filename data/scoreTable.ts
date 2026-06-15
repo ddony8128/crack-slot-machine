@@ -25,8 +25,8 @@ export const BONUS_ONLY_GEMS = 150;       // all 5 cells gems
 export const BONUS_ALL_BLUE = 200;        // all 5 cells in BLUE set
 export const BONUS_ALL_RED = 250;         // all 5 cells in RED set
 
-// Four penalty per four.
-export const FOUR_PENALTY_PER = 20;
+// Four penalty per four. (Season 1 v0.1: -30 per four.)
+export const FOUR_PENALTY_PER = 30;
 // FOUR FORTUNE rule: each 4 scores +this instead of the penalty.
 export const FOUR_FORTUNE_PER = 20;
 

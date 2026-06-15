@@ -112,15 +112,15 @@ describe('colorBonuses', () => {
 });
 
 describe('scoreResult', () => {
-  it('pair 🍒🍒0 0 4 => hand Pair 10, penalty 20, base -10', () => {
+  it('pair 🍒🍒0 0 4 => hand Pair 10, penalty 30, base -20', () => {
     const r: SymbolType[] = ['cherry', 'cherry', 'zero', 'zero', 'four'];
     const s = scoreResult(r, []);
     expect(s.hand).toBe('Pair');
     expect(s.handScore).toBe(10);
     expect(s.sevenScore).toBe(0);
     expect(s.bonusScore).toBe(0);
-    expect(s.penalty).toBe(20);
-    expect(s.baseRoundScore).toBe(-10);
+    expect(s.penalty).toBe(30);
+    expect(s.baseRoundScore).toBe(-20);
   });
 
   it('five cherries is additive: 700 + only-fruits 100 + all-red 250', () => {
@@ -191,12 +191,12 @@ describe('scoreResult', () => {
     expect(s.bonusScore).toBe(250);
   });
 
-  it('five fours => penalty 100, No Hand, base -100', () => {
+  it('five fours => penalty 150, No Hand, base -150', () => {
     const r: SymbolType[] = ['four', 'four', 'four', 'four', 'four'];
     const s = scoreResult(r, []);
     expect(s.hand).toBe('No Hand');
-    expect(s.penalty).toBe(100);
-    expect(s.baseRoundScore).toBe(-100);
+    expect(s.penalty).toBe(150);
+    expect(s.baseRoundScore).toBe(-150);
   });
 });
 
@@ -221,7 +221,7 @@ describe('scoreItems (breakdown)', () => {
     // 🍒🍒 0 0 4 -> Pair + 4 penalty
     const items = scoreItems(['cherry', 'cherry', 'zero', 'zero', 'four'], []);
     expect(items).toContainEqual({ label: '족보: 페어', points: 10 });
-    expect(items).toContainEqual({ label: '4 페널티 (1개)', points: -20 });
+    expect(items).toContainEqual({ label: '4 페널티 (1개)', points: -30 });
   });
 
   it('reflects active score rules incl copy-above duplication in the sum', () => {
@@ -261,10 +261,10 @@ describe('four-fortune (4 weight x4 + each 4 = +20)', () => {
     const r: SymbolType[] = ['four', 'four', 'cherry', 'cherry', 'zero'];
     const base = scoreResult(r, []);
     const ff = scoreResult(r, [RULES_BY_ID['four-fortune']]);
-    expect(base.penalty).toBe(40); // 2 fours * 20
+    expect(base.penalty).toBe(60); // 2 fours * 30
     expect(ff.penalty).toBe(0);
-    // remove the -40 penalty AND add +40 bonus.
-    expect(ff.baseRoundScore).toBe(base.baseRoundScore + 40 + 40);
+    // remove the -60 penalty AND add +40 bonus (FORTUNE +20 each).
+    expect(ff.baseRoundScore).toBe(base.baseRoundScore + 60 + 40);
   });
 
   it('scoreItems shows a positive "4 보너스" and sums to baseRoundScore', () => {
