@@ -1,4 +1,4 @@
-import type { Rule, SelectKind, SpinLogStep, SymbolType } from '@/types';
+import type { EngineEvent, Rule, SelectKind, SpinLogStep, SymbolType } from '@/types';
 import { FRUITS, GEMS } from '@/data/symbols';
 import { rollSymbol, type Rng } from '@/lib/rng';
 
@@ -41,6 +41,10 @@ export type CascadeFrame = {
   pending: Pending | null;
   done: boolean;
   interactive: boolean;
+  // ADDITIVE per-spin engine event log (reroll/move/copy/transform/lock), in
+  // application order. Read-only data for later set-scoring; emitted alongside the
+  // normal board writes and NEVER affects board/score/reveal/replay outcome.
+  events: EngineEvent[];
 };
 
 /**
@@ -77,15 +81,33 @@ function applyOne(
   working: SymbolType[],
   locked: boolean[],
   ctx: ApplyCtx,
+  events: EngineEvent[],
 ): number[] {
   const { weights, rng } = ctx;
+  // ADDITIVE event helpers. They only PUSH to `events`; they never read or change
+  // any board value, so removing them would leave the cascade outcome identical.
+  const emitReroll = (symbolId: SymbolType, index: number) => {
+    events.push({ type: 'symbol_rerolled', symbolId, index, byRuleId: rule.id });
+  };
+  const emitCopy = (symbolId: SymbolType, fromIndex: number, toIndex: number) => {
+    events.push({ type: 'symbol_copied', symbolId, fromIndex, toIndex, byRuleId: rule.id });
+  };
+  const emitTransform = (
+    fromSymbolId: SymbolType,
+    toSymbolId: SymbolType,
+    index: number,
+  ) => {
+    events.push({ type: 'symbol_transformed', fromSymbolId, toSymbolId, index, byRuleId: rule.id });
+  };
   switch (rule.id) {
     // ---- reroll ----
     case 'four-shield': {
       const rolled: number[] = [];
       for (let i = 0; i < working.length; i++) {
         if (working[i] === 'four' && !locked[i]) {
+          const old = working[i];
           write(working, locked, i, rollSymbol(weights, rng));
+          emitReroll(old, i);
           rolled.push(i);
         }
       }
@@ -94,11 +116,13 @@ function applyOne(
     case 'four-parry': {
       const idx = working.findIndex((s, i) => s === 'four' && !locked[i]);
       if (idx !== -1) {
+        const old = working[idx];
         let iter = 0;
         while (iter < REROLL_CAP && working[idx] === 'four') {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        emitReroll(old, idx);
         return [idx];
       }
       return [];
@@ -106,11 +130,13 @@ function applyOne(
     case 'gem-shuffle': {
       const idx = working.findIndex((s, i) => GEM_SET.has(s) && !locked[i]);
       if (idx !== -1) {
+        const old = working[idx];
         let iter = 0;
         while (iter < REROLL_CAP && GEM_SET.has(working[idx])) {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        emitReroll(old, idx);
         return [idx];
       }
       return [];
@@ -118,11 +144,13 @@ function applyOne(
     case 'fruit-fish': {
       const idx = working.findIndex((s, i) => !FRUIT_SET.has(s) && !locked[i]);
       if (idx !== -1) {
+        const old = working[idx];
         let iter = 0;
         while (iter < REROLL_CAP && !FRUIT_SET.has(working[idx])) {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        emitReroll(old, idx);
         return [idx];
       }
       return [];
@@ -130,50 +158,70 @@ function applyOne(
     case 'gem-fish': {
       const idx = working.findIndex((s, i) => !GEM_SET.has(s) && !locked[i]);
       if (idx !== -1) {
+        const old = working[idx];
         let iter = 0;
         while (iter < REROLL_CAP && !GEM_SET.has(working[idx])) {
           working[idx] = rollSymbol(weights, rng);
           iter += 1;
         }
+        emitReroll(old, idx);
         return [idx];
       }
       return [];
     }
 
-    // ---- transform ----
-    case 'left-pair':
-      write(working, locked, 1, working[0]);
+    // ---- transform (COPY: a cell takes another cell's current symbol) ----
+    case 'left-pair': {
+      const src = working[0];
+      if (write(working, locked, 1, src)) emitCopy(src, 0, 1);
       return [];
-    case 'center-echo':
-      write(working, locked, 3, working[1]);
+    }
+    case 'center-echo': {
+      const src = working[1];
+      if (write(working, locked, 3, src)) emitCopy(src, 1, 3);
       return [];
-    case 'third-mirror':
-      write(working, locked, 2, working[4]);
+    }
+    case 'third-mirror': {
+      const src = working[4];
+      if (write(working, locked, 2, src)) emitCopy(src, 4, 2);
       return [];
-    case 'first-cherry':
-      write(working, locked, 0, 'cherry');
+    }
+    // ---- transform (SET: a cell becomes a fixed symbol) ----
+    case 'first-cherry': {
+      const old = working[0];
+      if (old !== 'cherry' && write(working, locked, 0, 'cherry')) emitTransform(old, 'cherry', 0);
       return [];
+    }
     case 'safe-convert':
       for (let i = 0; i < working.length; i++) {
-        if ((working[i] === 'four' || working[i] === 'zero') && !locked[i])
-          write(working, locked, i, 'ruby');
+        const old = working[i];
+        if ((old === 'four' || old === 'zero') && !locked[i]) {
+          if (write(working, locked, i, 'ruby')) emitTransform(old, 'ruby', i);
+        }
       }
       return [];
     case 'zero-to-seven':
       for (let i = 0; i < working.length; i++) {
-        if (working[i] === 'zero' && !locked[i]) write(working, locked, i, 'seven');
+        const old = working[i];
+        if (old === 'zero' && !locked[i]) {
+          if (write(working, locked, i, 'seven')) emitTransform(old, 'seven', i);
+        }
       }
       return [];
     case 'red-dye':
       for (let i = 0; i < working.length; i++) {
-        if ((working[i] === 'lemon' || working[i] === 'diamond') && !locked[i])
-          write(working, locked, i, 'cherry');
+        const old = working[i];
+        if ((old === 'lemon' || old === 'diamond') && !locked[i]) {
+          if (write(working, locked, i, 'cherry')) emitTransform(old, 'cherry', i);
+        }
       }
       return [];
     case 'blue-dye':
       for (let i = 0; i < working.length; i++) {
-        if ((working[i] === 'lemon' || working[i] === 'diamond') && !locked[i])
-          write(working, locked, i, 'sapphire');
+        const old = working[i];
+        if ((old === 'lemon' || old === 'diamond') && !locked[i]) {
+          if (write(working, locked, i, 'sapphire')) emitTransform(old, 'sapphire', i);
+        }
       }
       return [];
 
@@ -189,6 +237,14 @@ const SELECT_KIND: Record<string, SelectKind> = {
   'select-copy': 'copy',
   'select-swap': 'swap',
   'select-reroll': 'reroll',
+};
+
+// Inverse of SELECT_KIND: the select rule id for a given kind. Used to tag the
+// ADDITIVE engine events with the actual select rule's id (byRuleId).
+const SELECT_RULE_ID: Record<SelectKind, string> = {
+  copy: 'select-copy',
+  swap: 'select-swap',
+  reroll: 'select-reroll',
 };
 
 /**
@@ -229,6 +285,9 @@ export function beginCascade(
 ): CascadeFrame {
   const working: SymbolType[] = [...base];
   const locked: boolean[] = [false, false, false, false, false];
+  // ADDITIVE engine event log for the whole spin. Populated alongside (never
+  // instead of) the normal board writes; read-only for later set-scoring.
+  const events: EngineEvent[] = [];
 
   // --- PRE-ROLL HOLD pass: freeze locked cells to the previous spin value. ---
   // A `copy-above` whose slot above is a lock re-applies that lock here too
@@ -236,15 +295,24 @@ export function beginCascade(
   const prev = ctx.previousResult;
   const applyLock = (lockRule: Rule) => {
     if (lockRule.id === 'center-lock') {
-      if (!locked[2]) { working[2] = prev[2]; locked[2] = true; }
+      if (!locked[2]) {
+        working[2] = prev[2];
+        locked[2] = true;
+        events.push({ type: 'symbol_locked', symbolId: working[2], index: 2, byRuleId: lockRule.id });
+      }
     } else if (lockRule.id === 'last-lock') {
-      if (!locked[4]) { working[4] = prev[4]; locked[4] = true; }
+      if (!locked[4]) {
+        working[4] = prev[4];
+        locked[4] = true;
+        events.push({ type: 'symbol_locked', symbolId: working[4], index: 4, byRuleId: lockRule.id });
+      }
     } else if (lockRule.id === 'fruit-freeze') {
       let held = 0;
       for (let i = 0; i < prev.length && held < 2; i++) {
         if (FRUIT_SET.has(prev[i]) && !locked[i]) {
           working[i] = prev[i];
           locked[i] = true;
+          events.push({ type: 'symbol_locked', symbolId: working[i], index: i, byRuleId: lockRule.id });
           held += 1;
         }
       }
@@ -272,6 +340,7 @@ export function beginCascade(
     pending: null,
     done: false,
     interactive: false,
+    events,
   };
 
   return advanceCascade(frame, rules, ctx, opts);
@@ -348,7 +417,9 @@ export function advanceCascade(
       // re-apply a post-roll board effect.
       let copyRolled: number[] = [];
       if (above.type === 'reroll' || above.type === 'transform') {
-        copyRolled = applyOne(above, working, locked, ctx);
+        // Events emit NATURALLY from this call, tagged with the above rule's id
+        // (the ACTUAL rule applied). No separate emit here -> no double-emit.
+        copyRolled = applyOne(above, working, locked, ctx, frame.events);
       }
       const copyStep: SpinLogStep = { label: `COPY ABOVE → ${above.name}`, result: [...working], locked: [...locked] };
       if (copyRolled.length) copyStep.rerolled = copyRolled;
@@ -356,7 +427,7 @@ export function advanceCascade(
       continue;
     }
 
-    const rolled = applyOne(rule, working, locked, ctx);
+    const rolled = applyOne(rule, working, locked, ctx, frame.events);
     const step: SpinLogStep = { label: rule.name, result: [...working], locked: [...locked] };
     if (rolled.length) step.rerolled = rolled;
     steps.push(step);
@@ -387,6 +458,10 @@ export function resolveSelection(
   // rule may be `copy-above`, not the select rule itself).
   const ruleName = pending.ruleName;
 
+  // byRuleId for the ADDITIVE engine events: the select rule's own id. The slot
+  // rule may be `copy-above` but the applied effect is still the select rule.
+  const selectRuleId = SELECT_RULE_ID[pending.kind];
+
   // SELECT REROLL gives the chosen cell a fresh random roll, so it must animate
   // even if the value repeats. copy/swap are deterministic — a no-visible-change
   // there genuinely means the board is identical, so no rerolled hint is needed.
@@ -394,8 +469,10 @@ export function resolveSelection(
   switch (pending.kind) {
     case 'copy': {
       const i = indices[0];
+      const src = working[i - 1];
       // cell[i] = cell[i-1].
-      working[i] = working[i - 1];
+      working[i] = src;
+      frame.events.push({ type: 'symbol_copied', symbolId: src, fromIndex: i - 1, toIndex: i, byRuleId: selectRuleId });
       break;
     }
     case 'swap': {
@@ -403,11 +480,16 @@ export function resolveSelection(
       const tmp = working[a];
       working[a] = working[b];
       working[b] = tmp;
+      // TWO moves: each cell's PRIOR value left it and arrived at the other cell.
+      frame.events.push({ type: 'symbol_moved', symbolId: tmp, fromIndex: a, toIndex: b, byRuleId: selectRuleId });
+      frame.events.push({ type: 'symbol_moved', symbolId: working[a], fromIndex: b, toIndex: a, byRuleId: selectRuleId });
       break;
     }
     case 'reroll': {
       const i = indices[0];
+      const old = working[i];
       working[i] = rollSymbol(ctx.weights, ctx.rng);
+      frame.events.push({ type: 'symbol_rerolled', symbolId: old, index: i, byRuleId: selectRuleId });
       rerolled = [i];
       break;
     }

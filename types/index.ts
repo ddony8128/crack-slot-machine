@@ -27,6 +27,19 @@ export type SpinLogStep = {
 // One line of the score breakdown ("why you got these points"). points can be negative.
 export type ScoreItem = { label: string; points: number };
 
+/**
+ * An ADDITIVE per-spin engine event describing a single symbol change the cascade
+ * made (reroll/move/copy/transform/lock). Emitted by the cascade and aggregated on
+ * the SpinLog so later SET-scoring (vehicle/monster/cat) can read what happened to
+ * each cell. These NEVER affect the board, score, reveal, or replay — read-only data.
+ */
+export type EngineEvent =
+  | { type: 'symbol_rerolled'; symbolId: SymbolType; index: number; byRuleId: string }
+  | { type: 'symbol_moved'; symbolId: SymbolType; fromIndex: number; toIndex: number; byRuleId: string }
+  | { type: 'symbol_copied'; symbolId: SymbolType; fromIndex: number; toIndex: number; byRuleId: string }
+  | { type: 'symbol_transformed'; fromSymbolId: SymbolType; toSymbolId: SymbolType; index: number; byRuleId: string }
+  | { type: 'symbol_locked'; symbolId: SymbolType; index: number; byRuleId: string };
+
 export type SpinLog = {
   spinIndex: number;        // 0-based
   baseResult: SymbolType[]; // raw roll before post-roll rules
@@ -45,6 +58,10 @@ export type SpinLog = {
   lockedCells: boolean[];   // final cells frozen by lock rules (greyed in UI)
   scoreItems: ScoreItem[];  // itemized "why these points" breakdown (pre-multiplier)
   interactive: boolean;     // true if a `select` rule actually resolved this spin
+  // ADDITIVE engine event log for the whole spin (every symbol reroll/move/copy/
+  // transform/lock, in application order). Read-only data for later set-scoring;
+  // does NOT affect board/score/reveal/replay.
+  events: EngineEvent[];
 };
 
 export type SelectKind = 'copy' | 'swap' | 'reroll';

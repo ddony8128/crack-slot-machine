@@ -183,6 +183,9 @@ function buildInitializer(initialRng: Rng): Initializer {
         lockedCells: frame.locked,
         scoreItems: items,
         interactive: frame.interactive,
+        // ADDITIVE engine event log from the cascade (read-only; default [] if a
+        // frame somehow lacks it). Does not affect any other SpinLog field.
+        events: frame.events ?? [],
       };
 
       activeFrame = null;
