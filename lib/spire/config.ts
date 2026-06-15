@@ -93,15 +93,9 @@ export const SPIRE_REWARD_TYPES: { type: SpireRewardType; label: string; descrip
   { type: 'artifact', label: '아티팩트 획득', description: '런 전체에 적용되는 패시브 효과를 얻습니다.' },
 ];
 
-export type SpireArtifact = { id: string; name: string; effect: string };
-
-export const SPIRE_ARTIFACTS: SpireArtifact[] = [
-  { id: 'lucky_start', name: '행운의 시작', effect: '각 스테이지 첫 스핀에서 7 확률 +50%' },
-  { id: 'four_insurance', name: '4 보험', effect: '각 스테이지 첫 번째 4 페널티 무시' },
-  { id: 'zero_coupon', name: '0 쿠폰', effect: '0이 3개 이상 나올 때 얻는 추가 규칙 선택 +1' },
-  { id: 'final_push', name: '마지막 레버', effect: '각 스테이지 마지막 스핀 점수 1.5배' },
-  { id: 'stable_hand', name: '안정된 손', effect: '스테이지 시작 시 랜덤 규칙 슬롯 1개 유지' },
-];
+// Artifact catalog now lives in lib/spire/artifacts.ts (real, hook-driven defs).
+// Re-exported here under the legacy name so existing imports keep working.
+export { ARTIFACTS as SPIRE_ARTIFACTS, type ArtifactDef as SpireArtifact } from '@/lib/spire/artifacts';
 
 /**
  * Spec base starting symbol bag (counts) for a spire run: NUMBER set only.

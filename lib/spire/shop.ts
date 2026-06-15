@@ -11,7 +11,7 @@
 
 import { createSeededRng, type Rng } from '@/lib/rng';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
-import { SPIRE_ARTIFACTS } from '@/lib/spire/config';
+import { ARTIFACTS, artifactOffered } from '@/lib/spire/artifacts';
 import {
   SPIRE_ARTIFACT_PRICES,
   SPIRE_SET_PRICE,
@@ -69,7 +69,7 @@ export function spireShopOffers(
   const rng = createSeededRng(`${state.seed}:shop:${shopVisitIndex}:${rerollCount}`);
 
   const artifacts = shuffle(
-    SPIRE_ARTIFACTS.filter((a) => !state.artifacts.includes(a.id)),
+    ARTIFACTS.filter((a) => artifactOffered(a, state.ownedSetIds, state.artifacts)),
     rng,
   )
     .slice(0, SPIRE_ARTIFACT_PRICES.length)

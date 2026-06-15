@@ -554,7 +554,7 @@ export default function SpireClient() {
                 className="flex flex-col gap-1 rounded-2xl border border-zinc-700 bg-zinc-900/60 p-4 text-left transition hover:border-emerald-400"
               >
                 <span className="font-bold text-emerald-300">{def?.name ?? a.id}</span>
-                <span className="text-sm text-zinc-400">{def?.effect}</span>
+                <span className="text-sm text-zinc-400">{def?.description}</span>
               </button>
             );
           })}
