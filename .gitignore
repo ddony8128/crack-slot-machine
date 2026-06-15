@@ -44,3 +44,6 @@ next-env.d.ts
 /screenshots
 dev.log
 server.log
+
+# Mobile screenshot output (scripts/mobile-shots.mjs)
+scripts/shots/
