@@ -11,6 +11,8 @@ import type {
   DailyChallengeRow,
   DailyUserStatusRow,
   BestScoreRow,
+  PuzzleRecordRow,
+  SpireRecordRow,
   RunMode,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
@@ -54,6 +56,8 @@ export class MemoryDb implements Db {
   private dailyChallenges: DailyChallengeRow[] = [];
   private dailyUserStatuses: DailyUserStatusRow[] = [];
   private bestScores: BestScoreRow[] = [];
+  private puzzleRecords: PuzzleRecordRow[] = [];
+  private spireRecords: SpireRecordRow[] = [];
   private counter = 0;
 
   constructor(events?: EventRow[]) {
@@ -433,5 +437,122 @@ export class MemoryDb implements Db {
         if (b.score !== a.score) return b.score - a.score;
         return a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0;
       });
+  }
+
+  // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
+  async upsertPuzzleRecord(input: {
+    playerId: string;
+    seasonId: string;
+    puzzleKey: string;
+    goalsAchieved: number;
+    spinCount: number | null;
+    runId: string | null;
+  }): Promise<PuzzleRecordRow> {
+    const existing = this.puzzleRecords.find(
+      (p) =>
+        p.playerId === input.playerId &&
+        p.seasonId === input.seasonId &&
+        p.puzzleKey === input.puzzleKey,
+    );
+    if (!existing) {
+      const row: PuzzleRecordRow = {
+        id: this.id('puzzle-rec'),
+        playerId: input.playerId,
+        seasonId: input.seasonId,
+        puzzleKey: input.puzzleKey,
+        bestGoalsAchieved: input.goalsAchieved,
+        bestSpinCount: input.spinCount,
+        bestRunId: input.runId,
+        updatedAt: new Date().toISOString(),
+      };
+      this.puzzleRecords.push(row);
+      return row;
+    }
+    const better =
+      input.goalsAchieved > existing.bestGoalsAchieved ||
+      (input.goalsAchieved === existing.bestGoalsAchieved &&
+        input.spinCount !== null &&
+        (existing.bestSpinCount === null ||
+          input.spinCount < existing.bestSpinCount));
+    if (better) {
+      existing.bestGoalsAchieved = input.goalsAchieved;
+      existing.bestSpinCount = input.spinCount;
+      existing.bestRunId = input.runId;
+      existing.updatedAt = new Date().toISOString();
+    }
+    return existing;
+  }
+
+  async listPlayerPuzzleRecords(
+    playerId: string,
+    seasonId: string,
+  ): Promise<PuzzleRecordRow[]> {
+    return this.puzzleRecords.filter(
+      (p) => p.playerId === playerId && p.seasonId === seasonId,
+    );
+  }
+
+  async getPuzzleDistribution(
+    seasonId: string,
+    puzzleKey: string,
+  ): Promise<Record<number, number>> {
+    const dist: Record<number, number> = {};
+    for (const p of this.puzzleRecords) {
+      if (p.seasonId !== seasonId || p.puzzleKey !== puzzleKey) continue;
+      dist[p.bestGoalsAchieved] = (dist[p.bestGoalsAchieved] ?? 0) + 1;
+    }
+    return dist;
+  }
+
+  // ── Season 1 WU9: spire records ────────────────────────────────────────────
+  async upsertSpireRecord(input: {
+    playerId: string;
+    seasonId: string;
+    stageReached: number;
+    totalScore: number;
+    runId: string | null;
+  }): Promise<SpireRecordRow> {
+    const existing = this.spireRecords.find(
+      (s) => s.playerId === input.playerId && s.seasonId === input.seasonId,
+    );
+    if (!existing) {
+      const row: SpireRecordRow = {
+        id: this.id('spire-rec'),
+        playerId: input.playerId,
+        seasonId: input.seasonId,
+        bestStageReached: input.stageReached,
+        bestTotalScore: input.totalScore,
+        bestRunId: input.runId,
+        updatedAt: new Date().toISOString(),
+      };
+      this.spireRecords.push(row);
+      return row;
+    }
+    const better =
+      input.stageReached > existing.bestStageReached ||
+      (input.stageReached === existing.bestStageReached &&
+        input.totalScore > existing.bestTotalScore);
+    if (better) {
+      existing.bestStageReached = input.stageReached;
+      existing.bestTotalScore = input.totalScore;
+      existing.bestRunId = input.runId;
+      existing.updatedAt = new Date().toISOString();
+    }
+    return existing;
+  }
+
+  async getSpireRecord(
+    playerId: string,
+    seasonId: string,
+  ): Promise<SpireRecordRow | null> {
+    return (
+      this.spireRecords.find(
+        (s) => s.playerId === playerId && s.seasonId === seasonId,
+      ) ?? null
+    );
+  }
+
+  async listSpireRecords(seasonId: string): Promise<SpireRecordRow[]> {
+    return this.spireRecords.filter((s) => s.seasonId === seasonId);
   }
 }

@@ -16,6 +16,8 @@ import type {
   DailyChallengeRow,
   DailyUserStatusRow,
   BestScoreRow,
+  PuzzleRecordRow,
+  SpireRecordRow,
   RunMode,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
@@ -127,6 +129,31 @@ function toBestScore(row: any): BestScoreRow {
     seasonPoints: row.season_points,
     cleared: row.cleared ?? null,
     runId: row.run_id ?? null,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toPuzzleRecord(row: any): PuzzleRecordRow {
+  return {
+    id: row.id,
+    playerId: row.player_id,
+    seasonId: row.season_id,
+    puzzleKey: row.puzzle_key,
+    bestGoalsAchieved: row.best_goals_achieved,
+    bestSpinCount: row.best_spin_count ?? null,
+    bestRunId: row.best_run_id ?? null,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toSpireRecord(row: any): SpireRecordRow {
+  return {
+    id: row.id,
+    playerId: row.player_id,
+    seasonId: row.season_id,
+    bestStageReached: row.best_stage_reached,
+    bestTotalScore: row.best_total_score,
+    bestRunId: row.best_run_id ?? null,
     updatedAt: row.updated_at,
   };
 }
@@ -588,5 +615,172 @@ export class SupabaseDb implements Db {
       .order('updated_at', { ascending: true });
     if (error) throw error;
     return (data ?? []).map(toBestScore);
+  }
+
+  // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
+  async upsertPuzzleRecord(input: {
+    playerId: string;
+    seasonId: string;
+    puzzleKey: string;
+    goalsAchieved: number;
+    spinCount: number | null;
+    runId: string | null;
+  }): Promise<PuzzleRecordRow> {
+    const { data: existingRow, error: selectError } = await this.sb
+      .from('puzzle_user_records')
+      .select('*')
+      .eq('player_id', input.playerId)
+      .eq('season_id', input.seasonId)
+      .eq('puzzle_key', input.puzzleKey)
+      .maybeSingle();
+    if (selectError) throw selectError;
+
+    if (!existingRow) {
+      const { data, error } = await this.sb
+        .from('puzzle_user_records')
+        .insert({
+          player_id: input.playerId,
+          season_id: input.seasonId,
+          puzzle_key: input.puzzleKey,
+          best_goals_achieved: input.goalsAchieved,
+          best_spin_count: input.spinCount,
+          best_run_id: input.runId,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return toPuzzleRecord(data);
+    }
+
+    const existing = toPuzzleRecord(existingRow);
+    const better =
+      input.goalsAchieved > existing.bestGoalsAchieved ||
+      (input.goalsAchieved === existing.bestGoalsAchieved &&
+        input.spinCount !== null &&
+        (existing.bestSpinCount === null ||
+          input.spinCount < existing.bestSpinCount));
+    if (!better) return existing;
+
+    const { data, error } = await this.sb
+      .from('puzzle_user_records')
+      .update({
+        best_goals_achieved: input.goalsAchieved,
+        best_spin_count: input.spinCount,
+        best_run_id: input.runId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toPuzzleRecord(data);
+  }
+
+  async listPlayerPuzzleRecords(
+    playerId: string,
+    seasonId: string,
+  ): Promise<PuzzleRecordRow[]> {
+    const { data, error } = await this.sb
+      .from('puzzle_user_records')
+      .select('*')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId);
+    if (error) throw error;
+    return (data ?? []).map(toPuzzleRecord);
+  }
+
+  async getPuzzleDistribution(
+    seasonId: string,
+    puzzleKey: string,
+  ): Promise<Record<number, number>> {
+    const { data, error } = await this.sb
+      .from('puzzle_user_records')
+      .select('best_goals_achieved')
+      .eq('season_id', seasonId)
+      .eq('puzzle_key', puzzleKey);
+    if (error) throw error;
+    const dist: Record<number, number> = {};
+    for (const row of data ?? []) {
+      const value = (row as any).best_goals_achieved as number;
+      dist[value] = (dist[value] ?? 0) + 1;
+    }
+    return dist;
+  }
+
+  // ── Season 1 WU9: spire records ────────────────────────────────────────────
+  async upsertSpireRecord(input: {
+    playerId: string;
+    seasonId: string;
+    stageReached: number;
+    totalScore: number;
+    runId: string | null;
+  }): Promise<SpireRecordRow> {
+    const { data: existingRow, error: selectError } = await this.sb
+      .from('spire_user_records')
+      .select('*')
+      .eq('player_id', input.playerId)
+      .eq('season_id', input.seasonId)
+      .maybeSingle();
+    if (selectError) throw selectError;
+
+    if (!existingRow) {
+      const { data, error } = await this.sb
+        .from('spire_user_records')
+        .insert({
+          player_id: input.playerId,
+          season_id: input.seasonId,
+          best_stage_reached: input.stageReached,
+          best_total_score: input.totalScore,
+          best_run_id: input.runId,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return toSpireRecord(data);
+    }
+
+    const existing = toSpireRecord(existingRow);
+    const better =
+      input.stageReached > existing.bestStageReached ||
+      (input.stageReached === existing.bestStageReached &&
+        input.totalScore > existing.bestTotalScore);
+    if (!better) return existing;
+
+    const { data, error } = await this.sb
+      .from('spire_user_records')
+      .update({
+        best_stage_reached: input.stageReached,
+        best_total_score: input.totalScore,
+        best_run_id: input.runId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toSpireRecord(data);
+  }
+
+  async getSpireRecord(
+    playerId: string,
+    seasonId: string,
+  ): Promise<SpireRecordRow | null> {
+    const { data, error } = await this.sb
+      .from('spire_user_records')
+      .select('*')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toSpireRecord(data) : null;
+  }
+
+  async listSpireRecords(seasonId: string): Promise<SpireRecordRow[]> {
+    const { data, error } = await this.sb
+      .from('spire_user_records')
+      .select('*')
+      .eq('season_id', seasonId);
+    if (error) throw error;
+    return (data ?? []).map(toSpireRecord);
   }
 }

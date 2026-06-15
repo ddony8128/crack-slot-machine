@@ -368,3 +368,117 @@ describe('MemoryDb best scores', () => {
     expect((await db.listPlayerBestScores('p1', season!.id)).length).toBe(2);
   });
 });
+
+describe('MemoryDb puzzle records', () => {
+  it('upsertPuzzleRecord keeps better: higher goals wins, equal goals fewer spins wins, worse ignored', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const scope = { playerId: 'p1', seasonId: season!.id, puzzleKey: 'pz1' };
+
+    const a = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 1, spinCount: 10, runId: 'r1' });
+    expect(a.bestGoalsAchieved).toBe(1);
+    expect(a.bestSpinCount).toBe(10);
+    expect(a.bestRunId).toBe('r1');
+
+    // higher goals wins (even with more spins)
+    const b = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 2, spinCount: 99, runId: 'r2' });
+    expect(b.bestGoalsAchieved).toBe(2);
+    expect(b.bestSpinCount).toBe(99);
+    expect(b.bestRunId).toBe('r2');
+
+    // equal goals, fewer spins wins
+    const c = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 2, spinCount: 30, runId: 'r3' });
+    expect(c.bestGoalsAchieved).toBe(2);
+    expect(c.bestSpinCount).toBe(30);
+    expect(c.bestRunId).toBe('r3');
+
+    // worse: fewer goals -> ignored
+    const d = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 1, spinCount: 1, runId: 'r4' });
+    expect(d.bestGoalsAchieved).toBe(2);
+    expect(d.bestSpinCount).toBe(30);
+    expect(d.bestRunId).toBe('r3');
+
+    // worse: equal goals, more spins -> ignored
+    const e = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 2, spinCount: 50, runId: 'r5' });
+    expect(e.bestSpinCount).toBe(30);
+    expect(e.bestRunId).toBe('r3');
+
+    // one row only
+    expect((await db.listPlayerPuzzleRecords('p1', season!.id)).length).toBe(1);
+  });
+
+  it('getPuzzleDistribution buckets bestGoalsAchieved across players', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const mk = (playerId: string, goalsAchieved: number) =>
+      db.upsertPuzzleRecord({
+        playerId,
+        seasonId: season!.id,
+        puzzleKey: 'pz1',
+        goalsAchieved,
+        spinCount: 5,
+        runId: null,
+      });
+    await mk('p1', 0);
+    await mk('p2', 1);
+    await mk('p3', 1);
+    await mk('p4', 2);
+    // different puzzle -> excluded
+    await db.upsertPuzzleRecord({ playerId: 'p5', seasonId: season!.id, puzzleKey: 'pz2', goalsAchieved: 3, spinCount: 1, runId: null });
+    // p1 improves to 1 -> moves bucket
+    await mk('p1', 1);
+
+    const dist = await db.getPuzzleDistribution(season!.id, 'pz1');
+    expect(dist).toEqual({ 1: 3, 2: 1 });
+  });
+});
+
+describe('MemoryDb spire records', () => {
+  it('upsertSpireRecord keeps better: higher stage wins, equal stage higher score wins, worse ignored', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const scope = { playerId: 'p1', seasonId: season!.id };
+
+    const a = await db.upsertSpireRecord({ ...scope, stageReached: 3, totalScore: 100, runId: 'r1' });
+    expect(a.bestStageReached).toBe(3);
+    expect(a.bestTotalScore).toBe(100);
+    expect(a.bestRunId).toBe('r1');
+
+    // higher stage wins (even with lower score)
+    const b = await db.upsertSpireRecord({ ...scope, stageReached: 5, totalScore: 50, runId: 'r2' });
+    expect(b.bestStageReached).toBe(5);
+    expect(b.bestTotalScore).toBe(50);
+    expect(b.bestRunId).toBe('r2');
+
+    // equal stage, higher score wins
+    const c = await db.upsertSpireRecord({ ...scope, stageReached: 5, totalScore: 80, runId: 'r3' });
+    expect(c.bestTotalScore).toBe(80);
+    expect(c.bestRunId).toBe('r3');
+
+    // worse: lower stage -> ignored
+    const d = await db.upsertSpireRecord({ ...scope, stageReached: 4, totalScore: 9999, runId: 'r4' });
+    expect(d.bestStageReached).toBe(5);
+    expect(d.bestTotalScore).toBe(80);
+    expect(d.bestRunId).toBe('r3');
+
+    // worse: equal stage, lower score -> ignored
+    const e = await db.upsertSpireRecord({ ...scope, stageReached: 5, totalScore: 70, runId: 'r5' });
+    expect(e.bestTotalScore).toBe(80);
+    expect(e.bestRunId).toBe('r3');
+  });
+
+  it('getSpireRecord returns null then the row; listSpireRecords returns all', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+
+    expect(await db.getSpireRecord('p1', season!.id)).toBeNull();
+
+    await db.upsertSpireRecord({ playerId: 'p1', seasonId: season!.id, stageReached: 2, totalScore: 10, runId: null });
+    const row = await db.getSpireRecord('p1', season!.id);
+    expect(row?.bestStageReached).toBe(2);
+    expect(row?.bestTotalScore).toBe(10);
+
+    await db.upsertSpireRecord({ playerId: 'p2', seasonId: season!.id, stageReached: 1, totalScore: 5, runId: null });
+    expect((await db.listSpireRecords(season!.id)).length).toBe(2);
+  });
+});

@@ -265,7 +265,56 @@ export interface Db {
   listSeasonBestScores(seasonId: string): Promise<BestScoreRow[]>;
   /** Daily ranking for one date: best score per player, highest first. */
   listDailyBestScores(seasonId: string, dateKey: string): Promise<BestScoreRow[]>;
+
+  // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
+  /** Keep the player's best goals for a puzzle (tiebreak: fewer spins). */
+  upsertPuzzleRecord(input: {
+    playerId: string;
+    seasonId: string;
+    puzzleKey: string;
+    goalsAchieved: number;
+    spinCount: number | null;
+    runId: string | null;
+  }): Promise<PuzzleRecordRow>;
+  listPlayerPuzzleRecords(playerId: string, seasonId: string): Promise<PuzzleRecordRow[]>;
+  /** Distribution: goalsAchieved value → number of players, for one puzzle. */
+  getPuzzleDistribution(seasonId: string, puzzleKey: string): Promise<Record<number, number>>;
+
+  // ── Season 1 WU9: spire records ────────────────────────────────────────────
+  /** Keep the player's best spire run (by stage reached, then total score). */
+  upsertSpireRecord(input: {
+    playerId: string;
+    seasonId: string;
+    stageReached: number;
+    totalScore: number;
+    runId: string | null;
+  }): Promise<SpireRecordRow>;
+  getSpireRecord(playerId: string, seasonId: string): Promise<SpireRecordRow | null>;
+  listSpireRecords(seasonId: string): Promise<SpireRecordRow[]>;
 }
+
+/** A row in `puzzle_user_records` — best goals achieved per puzzle. */
+export type PuzzleRecordRow = {
+  id: string;
+  playerId: string;
+  seasonId: string;
+  puzzleKey: string;
+  bestGoalsAchieved: number;
+  bestSpinCount: number | null;
+  bestRunId: string | null;
+  updatedAt: string;
+};
+
+/** A row in `spire_user_records` — best stage + score per player. */
+export type SpireRecordRow = {
+  id: string;
+  playerId: string;
+  seasonId: string;
+  bestStageReached: number;
+  bestTotalScore: number;
+  bestRunId: string | null;
+  updatedAt: string;
+};
 
 /** One row of a season-points ranking (nickname resolved). */
 export type SeasonRankItem = {
