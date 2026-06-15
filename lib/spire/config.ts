@@ -38,10 +38,13 @@ export const SPIRE_ARTIFACTS: SpireArtifact[] = [
   { id: 'stable_hand', name: '안정된 손', effect: '스테이지 시작 시 랜덤 규칙 슬롯 1개 유지' },
 ];
 
-/** Default starting symbol bag (counts) for a spire run. */
+/**
+ * Spec base starting symbol bag (counts) for a spire run: NUMBER set only.
+ * Season 1 §16 — 0×12, 4×5, 7×3 (total 20). The pre-stage-1 set choice removes
+ * 3 zeros (→ 0×9) and adds the chosen set's 3 symbols ×1 (see lib/spire/run.ts).
+ */
 export const SPIRE_START_BAG: Record<string, number> = {
-  zero: 6,
-  four: 4,
+  zero: 12,
+  four: 5,
   seven: 3,
-  // groupA ×2 each, groupB ×2 each → filled in by the run setup (legacy fruit/gem for now).
 };
