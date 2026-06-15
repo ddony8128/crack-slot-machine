@@ -9,7 +9,7 @@ import {
   type ApplyCtx,
   type CascadeFrame,
 } from '@/lib/cascade';
-import { scoreResult, scoreItems } from '@/lib/score';
+import { scoreResult, scoreItems, type HandUpgradeMap } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
 import { RULES, RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS } from '@/data/symbols';
@@ -42,6 +42,9 @@ export type RunConfig = {
   baseWeights?: Record<SymbolType, number>; // the run's symbol bag (as weights)
   provisioning?: RunProvisioning;
   rulePoolIds?: string[];
+  // 첨탑 per-hand upgrades, applied to every spin's hand score (other modes
+  // leave this unset → scoring is unchanged).
+  handUpgrades?: HandUpgradeMap;
 };
 
 /**
@@ -215,8 +218,9 @@ function buildInitializer(initialRng: Rng): Initializer {
       // haunted cells (E1-lite) add a phantom 'ghost' to the hand counts. Threaded
       // exactly like `boards`: frame field -> finalize -> scoreResult/scoreItems.
       const haunted = frame.haunted ?? [];
-      const score = scoreResult(finalResult, ruleSlots, events, boards, haunted);
-      const items = scoreItems(finalResult, ruleSlots, events, boards, haunted);
+      const ups = runConfig?.handUpgrades;
+      const score = scoreResult(finalResult, ruleSlots, events, boards, haunted, ups);
+      const items = scoreItems(finalResult, ruleSlots, events, boards, haunted, ups);
       const specials = detectSpecials(finalResult);
       const multiplier = state.nextMultiplier;
       const roundScore = score.baseRoundScore * multiplier;

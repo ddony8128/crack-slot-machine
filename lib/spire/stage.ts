@@ -9,6 +9,7 @@
 
 import type { SymbolType } from '@/types';
 import type { RunConfig } from '@/store/gameStore';
+import type { HandUpgradeMap } from '@/lib/score';
 import { BASE_WEIGHTS } from '@/data/symbols';
 import { initialBoardFor } from '@/lib/board/initialBoard';
 import { SPIRE_SPINS_PER_STAGE, SPIRE_STAGES } from '@/lib/spire/config';
@@ -49,6 +50,7 @@ export function spireStageRunConfig(
   attempt: number,
   bag: Record<string, number>,
   rulePool: string[],
+  handUpgrades?: HandUpgradeMap,
 ): RunConfig {
   const weights = bagToWeights(bag);
   const seed = stageAttemptSeed(runSeed, stage, attempt);
@@ -58,6 +60,7 @@ export function spireStageRunConfig(
     baseWeights: weights,
     provisioning: 'pool',
     rulePoolIds: [...rulePool],
+    handUpgrades,
   };
 }
 
