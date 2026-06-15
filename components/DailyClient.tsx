@@ -10,6 +10,7 @@ import {
   type DailyCurrent,
 } from "@/lib/client/dailyApi";
 import { fetchMe } from "@/lib/client/authApi";
+import { dailyRunConfigFromParts } from "@/lib/daily/run";
 import GameScreen from "@/components/GameScreen";
 import DailyResultScreen from "@/components/DailyResultScreen";
 import DummyAdModal from "@/components/DummyAdModal";
@@ -25,6 +26,7 @@ export default function DailyClient() {
   const status = useGameStore((s) => s.status);
   const setNickname = useGameStore((s) => s.setNickname);
   const beginRun = useGameStore((s) => s.beginRun);
+  const configureRun = useGameStore((s) => s.configureRun);
   const startGame = useGameStore((s) => s.startGame);
   const reset = useGameStore((s) => s.reset);
 
@@ -61,6 +63,16 @@ export default function DailyClient() {
       const me = await fetchMe();
       setNickname(me.nickname);
       const run = await startDaily();
+      // Build the run from the DB-stored challenge config (returned by /start),
+      // not by re-deriving in the client, so it matches the server replay.
+      configureRun(
+        dailyRunConfigFromParts({
+          seed: run.seed,
+          groupASetId: run.groupASetId,
+          groupBSetId: run.groupBSetId,
+          basicRuleSetId: run.basicRuleSetId,
+        }),
+      );
       beginRun(run.seed, run.runId, "daily");
       startGame();
     } catch (err) {

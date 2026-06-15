@@ -22,7 +22,15 @@ export type RefillDailyResponse = {
   attemptsLeft: number;
 };
 
-export type StartDailyResponse = { runId: string; seed: string; dateKey: string };
+export type StartDailyResponse = {
+  runId: string;
+  seed: string;
+  dateKey: string;
+  // Stored challenge config (DB-referenced) used to build the run.
+  groupASetId: string;
+  groupBSetId: string;
+  basicRuleSetId: string;
+};
 
 export type SubmitDailyResponse =
   | { status: 'submitted'; score: number; bestSpinScore: number; attemptsLeft: number }

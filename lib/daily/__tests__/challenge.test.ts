@@ -49,8 +49,8 @@ describe('dailyGroups', () => {
 
   it('advances to the next rotation pair one day later', () => {
     expect(dailyGroups('2026-06-16')).toEqual({
-      groupASetId: 'horror',
-      groupBSetId: 'card',
+      groupASetId: 'cat',
+      groupBSetId: 'vehicle',
     });
   });
 });

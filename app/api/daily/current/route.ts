@@ -4,9 +4,9 @@ import {
   dailyDateKey,
   dailyWindow,
   dailySeed,
-  dailyGroups,
   dailyAttemptsAllowed,
 } from '@/lib/daily/challenge';
+import { resolveDailySetup } from '@/lib/daily/run';
 
 // GET /api/daily/current — lazily ensures today's challenge exists, then returns
 // the day's metadata plus (if signed in) how many attempts the player has left,
@@ -21,13 +21,16 @@ export async function GET() {
 
   const dateKey = dailyDateKey(new Date());
   const { startsAt, endsAt } = dailyWindow(dateKey);
+  const setup = resolveDailySetup(dateKey);
   await db.upsertDailyChallenge({
     seasonId: season.id,
     dateKey,
     startsAt,
     endsAt,
     seed: dailySeed(dateKey),
-    ...dailyGroups(dateKey),
+    groupASetId: setup.groupASetId,
+    groupBSetId: setup.groupBSetId,
+    config: { basicRuleSetId: setup.basicRuleSetId },
   });
 
   const player = await currentPlayer();

@@ -2,6 +2,11 @@ import { getDb } from '@/lib/db';
 import { currentPlayer } from '@/lib/server/playerAuth';
 import { verifySubmission } from '@/lib/server/verifySubmission';
 import { dailyAttemptsAllowed } from '@/lib/daily/challenge';
+import {
+  dailyRunConfigFromRow,
+  dailyRunConfigFromParts,
+  resolveDailySetup,
+} from '@/lib/daily/run';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
@@ -76,7 +81,13 @@ export async function POST(req: Request) {
     return Response.json({ status: 'rejected', reason: 'version_mismatch' });
   }
 
-  const outcome = verifySubmission(run.seed, actions, clientResults);
+  // Reconstruct the day's run config from the STORED challenge row so the
+  // server replay matches the client's run exactly.
+  const challenge = await db.getDailyChallenge(run.seasonId!, run.dailyDateKey!);
+  const config = challenge
+    ? dailyRunConfigFromRow(challenge)
+    : dailyRunConfigFromParts({ seed: run.seed, ...resolveDailySetup(run.dailyDateKey!) });
+  const outcome = verifySubmission(run.seed, actions, clientResults, config);
 
   if (outcome.status === 'rejected') {
     await db.finalizeRun(runId, {

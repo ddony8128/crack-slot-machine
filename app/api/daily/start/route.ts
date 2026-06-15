@@ -4,9 +4,9 @@ import {
   dailyDateKey,
   dailyWindow,
   dailySeed,
-  dailyGroups,
   dailyAttemptsAllowed,
 } from '@/lib/daily/challenge';
+import { resolveDailySetup } from '@/lib/daily/run';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 // POST /api/daily/start — open a pending daily run on today's shared seed.
@@ -26,13 +26,16 @@ export async function POST() {
 
   const dateKey = dailyDateKey(new Date());
   const { startsAt, endsAt } = dailyWindow(dateKey);
-  await db.upsertDailyChallenge({
+  const setup = resolveDailySetup(dateKey);
+  const challenge = await db.upsertDailyChallenge({
     seasonId: season.id,
     dateKey,
     startsAt,
     endsAt,
     seed: dailySeed(dateKey),
-    ...dailyGroups(dateKey),
+    groupASetId: setup.groupASetId,
+    groupBSetId: setup.groupBSetId,
+    config: { basicRuleSetId: setup.basicRuleSetId },
   });
 
   const status = await db.getDailyUserStatus({
@@ -54,7 +57,7 @@ export async function POST() {
     );
   }
 
-  const seed = dailySeed(dateKey);
+  const seed = challenge.seed;
   const run = await db.createRun({
     playerId: player.id,
     seasonId: season.id,
@@ -65,5 +68,17 @@ export async function POST() {
     rulesetVersion: RULESET_VERSION,
   });
 
-  return Response.json({ runId: run.id, seed, dateKey });
+  // Return the STORED challenge config so the client builds the run from the DB
+  // row (not by re-deriving), matching the server replay.
+  const basicRuleSetId =
+    (challenge.config as { basicRuleSetId?: string } | null)?.basicRuleSetId ??
+    setup.basicRuleSetId;
+  return Response.json({
+    runId: run.id,
+    seed,
+    dateKey,
+    groupASetId: challenge.groupASetId,
+    groupBSetId: challenge.groupBSetId,
+    basicRuleSetId,
+  });
 }

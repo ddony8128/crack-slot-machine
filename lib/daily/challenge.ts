@@ -37,20 +37,22 @@ export function dailySeed(dateKey: string): string {
  * legacy fruit/gem symbols regardless — these labels are stored for display and
  * are forward-ready for when extra symbol sets are wired into the engine.
  */
+// Pairs of EXISTING non-number sets (fruit/gem/cat/vehicle/monster). numberSet
+// is always present; these two rotate daily. groupA !== groupB in every pair.
 const ROTATION: Array<[string, string]> = [
   ['fruit', 'gem'],
-  ['horror', 'card'],
-  ['cat', 'occult'],
-  ['time', 'fruit'],
-  ['gem', 'horror'],
-  ['card', 'cat'],
-  ['occult', 'time'],
-  ['fruit', 'card'],
+  ['cat', 'vehicle'],
+  ['monster', 'fruit'],
   ['gem', 'cat'],
-  ['horror', 'occult'],
-  ['time', 'gem'],
+  ['vehicle', 'monster'],
+  ['fruit', 'cat'],
+  ['gem', 'vehicle'],
+  ['monster', 'cat'],
+  ['fruit', 'vehicle'],
+  ['gem', 'monster'],
   ['cat', 'fruit'],
-  ['card', 'time'],
+  ['vehicle', 'gem'],
+  ['monster', 'vehicle'],
 ];
 
 const SEASON_START_KEY = '2026-06-15';
