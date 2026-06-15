@@ -17,13 +17,21 @@ Each WU: independently testable + committed (test + lint per unit).
 | O3 | Guest→account merge | on signup, optionally attach guest's quick records to the account. | low | ☐ |
 | E1 | Cell-status board model | board cells carry statuses (e.g. `haunted`); engine/score/reveal aware. DEEP — prerequisite for monster set. | high | ☐ |
 | E2 | Symbol tags / hybrids | symbol tag system + hybrid symbols (zombie_cat…) as registered symbols + render. | high | ☐ |
-| S1 | Cat set rules | 식빵굽기/우다다다/점프의 달인 … (hold + move/rotate via event log). | med | ☐ |
-| S2 | Vehicle set rules | 유료 주차/물류 사업/배 크다 … (move/reroll triggers, selection-limited). | med | ☐ |
+| S1 | Cat set rules | 식빵 굽기/우다다다/점프의 달인 (hold + rotate/swap; symbol_moved events). | med | ✅ `0ca2a3e` |
+| S2 | Vehicle set rules | 러시아워/물류 사업/배 크다 (weight×slots, random swaps, copy-neighbors). 유료 주차 deferred (needs next-spin hold). | med | ✅ `a31a405` |
 | S3 | Monster set rules | 가족 만들기/유령들림 … (needs E1+E2). | high | ☐ |
 | D1 | A–B pair rules | `pairRuleMap[setA+setB]` included in a run's pool when present. | low | ☐ |
 | SP1 | Spire 이어하기 (resume) | persist in-progress spire run (localStorage v0; DB later); resume vs new. | med | ☐ |
 
 Process per WU: subagent implements (supervised) → vitest (scoped) + eslint → fix → tsc → commit+push. Periodic full tsc/vitest/next build at integration points.
+
+## Remaining after this wave (recommended approach)
+- **E1 (haunted cells) — do "E1-lite", NOT a full board refactor.** Add a parallel `haunted: boolean[]` to the cascade frame (threaded exactly like `locked`/`events`/`scoreBoards`); keep the board as `SymbolType[]`. `computeHand(board, haunted?)` adds a phantom `ghost` to the n-of-a-kind multiset for each haunted cell (hands only; set bonuses stay board-only for v0). Thread `haunted` through scoreResult/scoreItems/finalize/replay. Replay-fuzz must stay green. This is far lower risk than a `Cell[]` rewrite and covers 유령들린 칸.
+- **S3 (monster) v0**: `monster-family` (가족 만들기 = copy leftmost dracula → leftmost non-dracula; the +40 copy bonus already rewards it) + `monster-haunt` (유령 들림 = mark leftmost monster cell haunted). Needs E1-lite. Defer hybrids.
+- **E2 (hybrid symbols zombie_cat…)**: only if a rule actually needs them; otherwise skip for v0.
+- **D1 (pair rules)**: pairRuleMap[`a+b`] (sorted key) merged into buildRulePool when both sets are in the run; ship with 1–2 example pair rules.
+- **SP1 (spire resume)**: persist {seed, chosenSetId, actions} to localStorage during a run; resume = configureRun + beginRun + re-dispatch stored actions to rebuild state, then continue.
+- **O3 (guest→account merge)**: on signup, a Db method to reassign the guest display-name's quick runs to the new player.
 
 Notes / decisions captured from the spec:
 - Quick game ranking is separate from season ranking; resets with the season; never feeds season points (state the copy in-UI).
