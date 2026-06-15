@@ -9,6 +9,21 @@ export const RULE_PHASE_LABELS: Record<RulePhase, string> = {
   'next-spin': '다음 스핀',
 };
 
+// Player-facing labels for each rule build/set (the "세트" badge — spec §15).
+export const RULE_BUILD_LABELS: Record<string, string> = {
+  '7': '7',
+  fruit: '과일',
+  gem: '보석',
+  color: '색',
+  order: '순서',
+  cat: '고양이',
+  vehicle: '교통수단',
+  monster: '괴물',
+  safe: '안전',
+  pair: '조합',
+  score: '점수',
+};
+
 export const RULES: Rule[] = [
   // ---- 7 / jackpot ----
   {
