@@ -26,11 +26,14 @@ Monster: 괴물 자동차(monster move/reroll ×20·score), 빠루(monster rerol
 ## Work units
 | WU | Title | Scope | Status |
 |----|-------|-------|--------|
-| AR-A | Catalog + types | ArtifactDef (id/name/description/category/requiredSetIds), full catalog, replaces temp SPIRE_ARTIFACTS; offer-eligibility helper (no-dup + set-required). | ☐ |
-| AR-B | Number-specials gating | RunConfig.numberSpecials {four,zero}; detectSpecials(opts); quick=on, season=off, 첨탑 from 석상 artifacts. | ☐ |
-| AR-C | Score-effect artifacts | scoreResult/scoreItems take `artifacts[]`; apply 영수증/체리/금고/캣타워/새하얀도화지/유람선/괴물자동차/빠루/전용기/타임캡슐 + 금괴(money); RunConfig.artifacts threaded via finalize. | ☐ |
-| AR-D | Economy artifacts | 가계부(interest×2), 차임벨(free rerolls), 금괴 money credit, 4석상/0석상 enable in spire config. | ☐ |
-| AR-E | Provisioning artifacts | 맥가이버 칼(4 offers), 엔진(+1 first pick), 녹아버린 고양이(spin1 no cat). | ☐ |
-| AR-F | Selection/shop + onAcquire | real catalog in 3/6/9 selection + shop buy (no-dup, set-required); onAcquire for 물뿌리개; DEFER 슬롯머신/콩의가호 (spec §10 "later"). | ☐ |
+| AR-A | Catalog + types | ArtifactDef + 21-artifact catalog, no-dup + set-required eligibility. | ✅ `2ba3f07` |
+| AR-B | Number-specials gating | RunConfig.numberSpecials; detectSpecials(opts); quick=on, season=off, 첨탑 from 석상. | ✅ `bdbd5bf` |
+| AR-C | Score-effect artifacts | 영수증/체리/금고/캣타워/새하얀도화지/유람선/괴물자동차/빠루/전용기 in score.ts. | ✅ `9d1c313` |
+| AR-D | Economy + 타임캡슐 | 가계부(interest×2), 차임벨(free rerolls), 금괴(money), 타임캡슐(spin1=0/spin7×2). | ✅ `e4a5bcb` |
+| AR-E | Provisioning | 맥가이버 칼(4 offers), 엔진(+1 first pick), 녹아버린 고양이(spin1 no cat). | ✅ `4c7c542` |
+| AR-F | Shop buy + 석상 | shop artifact purchase (buyArtifact), 4석상/0석상 via spire config. | ✅ `4c7c542`/`bdbd5bf` |
+| AR-G | onAcquire | 물뿌리개(bag shift), 슬롯머신(bag+pool reset), seeded. | ✅ `bc839f2` |
+| AR-H | 콩의 가호 | bean-blessing — slot-1 rule applied twice via effective-slots duplication (cascade + scoring + select-pause). | ✅ this commit |
 
-Process per WU: subagent (supervised) → vitest + eslint → tsc → commit+push. Replay-fuzz green at integration points.
+### Status: COMPLETE — all 21 artifacts implemented (566 tests, replayFuzz byte-identical, build OK).
+Process per WU: subagent (supervised) → vitest + eslint → tsc → commit+push.

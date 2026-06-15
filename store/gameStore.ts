@@ -144,6 +144,37 @@ function emptySlots(): Array<Rule | null> {
   return [null, null, null, null, null];
 }
 
+/**
+ * bean-blessing (콩의 가호): the second rule slot (index 1) is applied ONE MORE
+ * TIME each spin. Implemented as a derived, transient "effective slots" list that
+ * duplicates slot 1 right after itself — so the cascade, the interactive select
+ * path, AND scoring all see the SAME 6-element list and reuse every existing
+ * mechanism (no new cascade branches, no recursion: the artifact isn't a rule).
+ *
+ * Pure + config-driven: it reads only `artifacts` (reconstructed identically in
+ * replay) and the slot contents, so it adds no randomness and replays byte-for-
+ * byte. A no-op when the artifact is absent OR slot 1 is empty — which is why all
+ * existing tests + replayFuzz (no artifacts) are unchanged. `state.ruleSlots`
+ * stays the 5-slot array for UI/placement/moveRule; this is used only for spin
+ * resolution + scoring of that spin.
+ */
+export function effectiveSlots(
+  ruleSlots: (Rule | null)[],
+  artifacts?: string[],
+): (Rule | null)[] {
+  if (artifacts?.includes('bean-blessing') && ruleSlots[1] != null) {
+    return [
+      ruleSlots[0],
+      ruleSlots[1],
+      ruleSlots[1],
+      ruleSlots[2],
+      ruleSlots[3],
+      ruleSlots[4],
+    ];
+  }
+  return ruleSlots;
+}
+
 function freshState(nickname: string): GameState {
   return {
     nickname,
@@ -198,6 +229,11 @@ function buildInitializer(initialRng: Rng): Initializer {
   // matters between spin() and selectCells()/finalize().
   let activeFrame: CascadeFrame | null = null;
   let activeCtx: ApplyCtx | null = null;
+  // The EFFECTIVE slot list for the in-progress spin (= ruleSlots, with slot 1
+  // duplicated when bean-blessing is owned). Computed in spin() and reused by
+  // selectCells() (resolveSelection) and finalize() (scoreResult/scoreItems) so
+  // the cascade, the pause/resume, and scoring all agree. Reset like activeFrame.
+  let activeSlots: (Rule | null)[] | null = null;
 
   // Monotonic reveal-stream id. Incremented at the START of each spin() so the
   // reveal hook can tell a brand-new spin (new id → roll) apart from the same
@@ -221,7 +257,12 @@ function buildInitializer(initialRng: Rng): Initializer {
      */
     const finalize = (frame: CascadeFrame) => {
       const state = get();
-      const { ruleSlots, spinIndex } = state;
+      const { spinIndex } = state;
+      // Score against the SAME effective slots the cascade ran on (slot 1
+      // duplicated under bean-blessing), so score-rule occurrence counts and
+      // blank-canvas null counts match what was actually applied. Falls back to
+      // the live ruleSlots if a frame somehow finalizes without spin() setting it.
+      const slots = activeSlots ?? state.ruleSlots;
       const finalResult = [...frame.working];
 
       // The spin's engine events (same list attached to the SpinLog below) feed
@@ -235,8 +276,8 @@ function buildInitializer(initialRng: Rng): Initializer {
       const haunted = frame.haunted ?? [];
       const ups = runConfig?.handUpgrades;
       const arts = runConfig?.artifacts ?? [];
-      const score = scoreResult(finalResult, ruleSlots, events, boards, haunted, ups, arts);
-      const items = scoreItems(finalResult, ruleSlots, events, boards, haunted, ups, arts);
+      const score = scoreResult(finalResult, slots, events, boards, haunted, ups, arts);
+      const items = scoreItems(finalResult, slots, events, boards, haunted, ups, arts);
       const specials = detectSpecials(finalResult, runConfig?.numberSpecials);
       const multiplier = state.nextMultiplier;
       let roundScore = score.baseRoundScore * multiplier;
@@ -278,6 +319,7 @@ function buildInitializer(initialRng: Rng): Initializer {
 
       activeFrame = null;
       activeCtx = null;
+      activeSlots = null;
 
       // Keep the SAME-id revealStream (so the hook continues, never replays) but
       // mark it done with the final steps. Do NOT clear it here — the reveal hook
@@ -320,6 +362,7 @@ function buildInitializer(initialRng: Rng): Initializer {
       rng = createSeededRng(seed);
       activeFrame = null;
       activeCtx = null;
+      activeSlots = null;
       set({ runId, eventSlug: slug });
     },
 
@@ -509,8 +552,13 @@ function buildInitializer(initialRng: Rng): Initializer {
       record({ type: 'spin' });
 
       const { ruleSlots, previousResult } = state;
+      // bean-blessing (콩의 가호): apply slot 1's rule one more time this spin by
+      // duplicating it into a derived effective slot list. Drives weights, the
+      // roll, the cascade, and (via activeSlots) scoring — all consistently. A
+      // no-op without the artifact, so non-artifact runs are byte-identical.
+      const slots = effectiveSlots(ruleSlots, runConfig?.artifacts);
 
-      let weights = computeWeights(ruleSlots, runConfig?.baseWeights ?? BASE_WEIGHTS);
+      let weights = computeWeights(slots, runConfig?.baseWeights ?? BASE_WEIGHTS);
       // melted-cat (녹아버린 고양이): no cat symbols on the stage's FIRST spin
       // (spinIndex 0). Clone the weights and zero every cat-set symbol BEFORE
       // rolling. Numbers/other sets still have weight, so the bag is never fully
@@ -519,15 +567,16 @@ function buildInitializer(initialRng: Rng): Initializer {
         weights = { ...weights };
         for (const cat of CATS) weights[cat] = 0;
       }
-      const base = rollBoard(ruleSlots, weights, previousResult, rng);
+      const base = rollBoard(slots, weights, previousResult, rng);
       const ctx: ApplyCtx = { previousResult, weights, rng };
       // Cross-spin HOLD: cells flagged by the previous spin's next-spin rule
       // (유료 주차) are held to previousResult at this spin's first roll. Pure
       // engine state (deterministic), so replay reproduces it exactly.
-      const frame = beginCascade(base, ruleSlots, ctx, { preHeld: state.nextHoldCells });
+      const frame = beginCascade(base, slots, ctx, { preHeld: state.nextHoldCells });
 
       activeFrame = frame;
       activeCtx = ctx;
+      activeSlots = slots;
 
       // Open a fresh reveal stream for this spin (new id → the hook rolls anew).
       const id = nextId();
@@ -566,7 +615,10 @@ function buildInitializer(initialRng: Rng): Initializer {
       if (state.status !== 'awaiting-selection') return;
       if (!activeFrame || !activeFrame.pending || !activeCtx) return;
 
-      const { ruleSlots } = state;
+      // Resume the cascade on the SAME effective slots spin() ran on (slot 1
+      // duplicated under bean-blessing), so a select rule in slot 1 pauses/resumes
+      // for BOTH of its occurrences exactly as recorded.
+      const slots = activeSlots ?? state.ruleSlots;
       const pending = activeFrame.pending;
       const expectedCount = pending.count;
 
@@ -581,7 +633,7 @@ function buildInitializer(initialRng: Rng): Initializer {
       }
 
       record({ type: 'selectCells', indices: [...indices] });
-      const frame = resolveSelection(activeFrame, ruleSlots, activeCtx, indices);
+      const frame = resolveSelection(activeFrame, slots, activeCtx, indices);
       activeFrame = frame;
 
       // SAME-id revealStream, now with MORE steps: the hook continues animating
@@ -658,6 +710,7 @@ function buildInitializer(initialRng: Rng): Initializer {
       const { nickname } = get();
       activeFrame = null;
       activeCtx = null;
+      activeSlots = null;
       recorded = [];
       runConfig = null;
       set({ ...freshState(nickname) });
