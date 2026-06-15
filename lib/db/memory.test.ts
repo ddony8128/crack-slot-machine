@@ -433,6 +433,88 @@ describe('MemoryDb puzzle records', () => {
   });
 });
 
+describe('MemoryDb quick best scores', () => {
+  const QUICK_SCOPE = (seasonId: string | null) => ({
+    seasonId,
+    clientVersion: CLIENT_VERSION,
+    rulesetVersion: RULESET_VERSION,
+  });
+
+  async function seedQuick(
+    db: MemoryDb,
+    seasonId: string | null,
+    r: {
+      nickname: string;
+      score: number;
+      best: number;
+      submittedAt?: string;
+      status?: 'submitted' | 'rejected';
+      verified?: boolean;
+      mode?: 'quick' | 'daily';
+    },
+  ) {
+    const run = await db.createRun({
+      seasonId,
+      mode: r.mode ?? 'quick',
+      seed: 's',
+      ...VER,
+    });
+    await db.finalizeRun(run.id, {
+      ...submitInput(r.nickname, r.score, r.best),
+      status: r.status ?? 'submitted',
+      verified: r.verified ?? true,
+      submittedAt: r.submittedAt ?? new Date().toISOString(),
+    });
+  }
+
+  it('dedupes by nickname keeping the higher score; counts only quick+verified+matching-season', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const seasonId = season!.id;
+
+    // Same nickname twice -> keep the higher score.
+    await seedQuick(db, seasonId, { nickname: 'Alice', score: 100, best: 10 });
+    await seedQuick(db, seasonId, { nickname: 'Alice', score: 250, best: 30 });
+    // Another nickname.
+    await seedQuick(db, seasonId, { nickname: 'Bob', score: 200, best: 20 });
+
+    // Excluded: rejected run.
+    await seedQuick(db, seasonId, { nickname: 'Cheater', score: 9999, best: 999, status: 'rejected', verified: false });
+    // Excluded: not verified.
+    await seedQuick(db, seasonId, { nickname: 'Unver', score: 8888, best: 888, verified: false });
+    // Excluded: wrong mode (daily).
+    await seedQuick(db, seasonId, { nickname: 'Daily', score: 7777, best: 777, mode: 'daily' });
+    // Excluded: different season bucket (null).
+    await seedQuick(db, null, { nickname: 'Guest', score: 6666, best: 666 });
+
+    const rows = await db.listQuickBestScores(QUICK_SCOPE(seasonId));
+    expect(rows.map((r) => r.nickname)).toEqual(['Alice', 'Bob']);
+    expect(rows[0].score).toBe(250); // higher of Alice's two
+    expect(rows[1].score).toBe(200);
+
+    // The null bucket sees only the guest run.
+    const nullRows = await db.listQuickBestScores(QUICK_SCOPE(null));
+    expect(nullRows.map((r) => r.nickname)).toEqual(['Guest']);
+  });
+
+  it('excludes mismatched versions', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const seasonId = season!.id;
+    const run = await db.createRun({
+      seasonId,
+      mode: 'quick',
+      seed: 's',
+      clientVersion: CLIENT_VERSION,
+      rulesetVersion: 999,
+    });
+    await db.finalizeRun(run.id, submitInput('OldRules', 500, 50));
+
+    const rows = await db.listQuickBestScores(QUICK_SCOPE(seasonId));
+    expect(rows).toEqual([]);
+  });
+});
+
 describe('MemoryDb spire records', () => {
   it('upsertSpireRecord keeps better: higher stage wins, equal stage higher score wins, worse ignored', async () => {
     const db = new MemoryDb();

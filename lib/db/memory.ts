@@ -44,6 +44,20 @@ function seedSeasons(): SeasonRow[] {
   ];
 }
 
+type QuickEntry = {
+  nickname: string;
+  score: number;
+  bestSpinScore: number;
+  submittedAt: string;
+};
+
+/** Quick ranking order: score desc, then bestSpinScore desc, then submittedAt asc. */
+function quickBetter(a: QuickEntry, b: QuickEntry): boolean {
+  if (a.score !== b.score) return a.score > b.score;
+  if (a.bestSpinScore !== b.bestSpinScore) return a.bestSpinScore > b.bestSpinScore;
+  return a.submittedAt < b.submittedAt;
+}
+
 /**
  * In-memory Db for tests and local dev without Supabase credentials. Replicates
  * the SQL filtering/sorting semantics. Not persistent across process restarts.
@@ -437,6 +451,47 @@ export class MemoryDb implements Db {
         if (b.score !== a.score) return b.score - a.score;
         return a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0;
       });
+  }
+
+  // ── Quick game (guest + member) ranking ────────────────────────────────────
+  async listQuickBestScores(input: {
+    seasonId: string | null;
+    clientVersion: string;
+    rulesetVersion: number;
+  }): Promise<
+    Array<{ nickname: string; score: number; bestSpinScore: number; submittedAt: string }>
+  > {
+    const rows = this.runs.filter(
+      (r) =>
+        r.mode === 'quick' &&
+        r.status === 'submitted' &&
+        r.verified &&
+        r.seasonId === input.seasonId &&
+        r.clientVersion === input.clientVersion &&
+        r.rulesetVersion === input.rulesetVersion,
+    );
+
+    // Dedupe by nickname, keeping the best:
+    // score desc, then bestSpinScore desc, then submittedAt asc.
+    const best = new Map<
+      string,
+      { nickname: string; score: number; bestSpinScore: number; submittedAt: string }
+    >();
+    for (const r of rows) {
+      const nickname = r.nickname ?? 'Anonymous';
+      const candidate = {
+        nickname,
+        score: r.score ?? 0,
+        bestSpinScore: r.bestSpinScore ?? 0,
+        submittedAt: r.submittedAt ?? '',
+      };
+      const current = best.get(nickname);
+      if (!current || quickBetter(candidate, current)) {
+        best.set(nickname, candidate);
+      }
+    }
+
+    return [...best.values()].sort((a, b) => (quickBetter(a, b) ? -1 : quickBetter(b, a) ? 1 : 0));
   }
 
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────

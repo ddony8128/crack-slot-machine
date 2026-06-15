@@ -617,6 +617,60 @@ export class SupabaseDb implements Db {
     return (data ?? []).map(toBestScore);
   }
 
+  // ── Quick game (guest + member) ranking ────────────────────────────────────
+  async listQuickBestScores(input: {
+    seasonId: string | null;
+    clientVersion: string;
+    rulesetVersion: number;
+  }): Promise<
+    Array<{ nickname: string; score: number; bestSpinScore: number; submittedAt: string }>
+  > {
+    let query = this.sb
+      .from('game_runs')
+      .select('nickname, score, best_spin_score, submitted_at')
+      .eq('mode', 'quick')
+      .eq('status', 'submitted')
+      .eq('verified', true)
+      .eq('client_version', input.clientVersion)
+      .eq('ruleset_version', input.rulesetVersion)
+      .order('score', { ascending: false })
+      .order('best_spin_score', { ascending: false })
+      .order('submitted_at', { ascending: true });
+
+    // Match the season bucket, treating null as the no-season bucket.
+    query =
+      input.seasonId === null
+        ? query.is('season_id', null)
+        : query.eq('season_id', input.seasonId);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Dedupe by nickname keeping the best. Rows arrive already sorted
+    // (score desc, best_spin_score desc, submitted_at asc), so the first
+    // occurrence per nickname is the best one.
+    const best = new Map<
+      string,
+      { nickname: string; score: number; bestSpinScore: number; submittedAt: string }
+    >();
+    for (const row of (data ?? []) as any[]) {
+      const nickname = (row.nickname ?? 'Anonymous') as string;
+      if (best.has(nickname)) continue;
+      best.set(nickname, {
+        nickname,
+        score: row.score ?? 0,
+        bestSpinScore: row.best_spin_score ?? 0,
+        submittedAt: row.submitted_at ?? '',
+      });
+    }
+
+    return [...best.values()].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.bestSpinScore !== a.bestSpinScore) return b.bestSpinScore - a.bestSpinScore;
+      return a.submittedAt < b.submittedAt ? -1 : a.submittedAt > b.submittedAt ? 1 : 0;
+    });
+  }
+
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
   async upsertPuzzleRecord(input: {
     playerId: string;

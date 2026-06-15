@@ -15,7 +15,7 @@ export type EventRow = {
 export type RunStatus = 'pending' | 'submitted' | 'rejected';
 
 /** Which game mode a run belongs to. 'event' is the legacy per-event flow. */
-export type RunMode = 'event' | 'daily' | 'puzzle' | 'spire';
+export type RunMode = 'event' | 'daily' | 'puzzle' | 'spire' | 'quick';
 
 /** A row in `players` (Season 1 accounts), camelCased. */
 export type PlayerRow = {
@@ -265,6 +265,18 @@ export interface Db {
   listSeasonBestScores(seasonId: string): Promise<BestScoreRow[]>;
   /** Daily ranking for one date: best score per player, highest first. */
   listDailyBestScores(seasonId: string, dateKey: string): Promise<BestScoreRow[]>;
+
+  // ── Quick game (guest + member) ranking ────────────────────────────────────
+  /**
+   * Fast-game leaderboard: best score per nickname among mode='quick',
+   * submitted+verified runs in the season (seasonId null = the no-season bucket),
+   * version-gated. NOT part of season points. Highest first.
+   */
+  listQuickBestScores(input: {
+    seasonId: string | null;
+    clientVersion: string;
+    rulesetVersion: number;
+  }): Promise<Array<{ nickname: string; score: number; bestSpinScore: number; submittedAt: string }>>;
 
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
   /** Keep the player's best goals for a puzzle (tiebreak: fewer spins). */
