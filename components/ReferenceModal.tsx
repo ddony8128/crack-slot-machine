@@ -10,16 +10,57 @@ import {
   HAND_FULL_HOUSE,
   HAND_FOUR_KIND,
   HAND_FIVE_KIND,
-  BONUS_ALL_FRUIT_TYPES,
-  BONUS_ALL_GEM_TYPES,
-  BONUS_ONLY_FRUITS,
-  BONUS_ONLY_GEMS,
-  BONUS_ALL_BLUE,
-  BONUS_ALL_RED,
   FOUR_PENALTY_PER,
   FOURS_4_MULT,
   FOURS_5_MULT,
 } from "@/data/scoreTable";
+import {
+  SYMBOL_SETS,
+  SYMBOL_SETS_BY_ID,
+  type SetBonus,
+  type SymbolSet,
+} from "@/lib/symbols/sets";
+import { PAIR_RULES } from "@/lib/pairRules";
+
+type PerEventTag = Extract<SetBonus, { type: "per-event" }>["event"];
+
+// moved/rerolled/copied -> the Korean wording used in lib/score.ts.
+const PER_EVENT_LABEL: Record<PerEventTag, string> = {
+  moved: "이동",
+  rerolled: "재굴림",
+  copied: "복사",
+};
+
+/**
+ * Label + display value for a single set bonus row. Pure data so the 점수표 stays
+ * in lockstep with lib/score.ts's `setBonuses` wording (single source of truth).
+ * Returns `negative: true` for penalty rows so the caller can color them.
+ */
+export function bonusRowLabel(
+  set: SymbolSet,
+  bonus: SetBonus,
+): { label: string; value: string; negative: boolean } {
+  switch (bonus.type) {
+    case "all-types":
+      return { label: `${set.name} 3종`, value: `+${bonus.points}`, negative: false };
+    case "all-symbols":
+      return { label: `올 ${set.name}`, value: `+${bonus.points}`, negative: false };
+    case "per-symbol":
+      return { label: `${set.name} 1개당`, value: `+${bonus.points}`, negative: false };
+    case "adjacent-penalty":
+      return {
+        label: `이웃 ${set.name} 1개당`,
+        value: `${bonus.points}`,
+        negative: true,
+      };
+    case "per-event":
+      return {
+        label: `${set.name} ${PER_EVENT_LABEL[bonus.event]} 1개당`,
+        value: `+${bonus.points}`,
+        negative: false,
+      };
+  }
+}
 
 // Build keys -> clean Korean section headers.
 const BUILD_ORDER = ["7", "fruit", "gem", "color", "order", "safe", "score"];
@@ -221,7 +262,7 @@ export default function ReferenceModal({
 
             <ScoreCard
               title="족보"
-              note="※ 족보는 과일과 보석에 대해서만 적용됩니다 (숫자 7·0·4 제외)."
+              note="※ 신체/색이 아니라 숫자를 제외한 모든 세트 심볼에 적용."
             >
               <ScoreRow label="페어" value={`+${HAND_PAIR}`} />
               <ScoreRow label="투페어" value={`+${HAND_TWO_PAIR}`} />
@@ -231,19 +272,44 @@ export default function ReferenceModal({
               <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
             </ScoreCard>
 
-            <ScoreCard title="색·종류 보너스">
-              <ScoreRow label="과일 3종" value={`+${BONUS_ALL_FRUIT_TYPES}`} />
-              <ScoreRow label="보석 3종" value={`+${BONUS_ALL_GEM_TYPES}`} />
-              <ScoreRow label="올 과일" value={`+${BONUS_ONLY_FRUITS}`} />
-              <ScoreRow label="올 보석" value={`+${BONUS_ONLY_GEMS}`} />
-              <ScoreRow
-                label="올 블루 (사파이어🔵·포도🍇)"
-                value={`+${BONUS_ALL_BLUE}`}
-              />
-              <ScoreRow
-                label="올 레드 (루비🔴·체리🍒)"
-                value={`+${BONUS_ALL_RED}`}
-              />
+            <ScoreCard title="세트 보너스">
+              {SYMBOL_SETS.filter((set) => !set.isNumberSet && set.bonuses.length > 0).map(
+                (set) => (
+                  <li key={set.id} className="space-y-1">
+                    <div className="flex items-center gap-1.5 pt-1 text-xs font-bold text-zinc-400">
+                      <span>{set.name}</span>
+                      <span className="font-normal text-zinc-500">
+                        {set.symbols.map((s) => s.emoji).join(" ")}
+                      </span>
+                    </div>
+                    <ul className="space-y-1 pl-2">
+                      {set.bonuses.map((bonus, i) => {
+                        const row = bonusRowLabel(set, bonus);
+                        return (
+                          <ScoreRow
+                            key={i}
+                            label={row.label}
+                            value={row.value}
+                            negative={row.negative}
+                          />
+                        );
+                      })}
+                    </ul>
+                  </li>
+                ),
+              )}
+            </ScoreCard>
+
+            <ScoreCard title="페어 보너스">
+              {PAIR_RULES.map((pair) => (
+                <li key={pair.id} className="space-y-0.5">
+                  <ScoreRow label={pair.name} value={`+${pair.points}`} />
+                  <p className="text-xs text-zinc-500">
+                    {SYMBOL_SETS_BY_ID[pair.setA].name}+
+                    {SYMBOL_SETS_BY_ID[pair.setB].name} 모두 있으면
+                  </p>
+                </li>
+              ))}
             </ScoreCard>
 
             <ScoreCard title="4 페널티">
