@@ -15,13 +15,13 @@ Each WU: independently testable + committed (test + lint per unit).
 | O2 | Guest fast-game ranking | record quick runs (guest or member) → a fast-game leaderboard, version+season-scoped, NOT in season points; result-screen 회원가입 CTA. | med | ✅ `5f12853`,`6a450e1` |
 | R2 | 유지(hold) — all current rules | DECISION: all current rules are hold (no 봉인). Held cells keep first-roll value but later rules can modify them; removed immutability; reworded rules. | med | ✅ `ae60a26` |
 | O3 | Guest→account merge | on signup, optionally attach guest's quick records to the account. | low | ☐ |
-| E1 | Cell-status board model | board cells carry statuses (e.g. `haunted`); engine/score/reveal aware. DEEP — prerequisite for monster set. | high | ☐ |
-| E2 | Symbol tags / hybrids | symbol tag system + hybrid symbols (zombie_cat…) as registered symbols + render. | high | ☐ |
+| E1 | Cell-status board model | done as **E1-lite**: parallel `frame.haunted[]` (no board-type refactor); `computeHand` adds a phantom ghost per haunted cell. | high | ✅ `d89b811` |
+| E2 | Symbol tags / hybrids | symbol tag system + hybrid symbols (zombie_cat…). | high | ⏸ deferred — only if a future rule needs it (none in v0.2). |
 | S1 | Cat set rules | 식빵 굽기/우다다다/점프의 달인 (hold + rotate/swap; symbol_moved events). | med | ✅ `0ca2a3e` |
 | S2 | Vehicle set rules | 러시아워/물류 사업/배 크다 (weight×slots, random swaps, copy-neighbors). 유료 주차 deferred (needs next-spin hold). | med | ✅ `a31a405` |
-| S3 | Monster set rules | 가족 만들기/유령들림 … (needs E1+E2). | high | ☐ |
-| D1 | A–B pair rules | `pairRuleMap[setA+setB]` included in a run's pool when present. | low | ☐ |
-| SP1 | Spire 이어하기 (resume) | persist in-progress spire run (localStorage v0; DB later); resume vs new. | med | ☐ |
+| S3 | Monster set rules | 유령 들림 (haunt) + 가족 만들기 (dracula copy → +40). | high | ✅ `d89b811` |
+| D1 | A–B pair rules | config-driven `PAIR_RULES` + pool inclusion + generic pair-bonus scoring. | low | ✅ `0ec0ccf` |
+| SP1 | Spire 이어하기 (resume) | localStorage {seed, set, actions}; resume re-dispatches actions (replay-safe). Reload→resume E2E ✓. | med | ✅ `76c7089` |
 
 Process per WU: subagent implements (supervised) → vitest (scoped) + eslint → fix → tsc → commit+push. Periodic full tsc/vitest/next build at integration points.
 
