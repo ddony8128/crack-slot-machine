@@ -92,7 +92,7 @@ describe('helpers', () => {
     const allFruit = ['fruit-surge', 'first-cherry', 'fruit-freeze', 'fruit-fish', 'fruit-vitamin'];
     expect(pickSetRules('fruit', allFruit, SEED, 'x')).toEqual([]);
     expect(
-      pickSetRules('fruit', allFruit.slice(0, 3), SEED, 'x'),
+      pickSetRules('fruit', allFruit.slice(0, 4), SEED, 'x'),
     ).toEqual(['fruit-vitamin']);
     expect(pickSetRules('does-not-exist', [], SEED, 'x')).toEqual([]);
   });
