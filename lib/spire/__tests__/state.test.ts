@@ -75,7 +75,7 @@ describe('helpers', () => {
 
   it('pickSetRules is deterministic for a fixed seed/salt and excludes pool ids', () => {
     const gained = pickSetRules('fruit', SPIRE_BASE_RULE_IDS, SEED, 'set-rules:fruit');
-    expect(gained).toEqual(['fruit-vitamin', 'first-cherry']);
+    expect(gained).toEqual(['fruit-vitamin', 'fruit-freeze']);
     // exclude already-owned: pool already has fruit-vitamin → only 3 candidates,
     // still returns 2 distinct, none equal to the excluded id.
     const gained2 = pickSetRules(
@@ -89,7 +89,7 @@ describe('helpers', () => {
   });
 
   it('pickSetRules returns fewer than 2 when candidates are scarce', () => {
-    const allFruit = ['fruit-surge', 'first-cherry', 'fruit-freeze', 'fruit-vitamin'];
+    const allFruit = ['fruit-surge', 'first-cherry', 'fruit-freeze', 'fruit-fish', 'fruit-vitamin'];
     expect(pickSetRules('fruit', allFruit, SEED, 'x')).toEqual([]);
     expect(
       pickSetRules('fruit', allFruit.slice(0, 3), SEED, 'x'),
@@ -135,8 +135,8 @@ describe('applyInitialSetChoice', () => {
     expect(r.state.symbolBag.grape).toBe(1);
     expect(bagTotal(r.state.symbolBag)).toBe(20);
     expect(r.state.rulePool).toHaveLength(10);
-    expect(r.breakdown.gainedRuleIds).toEqual(['fruit-vitamin', 'first-cherry']);
-    expect(r.state.rulePool.slice(-2)).toEqual(['fruit-vitamin', 'first-cherry']);
+    expect(r.breakdown.gainedRuleIds).toEqual(['fruit-vitamin', 'fruit-freeze']);
+    expect(r.state.rulePool.slice(-2)).toEqual(['fruit-vitamin', 'fruit-freeze']);
     expect(r.state.ownedSetIds).toEqual(['number', 'fruit']);
     expect(snapshot(s)).toBe(before); // input untouched
   });
