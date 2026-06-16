@@ -146,42 +146,77 @@ describe('replaySpireRun — stage consistency + settlement threading', () => {
 
 describe('replaySpireRun — gold-bar accrual is deterministic', () => {
   it('adds exactly goldBarMoney(stage boards) before settlement', () => {
-    // Use the GEM set so boards can contain gem symbols at all.
-    const choice = applyInitialSetChoice(initialSpireState(RUN), 'gem');
+    // `choose_artifact` is now gated to a real 3/6/9 reward step (anti-cheat), so
+    // gold-bar can no longer be back-door-injected before stage 1. Acquire it the
+    // ONLY other legitimate way — a shop PURCHASE — using the +5 support granted
+    // by the first (failed) attempt, then verify the next attempt accrues exactly
+    // goldBarMoney(its boards) BEFORE settlement.
+    //
+    // GOLD_RUN is a probed seed (lib/spire/shop.spireRewardArtifacts-independent)
+    // where, with the GEM set: stage-1 attempt-1 FAILS (→ +5 support) and attempt-2
+    // produces a board with ≥4 gems (→ gold-bar pays +1). gold-bar does NOT affect
+    // board generation (only number-specials do), so the SAME attempt-2 boards are
+    // produced whether or not it is owned — the only delta is the accrued money.
+    const GOLD_RUN = 'gemgold-28';
+    const choice = applyInitialSetChoice(initialSpireState(GOLD_RUN), 'gem');
     if (!choice.ok) throw new Error('setup');
-    const cfg = spireStageRunConfig(
-      RUN, 1, 1, choice.state.symbolBag, choice.state.rulePool, choice.state.handUpgrades,
-    );
-    const seed = `${RUN}:stage-1:attempt-1`;
+    const st = choice.state;
     const target = spireStageTarget(1);
-    const played = playStage(seed, cfg, target);
-    const outcome = spireStageOutcome(played.scores, target);
+
+    const cfg1 = spireStageRunConfig(GOLD_RUN, 1, 1, st.symbolBag, st.rulePool, st.handUpgrades);
+    const p1 = playStage(`${GOLD_RUN}:stage-1:attempt-1`, cfg1, target);
+    const oc1 = spireStageOutcome(p1.scores, target);
+    expect(oc1.cleared).toBe(false); // attempt 1 must fail to bank +5 + open attempt 2
+
+    // Attempt 2 is replayed under BOTH streams; with gold-bar owned its boards
+    // produce gold (probe-verified > 0). Its actions are config-independent here.
+    const cfg2 = spireStageRunConfig(GOLD_RUN, 1, 2, st.symbolBag, st.rulePool, st.handUpgrades, ['gold-bar']);
+    const p2 = playStage(`${GOLD_RUN}:stage-1:attempt-2`, cfg2, target);
+    const expectedGold = goldBarMoney(p2.boards, ['gold-bar']);
+    expect(expectedGold).toBeGreaterThan(0);
 
     const base: SpireAction[] = [
       { type: 'choose_set', chosenSetId: 'gem' },
-      { type: 'play_stage', actions: played.actions },
+      { type: 'play_stage', actions: p1.actions }, // fail → money 0 → +5
+      { type: 'play_stage', actions: p2.actions }, // 2nd attempt, no gold-bar
     ];
-    // gold-bar does NOT affect board generation (only number-specials do), so the
-    // SAME stage boards are produced with or without it — the only state delta is
-    // the accrued money (+ any interest it pushes up). Inject the artifact via
-    // choose_artifact (v0 replay appends it) so both streams share identical play.
     const withGold: SpireAction[] = [
-      { type: 'choose_artifact', artifactId: 'gold-bar' },
-      ...base,
+      { type: 'choose_set', chosenSetId: 'gem' },
+      { type: 'play_stage', actions: p1.actions },         // fail → +5 support
+      { type: 'buy_artifact', artifactId: 'gold-bar', cost: 5 }, // legit shop buy: 5 → 0
+      { type: 'play_stage', actions: p2.actions },         // accrues gold before settle
     ];
 
-    const baseRes = replaySpireRun(RUN, base);
-    const goldRes = replaySpireRun(RUN, withGold);
+    const baseRes = replaySpireRun(GOLD_RUN, base);
+    const goldRes = replaySpireRun(GOLD_RUN, withGold);
     expect(baseRes.ok && goldRes.ok).toBe(true);
 
-    const expectedGold = goldBarMoney(played.boards, ['gold-bar']);
-    // gold-bar is added BEFORE settlement. Pre-settle money is 0 for stage 1, so
-    // on a CLEAR the extra interest is spireInterest(expectedGold) (ledger not
-    // owned); on a FAIL no interest applies.
-    const extraInterest = outcome.cleared ? spireInterest(expectedGold) : 0;
-    expect(goldRes.finalState.money - baseRes.finalState.money).toBe(
-      expectedGold + extraInterest,
-    );
+    // attempt-2 also fails (probe-verified), so NO interest applies to either run.
+    // base attempt-2 settles from money 5; withGold settles from money 0 (after the
+    // -5 buy) + expectedGold accrued before the fail's +5 support. The full delta is
+    // therefore (expectedGold − buyCost).
+    expect(goldRes.finalState.money - baseRes.finalState.money).toBe(expectedGold - 5);
+  });
+});
+
+describe('replaySpireRun — choose_artifact is reward-gated (anti-cheat)', () => {
+  it('rejects a choose_artifact that is NOT at a 3/6/9 reward step', () => {
+    // No artifact stage cleared → no pending reward → any choose_artifact is a
+    // tampering signal and must be rejected (offer-set validation, SP-H).
+    const res = replaySpireRun(RUN, [
+      { type: 'choose_set', chosenSetId: 'fruit' },
+      { type: 'choose_artifact', artifactId: 'watering-can' },
+    ]);
+    expect(res.ok).toBe(false);
+    expect(res.rejectReason).toMatch(/reward step/);
+  });
+
+  it('rejects a skip (null) choose_artifact outside a reward step too', () => {
+    const res = replaySpireRun(RUN, [
+      { type: 'choose_set', chosenSetId: 'fruit' },
+      { type: 'choose_artifact', artifactId: null },
+    ]);
+    expect(res.ok).toBe(false);
   });
 });
 

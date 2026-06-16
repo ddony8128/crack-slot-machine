@@ -3,12 +3,19 @@
 import Link from "next/link";
 import { SPIRE_STAGE_COUNT, SPIRE_ARTIFACTS } from "@/lib/spire/config";
 import SeasonScoreRise from "@/components/SeasonScoreRise";
-import type { SeasonScoreChange } from "@/lib/season/scoring";
+import {
+  SPIRE_STAGE_POINTS,
+  SPIRE_MONEY_PER,
+  SPIRE_SPIN_PER,
+  type SeasonScoreChange,
+} from "@/lib/season/scoring";
 
 export type SpireResultProps = {
   stagesCleared: number;
   totalScore: number;
   money: number;
+  /** Banked spins over CLEARED stages only (feeds the season-score breakdown). */
+  unusedSpins: number;
   artifacts: string[];
   endReason: "completed" | "failed-out" | "in-progress";
   seasonPoints: number | null;
@@ -27,6 +34,7 @@ export default function SpireResultScreen({
   stagesCleared,
   totalScore,
   money,
+  unusedSpins,
   artifacts,
   endReason,
   seasonPoints,
@@ -119,9 +127,20 @@ export default function SpireResultScreen({
           <p className="text-sm text-rose-400">기록 등록에 실패했습니다.</p>
         )}
         {submitState === "submitted" && seasonPoints != null && (
-          <p className="text-sm font-semibold text-amber-200">
-            시즌 점수 +{seasonPoints} <span className="text-zinc-500">(최대 1000)</span>
-          </p>
+          <div className="space-y-1 text-center">
+            <p className="text-sm font-semibold text-amber-200">시즌 점수 +{seasonPoints}</p>
+            <p className="text-xs leading-relaxed text-zinc-500">
+              최고 클리어 스테이지 {stagesCleared}×{SPIRE_STAGE_POINTS}
+              {" + "}남은 돈 {money}×{SPIRE_MONEY_PER}
+              {" + "}전체 남긴 스핀 {unusedSpins}×{SPIRE_SPIN_PER}
+              {" = "}
+              <span className="font-bold text-amber-200">
+                {stagesCleared * SPIRE_STAGE_POINTS +
+                  money * SPIRE_MONEY_PER +
+                  unusedSpins * SPIRE_SPIN_PER}
+              </span>
+            </p>
+          </div>
         )}
       </div>
 

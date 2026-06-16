@@ -35,8 +35,9 @@ import {
   spireStageTarget,
   goldBarMoney,
 } from '@/lib/spire/stage';
-import { SPIRE_STAGE_COUNT } from '@/lib/spire/config';
-import { ARTIFACTS_BY_ID } from '@/lib/spire/artifacts';
+import { SPIRE_STAGE_COUNT, SPIRE_ARTIFACT_STAGES } from '@/lib/spire/config';
+import { ARTIFACTS_BY_ID, artifactOffered } from '@/lib/spire/artifacts';
+import { spireRewardArtifacts } from '@/lib/spire/shop';
 
 export type SpireAction =
   | { type: 'choose_set'; chosenSetId: string }
@@ -83,6 +84,11 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
   // chime (차임벨): rerolls used in the CURRENT shop visit (the buys after one
   // play_stage). Reset to 0 right after each play_stage; the first 2 are free.
   let shopRerolls = 0;
+  // The artifact stage (3/6/9) just cleared whose seeded reward pick is still
+  // pending. A `choose_artifact` is ONLY legal while this is set, and the chosen
+  // id MUST be one of that step's seeded reward offers (anti-cheat, SP-H). Reset
+  // after the pick is consumed (or skipped).
+  let pendingRewardStage: number | null = null;
 
   const fail = (reason: string): SpireReplayResult => ({
     ok: false,
@@ -117,6 +123,10 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
         const attempt = state.currentStageAttempt;
         if (stage < 1 || stage > SPIRE_STAGE_COUNT) return fail(`play_stage out of range: ${stage}`);
         if (state.ownedSetIds.length < 2) return fail('play_stage before choosing a set');
+        // The artifact reward pick (after a 3/6/9 clear) must be resolved before
+        // the next stage starts — mirrors the client (no stage from the reward
+        // screen), and stops a forged stream from skipping reward validation.
+        if (pendingRewardStage !== null) return fail('play_stage before resolving artifact reward');
 
         const cfg = spireStageRunConfig(
           runSeed,
@@ -161,6 +171,10 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
           if (stage >= SPIRE_STAGE_COUNT) {
             runEnded = true;
             endReason = 'completed';
+          } else if (SPIRE_ARTIFACT_STAGES.includes(stage)) {
+            // Clearing an artifact stage opens a reward pick BEFORE the shop —
+            // the next legal action is exactly one `choose_artifact`.
+            pendingRewardStage = stage;
           }
         } else {
           const r = settleFail(state);
@@ -223,22 +237,36 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
         break;
       }
       case 'choose_artifact': {
-        // v0 reward pick (skip = null). At minimum reject an UNKNOWN artifact id
-        // (catalog membership) as a tampering signal, and silently skip an
-        // already-owned one. FULL offer-set validation — that this id was one of
-        // the ≤2 seeded-offered artifacts at THIS reward step, including its
-        // requiredSet — is deferred to the seeded shop generator (SP-H); it can't
-        // be enforced here without recomputing that offer.
+        // v0 reward pick (skip = null). A reward pick is ONLY legal right after
+        // clearing an artifact stage (3/6/9); otherwise it is a tampering signal.
+        if (pendingRewardStage === null) {
+          return fail('choose_artifact outside a reward step');
+        }
+        const rewardStage = pendingRewardStage;
+        // Consume the pending reward regardless of pick/skip outcome below.
+        pendingRewardStage = null;
+
         if (action.artifactId) {
-          if (!ARTIFACTS_BY_ID[action.artifactId]) {
+          const def = ARTIFACTS_BY_ID[action.artifactId];
+          if (!def) {
             return fail(`unknown artifact: ${action.artifactId}`);
           }
-          if (!state.artifacts.includes(action.artifactId)) {
-            state = { ...state, artifacts: [...state.artifacts, action.artifactId] };
-            // Apply onAcquire right after the id is added — same point as the live
-            // client (components/SpireClient.tsx `choose`).
-            state = applyArtifactAcquire(state, action.artifactId);
+          // FULL offer-set validation (SP-H): recompute the SAME seeded reward
+          // offer the client showed at this step and require the chosen id to be
+          // one of those ≤2 artifacts, AND still pass eligibility (requiredSet +
+          // not-already-owned). A legit client pick always lands in this set, so
+          // honest runs reproduce exactly; a forged id is rejected.
+          const offered = spireRewardArtifacts(state, rewardStage).map((o) => o.id);
+          if (!offered.includes(action.artifactId)) {
+            return fail(`artifact not offered at reward step: ${action.artifactId}`);
           }
+          if (!artifactOffered(def, state.ownedSetIds, state.artifacts)) {
+            return fail(`artifact not eligible: ${action.artifactId}`);
+          }
+          state = { ...state, artifacts: [...state.artifacts, action.artifactId] };
+          // Apply onAcquire right after the id is added — same point as the live
+          // client (components/SpireClient.tsx `choose`).
+          state = applyArtifactAcquire(state, action.artifactId);
         }
         break;
       }

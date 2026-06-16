@@ -72,12 +72,28 @@ export default function SpireShop({
         </span>
       </header>
 
-      {/* Owned artifacts (chosen at 3/6/9 or bought below). */}
+      {/* Owned artifacts (chosen at 3/6/9 or bought below) — expand for the
+          full effect description (ARTIFACTS_BY_ID). */}
       {runState.artifacts.length > 0 && (
         <Section title="보유 아티팩트">
-          <p className="text-sm text-emerald-200">
-            {runState.artifacts.map((id) => ARTIFACT_NAME[id] ?? id).join(", ")}
-          </p>
+          <div className="flex flex-col gap-1.5">
+            {runState.artifacts.map((id) => {
+              const def = ARTIFACTS_BY_ID[id];
+              return (
+                <details
+                  key={id}
+                  className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-3 py-1.5"
+                >
+                  <summary className="cursor-pointer text-sm font-bold text-emerald-200">
+                    {def?.name ?? ARTIFACT_NAME[id] ?? id}
+                  </summary>
+                  {def?.description && (
+                    <p className="mt-1 text-xs text-zinc-400">{def.description}</p>
+                  )}
+                </details>
+              );
+            })}
+          </div>
         </Section>
       )}
 
