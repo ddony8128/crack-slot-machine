@@ -73,6 +73,8 @@ function toPlayer(row: any): PlayerRow {
     nickname: row.nickname,
     contactType: row.contact_type,
     contactValue: row.contact_value,
+    email: row.email ?? null,
+    phone: row.phone ?? null,
     passwordHash: row.password_hash,
     createdAt: row.created_at,
     deletedAt: row.deleted_at ?? null,
@@ -397,6 +399,8 @@ export class SupabaseDb implements Db {
     nickname: string;
     contactType: 'email' | 'phone';
     contactValue: string;
+    email?: string | null;
+    phone?: string | null;
     passwordHash: string;
   }): Promise<PlayerRow> {
     const { data, error } = await this.sb
@@ -405,6 +409,8 @@ export class SupabaseDb implements Db {
         nickname: input.nickname,
         contact_type: input.contactType,
         contact_value: input.contactValue,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
         password_hash: input.passwordHash,
       })
       .select('*')
@@ -429,6 +435,28 @@ export class SupabaseDb implements Db {
       .select('*')
       .is('deleted_at', null)
       .ilike('nickname', nickname)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toPlayer(data) : null;
+  }
+
+  async getPlayerByEmail(email: string): Promise<PlayerRow | null> {
+    const { data, error } = await this.sb
+      .from('players')
+      .select('*')
+      .is('deleted_at', null)
+      .ilike('email', email)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toPlayer(data) : null;
+  }
+
+  async getPlayerByPhone(phone: string): Promise<PlayerRow | null> {
+    const { data, error } = await this.sb
+      .from('players')
+      .select('*')
+      .is('deleted_at', null)
+      .eq('phone', phone)
       .maybeSingle();
     if (error) throw error;
     return data ? toPlayer(data) : null;
@@ -476,6 +504,8 @@ export class SupabaseDb implements Db {
       .update({
         deleted_at: new Date().toISOString(),
         contact_value: '',
+        email: null,
+        phone: null,
         nickname: `탈퇴회원${playerId.slice(0, 6)}`,
       })
       .eq('id', playerId);

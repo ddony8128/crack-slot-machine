@@ -8,17 +8,21 @@ import { GUEST_NAME_KEY } from "@/lib/client/quickApi";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_nickname: "닉네임을 입력해 주세요.",
-  invalid_contact: "연락처를 올바르게 입력해 주세요.",
+  contact_required: "이메일 또는 전화번호 중 하나는 입력해 주세요.",
+  invalid_email: "이메일 형식이 올바르지 않습니다.",
+  invalid_phone: "전화번호 형식이 올바르지 않습니다.",
   weak_password: "비밀번호는 8자 이상이어야 합니다.",
   agreement_required: "개인정보 처리방침에 동의해 주세요.",
   nickname_taken: "이미 사용 중인 닉네임입니다.",
+  email_taken: "이미 사용 중인 이메일입니다.",
+  phone_taken: "이미 사용 중인 전화번호입니다.",
 };
 
 export default function SignupPage() {
   const router = useRouter();
   const [nickname, setNickname] = useState("");
-  const [contactType, setContactType] = useState<"email" | "phone">("email");
-  const [contactValue, setContactValue] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -27,6 +31,10 @@ export default function SignupPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
+    if (email.trim().length === 0 && phone.trim().length === 0) {
+      setError(ERROR_MESSAGES.contact_required);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -36,8 +44,8 @@ export default function SignupPage() {
           : undefined;
       await signup({
         nickname,
-        contactType,
-        contactValue,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
         password,
         agree,
         guestName,
@@ -76,39 +84,23 @@ export default function SignupPage() {
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center text-lg outline-none transition focus:border-emerald-400"
         />
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setContactType("email")}
-            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
-              contactType === "email"
-                ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
-                : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:bg-zinc-800/60"
-            }`}
-          >
-            이메일
-          </button>
-          <button
-            type="button"
-            onClick={() => setContactType("phone")}
-            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
-              contactType === "phone"
-                ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
-                : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:bg-zinc-800/60"
-            }`}
-          >
-            전화번호
-          </button>
-        </div>
-
+        <p className="px-1 text-left text-xs text-zinc-500">
+          이메일 또는 전화번호 중 하나 이상 입력해 주세요. (둘 다 입력 가능)
+        </p>
         <input
-          type={contactType === "email" ? "email" : "tel"}
-          value={contactValue}
-          onChange={(e) => setContactValue(e.target.value)}
-          placeholder={
-            contactType === "email" ? "이메일 주소" : "전화번호"
-          }
-          autoComplete={contactType === "email" ? "email" : "tel"}
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="이메일 (선택)"
+          autoComplete="email"
+          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center text-lg outline-none transition focus:border-emerald-400"
+        />
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="전화번호 (선택)"
+          autoComplete="tel"
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center text-lg outline-none transition focus:border-emerald-400"
         />
 

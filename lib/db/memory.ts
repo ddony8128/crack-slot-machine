@@ -280,6 +280,8 @@ export class MemoryDb implements Db {
     nickname: string;
     contactType: 'email' | 'phone';
     contactValue: string;
+    email?: string | null;
+    phone?: string | null;
     passwordHash: string;
   }): Promise<PlayerRow> {
     const row: PlayerRow = {
@@ -287,6 +289,8 @@ export class MemoryDb implements Db {
       nickname: input.nickname,
       contactType: input.contactType,
       contactValue: input.contactValue,
+      email: input.email ?? null,
+      phone: input.phone ?? null,
       passwordHash: input.passwordHash,
       createdAt: new Date().toISOString(),
       deletedAt: null,
@@ -307,6 +311,26 @@ export class MemoryDb implements Db {
     return (
       this.players.find(
         (p) => p.deletedAt === null && p.nickname.toLowerCase() === lower,
+      ) ?? null
+    );
+  }
+
+  async getPlayerByEmail(email: string): Promise<PlayerRow | null> {
+    const lower = email.toLowerCase();
+    return (
+      this.players.find(
+        (p) =>
+          p.deletedAt === null &&
+          p.email !== null &&
+          p.email.toLowerCase() === lower,
+      ) ?? null
+    );
+  }
+
+  async getPlayerByPhone(phone: string): Promise<PlayerRow | null> {
+    return (
+      this.players.find(
+        (p) => p.deletedAt === null && p.phone !== null && p.phone === phone,
       ) ?? null
     );
   }
@@ -348,6 +372,8 @@ export class MemoryDb implements Db {
     // tests stay deterministic.
     row.deletedAt = new Date(0).toISOString();
     row.contactValue = '';
+    row.email = null;
+    row.phone = null;
     // Anonymize so leaderboards (which resolve via getPlayerById) show no PII.
     row.nickname = `탈퇴회원${playerId.slice(0, 6)}`;
   }

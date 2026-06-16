@@ -22,8 +22,9 @@ export type MePlayer = {
 
 export type SignupInput = {
   nickname: string;
-  contactType: 'email' | 'phone';
-  contactValue: string;
+  /** At least one of email/phone is required (validated server-side). */
+  email?: string;
+  phone?: string;
   password: string;
   agree: boolean;
   /** Optional: the stored guest display name, to merge guest quick runs. */

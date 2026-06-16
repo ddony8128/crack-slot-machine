@@ -5,8 +5,8 @@ import { sanitizeNickname } from '@/lib/server/validation';
 
 type SignupBody = {
   nickname?: unknown;
-  contactType?: unknown;
-  contactValue?: unknown;
+  email?: unknown;
+  phone?: unknown;
   password?: unknown;
   agree?: unknown;
   guestName?: unknown;
@@ -27,24 +27,22 @@ export async function POST(req: Request) {
     return Response.json({ error: 'invalid_nickname' }, { status: 400 });
   }
 
-  // Contact type must be one of the known kinds.
-  const contactType = body.contactType;
-  if (contactType !== 'email' && contactType !== 'phone') {
-    return Response.json({ error: 'invalid_contact' }, { status: 400 });
+  // Email + phone are BOTH optional, but at least ONE must be provided (§1.3).
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+  if (email.length === 0 && phone.length === 0) {
+    return Response.json({ error: 'contact_required' }, { status: 400 });
   }
-
-  // Contact value: trimmed non-empty, with a light shape check per type.
-  const contactValue =
-    typeof body.contactValue === 'string' ? body.contactValue.trim() : '';
-  if (contactValue.length === 0) {
-    return Response.json({ error: 'invalid_contact' }, { status: 400 });
+  if (email.length > 0 && !email.includes('@')) {
+    return Response.json({ error: 'invalid_email' }, { status: 400 });
   }
-  if (contactType === 'email' && !contactValue.includes('@')) {
-    return Response.json({ error: 'invalid_contact' }, { status: 400 });
+  if (phone.length > 0 && !/\d/.test(phone)) {
+    return Response.json({ error: 'invalid_phone' }, { status: 400 });
   }
-  if (contactType === 'phone' && !/\d/.test(contactValue)) {
-    return Response.json({ error: 'invalid_contact' }, { status: 400 });
-  }
+  // Primary contact (back-compat for contact_type/contact_value reads): email
+  // when present, else phone.
+  const contactType: 'email' | 'phone' = email.length > 0 ? 'email' : 'phone';
+  const contactValue = email.length > 0 ? email : phone;
 
   // Password strength.
   const password = typeof body.password === 'string' ? body.password : '';
@@ -59,9 +57,15 @@ export async function POST(req: Request) {
 
   const db = getDb();
 
-  // Pre-check for a friendlier 409 (the create is still guarded below).
+  // Pre-checks for friendlier 409s (the create is still guarded below).
   if (await db.getPlayerByNickname(nickname)) {
     return Response.json({ error: 'nickname_taken' }, { status: 409 });
+  }
+  if (email.length > 0 && (await db.getPlayerByEmail(email))) {
+    return Response.json({ error: 'email_taken' }, { status: 409 });
+  }
+  if (phone.length > 0 && (await db.getPlayerByPhone(phone))) {
+    return Response.json({ error: 'phone_taken' }, { status: 409 });
   }
 
   const passwordHash = hashPassword(password);
@@ -72,11 +76,12 @@ export async function POST(req: Request) {
       nickname,
       contactType,
       contactValue,
+      email: email.length > 0 ? email : null,
+      phone: phone.length > 0 ? phone : null,
       passwordHash,
     });
   } catch {
-    // Unique-index race: another request took the nickname between the
-    // pre-check and the insert.
+    // Unique-index race: nickname/email/phone taken between pre-check and insert.
     return Response.json({ error: 'nickname_taken' }, { status: 409 });
   }
 

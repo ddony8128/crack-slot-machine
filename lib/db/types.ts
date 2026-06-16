@@ -29,8 +29,14 @@ export type RunMode = 'event' | 'daily' | 'puzzle' | 'spire' | 'quick';
 export type PlayerRow = {
   id: string;
   nickname: string;
+  /** Primary contact kind for back-compat reads (email when present, else phone). */
   contactType: 'email' | 'phone';
+  /** Primary contact value for back-compat reads (email when present, else phone). */
   contactValue: string;
+  /** Optional email (nullable). At least one of email/phone is set at signup. */
+  email: string | null;
+  /** Optional phone (nullable). At least one of email/phone is set at signup. */
+  phone: string | null;
   passwordHash: string;
   createdAt: string;
   deletedAt: string | null;
@@ -239,16 +245,23 @@ export interface Db {
     nickname: string;
     contactType: 'email' | 'phone';
     contactValue: string;
+    email?: string | null;
+    phone?: string | null;
     passwordHash: string;
   }): Promise<PlayerRow>;
   getPlayerById(id: string): Promise<PlayerRow | null>;
   /** Active (not soft-deleted) player by nickname, case-insensitive. */
   getPlayerByNickname(nickname: string): Promise<PlayerRow | null>;
+  /** Active (not soft-deleted) player by email, case-insensitive. */
+  getPlayerByEmail(email: string): Promise<PlayerRow | null>;
+  /** Active (not soft-deleted) player by phone. */
+  getPlayerByPhone(phone: string): Promise<PlayerRow | null>;
   /** Replace a player's password hash. */
   updatePlayerPassword(playerId: string, passwordHash: string): Promise<void>;
   /**
-   * Soft-delete + anonymize a player (탈퇴): set deletedAt, clear contactValue,
-   * and rename to an anonymized stable value so leaderboards carry no PII. The
+   * Soft-delete + anonymize a player (탈퇴): set deletedAt, clear contactValue +
+   * email + phone, and rename to an anonymized stable value so leaderboards carry
+   * no PII. The
    * row is kept (best_scores reference playerId). Frees the nickname + contact
    * for reuse (the active-nickname index only constrains non-deleted rows).
    */
