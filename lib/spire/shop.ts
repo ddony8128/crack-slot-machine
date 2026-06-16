@@ -12,6 +12,7 @@
 import { createSeededRng, type Rng } from '@/lib/rng';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { ARTIFACTS, artifactOffered } from '@/lib/spire/artifacts';
+import { GENERAL_RULE_IDS } from '@/lib/rules/sets';
 import {
   SPIRE_ARTIFACT_PRICES,
   SPIRE_SET_PRICE,
@@ -49,10 +50,11 @@ function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
   return out;
 }
 
-/** The buyable-rule candidate pool: base rules + every owned set's rules, minus
- *  whatever is already in the run's pool. */
+/** The buyable-rule candidate pool: base rules + the '일반' general rules + every
+ *  owned set's rules, minus whatever is already in the run's pool (deduped via
+ *  the Set). General rules stay buyable regardless of the symbol pool. */
 export function spireBuyableRuleIds(state: SpireRunState): string[] {
-  const candidates = new Set<string>(SPIRE_BASE_RULE_IDS);
+  const candidates = new Set<string>([...SPIRE_BASE_RULE_IDS, ...GENERAL_RULE_IDS]);
   for (const setId of state.ownedSetIds) {
     const set = SYMBOL_SETS_BY_ID[setId];
     if (set) for (const id of set.ruleIds) candidates.add(id);

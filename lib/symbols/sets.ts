@@ -69,7 +69,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { type: 'all-types', points: 50 },
       { type: 'all-symbols', points: 100 },
     ],
-    ruleIds: ['fruit-surge', 'first-cherry', 'fruit-freeze', 'fruit-vitamin'],
+    ruleIds: ['fruit-surge', 'first-cherry', 'fruit-freeze', 'fruit-fish', 'fruit-vitamin'],
   },
   {
     id: 'gem',
