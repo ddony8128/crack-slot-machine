@@ -37,7 +37,13 @@ export async function POST(req: Request) {
 
   const db = getDb();
   const season = await db.getActiveSeason();
-  const seasonId = season?.id ?? null;
+  // Quick runs are bucketed by season. Without an active season we would write
+  // into the permanent null bucket, which the season-reset 기획 forbids — block
+  // (QuickClient surfaces this as "진행 중인 시즌이 없습니다.").
+  if (!season) {
+    return Response.json({ error: 'no_active_season' }, { status: 404 });
+  }
+  const seasonId = season.id;
 
   const seed = `${randomUUID()}.${randomUUID()}`;
   const run = await db.createRun({

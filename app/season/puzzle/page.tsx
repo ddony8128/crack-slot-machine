@@ -83,8 +83,10 @@ export default async function PuzzleListPage() {
                 </span>
               ) : cleared && record ? (
                 <span className="mt-auto text-xs font-semibold text-emerald-300">
-                  내 기록: {record.bestClearSpin}스핀 클리어 · 내 점수{" "}
-                  {record.bestPuzzleScore ?? 0}점
+                  내 기록: {record.bestClearSpin}/{p.spinLimit}스핀 · 남긴{" "}
+                  {record.bestRemainingSpins ??
+                    Math.max(0, p.spinLimit - (record.bestClearSpin ?? 0))}{" "}
+                  · {record.bestPuzzleScore ?? 0}점
                 </span>
               ) : (
                 <span className="mt-auto text-xs font-semibold text-zinc-500">

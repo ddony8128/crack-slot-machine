@@ -72,29 +72,9 @@ export function spireSeasonScore(
 
 // ── per-mode point formulas (pure) ───────────────────────────────────────────
 
-/** 첨탑: clearedStages×70 + min(300, floor(runScore/200)), capped at 1000. */
-export function spireSeasonPoints(clearedStageCount: number, finalRunScore: number): number {
-  const base = Math.max(0, clearedStageCount) * 70;
-  const bonus = Math.min(300, Math.max(0, Math.floor((finalRunScore || 0) / 200)));
-  return Math.min(SEASON_MODE_CAP, base + bonus);
-}
-
 /** 퍼즐: 100 per cleared puzzle, capped at 1000. */
 export function puzzleSeasonPoints(clearedCount: number): number {
   return Math.min(SEASON_MODE_CAP, Math.max(0, clearedCount) * 100);
-}
-
-/**
- * 일일 도전 points for one day, by rank within that day's field. Uses the higher
- * of the percentile band and the small-field fallback so tiny fields still pay
- * the top ranks well.
- */
-export function dailyPointsForRank(rank: number, totalParticipants: number): number {
-  if (rank < 1 || totalParticipants < 1 || rank > totalParticipants) return 0;
-  const pct = rank / totalParticipants;
-  const percentile = pct <= 0.1 ? 100 : pct <= 0.3 ? 80 : pct <= 0.6 ? 60 : 40;
-  const smallField = rank === 1 ? 100 : rank === 2 ? 80 : rank === 3 ? 60 : 40;
-  return Math.max(percentile, smallField);
 }
 
 /** Sum of the best DAILY_COUNT_CAP daily-point values, capped at 1000. */

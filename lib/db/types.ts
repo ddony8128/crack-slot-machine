@@ -348,9 +348,12 @@ export interface Db {
 
   // ── Quick game (guest + member) ranking ────────────────────────────────────
   /**
-   * Fast-game leaderboard: best score per nickname among mode='quick',
-   * submitted+verified runs in the season (seasonId null = the no-season bucket),
-   * version-gated. NOT part of season points. Highest first.
+   * Fast-game leaderboard among mode='quick', submitted+verified runs in the
+   * season (seasonId null = the no-season bucket), version-gated. Deduped by
+   * IDENTITY — one best per member (playerId); each guest run (playerId null) is
+   * its own entry, so guests sharing a display name never merge or mask members.
+   * Nickname is carried for display only. Capped to a TOP-N slice. NOT part of
+   * season points. Highest first.
    */
   listQuickBestScores(input: {
     seasonId: string | null;
