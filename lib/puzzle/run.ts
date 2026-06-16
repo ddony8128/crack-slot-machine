@@ -16,5 +16,6 @@ export function puzzleRunConfig(puzzleKey: string): RunConfig {
     rulePoolIds: [...p.availableRuleIds],
     // Number special hands are 빠른 게임-only.
     numberSpecials: { four: false, zero: false },
+    positionalCleanSweep: true,
   };
 }

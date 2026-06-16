@@ -64,6 +64,7 @@ export function dailyRunConfigFromParts(p: DailyConfigParts): RunConfig {
     rulePoolIds: buildRulePool(['number', p.groupASetId, p.groupBSetId], p.basicRuleSetId),
     // Number special hands are 빠른 게임-only.
     numberSpecials: { four: false, zero: false },
+    positionalCleanSweep: true,
   };
 }
 

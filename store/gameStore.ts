@@ -51,6 +51,9 @@ export type RunConfig = {
   // Number special hands (4×4/4×5 multiplier, 0≥3 extra rule). Unset → ON
   // (빠른 게임/legacy); season modes pass {four:false, zero:false}.
   numberSpecials?: { four: boolean; zero: boolean };
+  // CLEAN SWEEP scoring: position-aware (at the rule's moment) when true; the
+  // legacy final-board reading when unset (빠른 게임/이벤트). Season modes set true.
+  positionalCleanSweep?: boolean;
 };
 
 /**
@@ -279,8 +282,9 @@ function buildInitializer(initialRng: Rng): Initializer {
       // per-event SET bonuses (vehicle moved/rerolled, monster copied, ...).
       const events = frame.events ?? [];
       // scoreBoards lets position-sensitive rules (CLEAN SWEEP) score against the
-      // board at their slot moment, not the final board.
-      const boards = frame.scoreBoards ?? [];
+      // board at their slot moment. Season modes opt in; legacy (빠른 게임/이벤트)
+      // passes undefined → CLEAN SWEEP reads the FINAL board (original behavior).
+      const boards = runConfig?.positionalCleanSweep ? (frame.scoreBoards ?? []) : undefined;
       // haunted cells (E1-lite) add a phantom 'ghost' to the hand counts. Threaded
       // exactly like `boards`: frame field -> finalize -> scoreResult/scoreItems.
       const haunted = frame.haunted ?? [];

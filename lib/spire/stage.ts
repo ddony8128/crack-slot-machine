@@ -94,6 +94,7 @@ export function spireStageRunConfig(
       four: artifacts.includes('four-statue'),
       zero: artifacts.includes('zero-statue'),
     },
+    positionalCleanSweep: true,
   };
 }
 
