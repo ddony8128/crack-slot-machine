@@ -6,6 +6,7 @@ import { SEASON_TITLE, SEASON_NOTICE, MODE_LABELS } from "@/lib/season/config";
 import { dailyDateKey, dailyAttemptsAllowed } from "@/lib/daily/challenge";
 import { settleDueDailyChallenges } from "@/lib/server/dailySettlement";
 import { PUZZLES } from "@/lib/puzzle/config";
+import { buildSeasonRanking } from "@/lib/season/scoring";
 
 const SEASON_PERIOD = "2026년 6월 16일 낮 12시 ~ 6월 30일 낮 12시 (KST)";
 
@@ -88,6 +89,30 @@ async function buildPlayerStatus(
   };
 }
 
+/** The logged-in player's season points + rank, sourced from the SAME read path
+ *  as /me (listSeasonBestScores → buildSeasonRanking) so the numbers match the
+ *  leaderboard exactly. `rank`/`seasonPoints` are null when the player has no
+ *  point-bearing rows yet (랭킹 미집계). */
+type SeasonSummary = { seasonPoints: number; rank: number | null };
+
+async function buildSeasonSummary(
+  playerId: string,
+  nickname: string,
+  seasonId: string,
+): Promise<SeasonSummary> {
+  const allRows = await getDb().listSeasonBestScores(seasonId);
+  // Only this player's nickname is load-bearing; others affect only ordering,
+  // which is decided by points, not names.
+  const ranking = buildSeasonRanking(allRows, () => nickname);
+  const mine = ranking.find((r) => r.playerId === playerId);
+  // A player with no rows isn't in the ranking at all → unranked, 0 points.
+  if (!mine) return { seasonPoints: 0, rank: null };
+  return {
+    seasonPoints: mine.seasonPoints,
+    rank: mine.seasonPoints > 0 ? mine.rank : null,
+  };
+}
+
 export default async function SeasonHubPage() {
   const [player, season] = await Promise.all([
     currentPlayer(),
@@ -100,8 +125,13 @@ export default async function SeasonHubPage() {
   }
 
   // Only show live status when a player is logged in AND a season is active.
-  const statusByHref =
-    player && season ? await buildPlayerStatus(player.id, season.id) : null;
+  const [statusByHref, seasonSummary] =
+    player && season
+      ? await Promise.all([
+          buildPlayerStatus(player.id, season.id),
+          buildSeasonSummary(player.id, player.nickname, season.id),
+        ])
+      : [null, null];
 
   return (
     <div className="flex min-h-full flex-col">
@@ -119,6 +149,47 @@ export default async function SeasonHubPage() {
             {SEASON_PERIOD}
           </p>
         </header>
+
+        {player && (
+          <section className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 px-5 py-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="max-w-full truncate text-xl font-black text-zinc-100">
+                {player.nickname}
+              </h2>
+              {player.supporterBadge && (
+                <span className="rounded-full border border-amber-700/60 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                  후원자
+                </span>
+              )}
+            </div>
+            <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-3">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-emerald-400">
+                  현재 시즌 점수
+                </dt>
+                <dd className="mt-1 font-mono text-3xl font-black text-emerald-300">
+                  {seasonSummary?.seasonPoints ?? 0}
+                  <span className="ml-1 text-base text-zinc-500">/ 3000</span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-emerald-400">
+                  현재 등수
+                </dt>
+                <dd className="mt-1 font-mono text-3xl font-black text-zinc-100">
+                  {seasonSummary?.rank != null ? (
+                    <>
+                      {seasonSummary.rank}
+                      <span className="ml-1 text-base text-zinc-500">위</span>
+                    </>
+                  ) : (
+                    <span className="text-xl text-zinc-500">랭킹 미집계</span>
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        )}
 
         <p className="rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-center text-xs leading-relaxed text-amber-200/90">
           {SEASON_NOTICE}

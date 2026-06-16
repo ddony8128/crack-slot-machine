@@ -280,6 +280,12 @@ export default function AdminDashboard() {
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Link
+            href="/admin/ranking"
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            랭킹 보기
+          </Link>
+          <Link
             href="/admin/users"
             className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
           >

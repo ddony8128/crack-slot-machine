@@ -18,6 +18,7 @@ import DonationModal from "@/components/DonationModal";
 import { useDonationPrompt } from "@/components/useDonationPrompt";
 import ModeIntro from "@/components/ModeIntro";
 import DailySetupPreview from "@/components/DailySetupPreview";
+import { dailyRefillGate } from "@/components/dailyRefillGate";
 
 function startErrorMessage(code: string): string {
   if (code === "daily_attempts_exhausted") return "오늘 도전 횟수를 모두 소진했습니다.";
@@ -133,6 +134,10 @@ export default function DailyClient() {
     current && current.loggedIn ? current.attemptsLeft : null;
   const exhausted = attemptsLeft != null && attemptsLeft <= 0;
 
+  // §8: the ad-refill CTA surfaces only AFTER the 5 base attempts are spent, so
+  // it doesn't compete with the start button while base plays remain.
+  const { showRefillCta, refillAvailableButHeld } = dailyRefillGate(current);
+
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
       <ModeIntro
@@ -184,7 +189,7 @@ export default function DailyClient() {
                   {current.allowed ?? current.attemptsLeft}회 남음
                 </p>
 
-                {current.canRefill ? (
+                {showRefillCta ? (
                   <>
                     <button
                       type="button"
@@ -194,12 +199,16 @@ export default function DailyClient() {
                       }}
                       className="w-full rounded-xl border border-amber-500/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20"
                     >
-                      광고 보고 5회 충전
+                      광고를 보고 5회 추가 충전
                     </button>
                     {refillError && (
                       <p className="text-sm text-rose-400">{refillError}</p>
                     )}
                   </>
+                ) : refillAvailableButHeld ? (
+                  <p className="text-sm text-zinc-500">
+                    공식 도전을 모두 사용하면 광고로 5회 추가 충전할 수 있습니다.
+                  </p>
                 ) : current.adRefillUsed ? (
                   <p className="text-sm text-zinc-400">
                     광고 충전을 사용했습니다.
