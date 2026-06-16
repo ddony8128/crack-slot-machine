@@ -294,16 +294,20 @@ export interface Db {
   /** Every daily challenge in a season (for the lazy settlement pass). */
   listSeasonDailyChallenges(seasonId: string): Promise<DailyChallengeRow[]>;
   /**
-   * Settle one day's ranking: overwrite each player's daily best_scores row's
-   * seasonPoints with the given rank reward (NOT a max), then stamp the
-   * daily_challenge's settledAt. Idempotency is the caller's job (settledAt gate).
+   * Atomically CLAIM and settle one day's ranking. Stamps the daily_challenge's
+   * settledAt ONLY if it was still null (a conditional/atomic update), then — and
+   * only if this call won the claim — overwrites each player's daily best_scores
+   * row's seasonPoints with the rank reward (NOT a max). Returns true iff THIS
+   * call performed the settlement; false if the day was already settled (a
+   * concurrent pass won). This makes settlement idempotent under concurrency, so
+   * the caller records each day's rank-reward ledger rows exactly once.
    */
   settleDailyChallenge(input: {
     seasonId: string;
     dateKey: string;
     settledAt: string;
     rewards: Array<{ playerId: string; seasonPoints: number }>;
-  }): Promise<void>;
+  }): Promise<boolean>;
   /** Count a player's RESOLVED (submitted|rejected) daily runs for a date. */
   countResolvedDailyRuns(input: {
     playerId: string;

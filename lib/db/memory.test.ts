@@ -252,7 +252,7 @@ describe('MemoryDb seasons', () => {
     const db = new MemoryDb();
     const active = await db.getActiveSeason();
     expect(active?.slug).toBe('2026-06-season-1');
-    expect(active?.title).toBe('RULE SLOT Season 1');
+    expect(active?.title).toBe('프리 시즌 1');
     expect(active?.rulesetVersion).toBe(2);
     expect(active?.isActive).toBe(true);
 

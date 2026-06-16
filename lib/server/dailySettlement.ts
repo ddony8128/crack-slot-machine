@@ -49,7 +49,16 @@ export async function settleDueDailyChallenges(
       ),
     );
 
-    await db.settleDailyChallenge({ seasonId, dateKey: c.dateKey, settledAt: nowIso, rewards });
+    // Atomic claim: only the pass that actually flips settledAt proceeds to log
+    // the ledger. A concurrent pass that lost the claim returns false and is
+    // skipped, so DAILY_RANK_REWARD events are written exactly once per day.
+    const didSettle = await db.settleDailyChallenge({
+      seasonId,
+      dateKey: c.dateKey,
+      settledAt: nowIso,
+      rewards,
+    });
+    if (!didSettle) continue;
 
     for (const r of rewards) {
       const beforeBreakdown = before.get(r.playerId)!;

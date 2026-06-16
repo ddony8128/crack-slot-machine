@@ -90,6 +90,50 @@ describe('settleDueDailyChallenges', () => {
     expect(secondRows).toEqual(firstRows); // not re-written
   });
 
+  it('records each DAILY_RANK_REWARD ledger row exactly once, even across repeated passes', async () => {
+    const db = new MemoryDb();
+    const dateKey = '2026-06-15';
+    await seedDay(db, dateKey, '2026-06-16T03:00:00.000Z', [
+      { playerId: 'P1', score: 300, updatedAt: '2026-06-15T04:00:00.000Z' },
+      { playerId: 'P2', score: 200, updatedAt: '2026-06-15T04:00:00.000Z' },
+    ]);
+
+    // Two settlement passes (e.g. two page loads racing at the noon rollover).
+    await settleDueDailyChallenges(db, SEASON_ID, '2026-06-16T05:00:00.000Z');
+    await settleDueDailyChallenges(db, SEASON_ID, '2026-06-16T05:00:01.000Z');
+
+    // P1 (rank 1, reward 50) must have exactly ONE DAILY_RANK_REWARD event.
+    const p1 = await db.listScoreEvents('P1', SEASON_ID, 50);
+    const p1Rewards = p1.filter(
+      (e) => e.sourceType === 'DAILY_RANK_REWARD' && e.sourceId === dateKey,
+    );
+    expect(p1Rewards).toHaveLength(1);
+    expect(p1Rewards[0].delta).toBe(dailyRankReward(1, 2)); // +50, not +100
+  });
+
+  it('settleDailyChallenge returns false when the day is already settled (lost claim)', async () => {
+    const db = new MemoryDb();
+    const dateKey = '2026-06-15';
+    await seedDay(db, dateKey, '2026-06-16T03:00:00.000Z', [
+      { playerId: 'P1', score: 300, updatedAt: '2026-06-15T04:00:00.000Z' },
+    ]);
+    const rewards = [{ playerId: 'P1', seasonPoints: 50 }];
+    const first = await db.settleDailyChallenge({
+      seasonId: SEASON_ID,
+      dateKey,
+      settledAt: '2026-06-16T05:00:00.000Z',
+      rewards,
+    });
+    const second = await db.settleDailyChallenge({
+      seasonId: SEASON_ID,
+      dateKey,
+      settledAt: '2026-06-16T06:00:00.000Z',
+      rewards,
+    });
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+  });
+
   it('does NOT settle a day whose window has not ended', async () => {
     const db = new MemoryDb();
     const dateKey = '2026-06-20';

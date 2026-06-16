@@ -601,9 +601,23 @@ export class SupabaseDb implements Db {
     dateKey: string;
     settledAt: string;
     rewards: Array<{ playerId: string; seasonPoints: number }>;
-  }): Promise<void> {
-    // Overwrite each player's daily best_scores row season_points with the
-    // settled rank reward (NOT a max), then stamp settled_at on the challenge.
+  }): Promise<boolean> {
+    // Atomic claim FIRST: flip settled_at only if it is still null. Postgres makes
+    // this row update atomic, so under concurrent settlement passes exactly one
+    // gets a row back; the losers see an empty result and bail without re-applying
+    // rewards or letting the caller re-log the ledger.
+    const { data: claimed, error: stampError } = await this.sb
+      .from('daily_challenges')
+      .update({ settled_at: input.settledAt })
+      .eq('season_id', input.seasonId)
+      .eq('date_key', input.dateKey)
+      .is('settled_at', null)
+      .select('id');
+    if (stampError) throw stampError;
+    if (!claimed || claimed.length === 0) return false; // already settled / lost claim
+
+    // Won the claim → overwrite each player's daily best_scores season_points with
+    // the settled rank reward (NOT a max). Idempotent overwrite regardless.
     for (const reward of input.rewards) {
       const { error } = await this.sb
         .from('best_scores')
@@ -614,12 +628,7 @@ export class SupabaseDb implements Db {
         .eq('scope_key', input.dateKey);
       if (error) throw error;
     }
-    const { error: stampError } = await this.sb
-      .from('daily_challenges')
-      .update({ settled_at: input.settledAt })
-      .eq('season_id', input.seasonId)
-      .eq('date_key', input.dateKey);
-    if (stampError) throw stampError;
+    return true;
   }
 
   async countResolvedDailyRuns(input: {
@@ -1073,7 +1082,28 @@ export class SupabaseDb implements Db {
       })
       .select('*')
       .single();
-    if (error) throw error;
+    if (error) {
+      // Backstop: migration 0012's partial unique index rejects a duplicate
+      // DAILY_RANK_REWARD (same player/season/date). The atomic settle-claim
+      // already prevents this; if it ever fires, treat it as already-recorded
+      // (the caller ignores the return value) rather than failing the request.
+      if ((error as { code?: string }).code === '23505') {
+        return {
+          id: '',
+          playerId: input.playerId,
+          seasonId: input.seasonId,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId ?? null,
+          previousTotalScore: input.previousTotalScore,
+          newTotalScore: input.newTotalScore,
+          delta: input.delta,
+          previousRank: input.previousRank,
+          newRank: input.newRank,
+          createdAt: new Date(0).toISOString(),
+        };
+      }
+      throw error;
+    }
     return toScoreEvent(data);
   }
 

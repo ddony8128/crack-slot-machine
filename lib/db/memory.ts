@@ -20,6 +20,12 @@ import type {
   RunStatus,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
+import {
+  SEASON_TITLE,
+  SEASON_SLUG,
+  SEASON_STARTS_AT,
+  SEASON_ENDS_AT,
+} from '@/lib/season/config';
 
 /** Seed events mirroring supabase/migrations/0001_init.sql. */
 function seedEvents(): EventRow[] {
@@ -31,15 +37,16 @@ function seedEvents(): EventRow[] {
   ];
 }
 
-/** Seed Season 1 mirroring the seed in supabase/migrations/0002_season1.sql. */
+/** Seed 프리 시즌 1, mirroring migration 0007_pre_season_1.sql. Dates/title come
+ *  from lib/season/config.ts so the dev/test DB never drifts from the live one. */
 function seedSeasons(): SeasonRow[] {
   return [
     {
       id: 'season-1',
-      slug: '2026-06-season-1',
-      title: 'RULE SLOT Season 1',
-      startsAt: '2026-06-15T03:00:00Z',
-      endsAt: '2026-06-28T03:00:00Z',
+      slug: SEASON_SLUG,
+      title: SEASON_TITLE,
+      startsAt: SEASON_STARTS_AT,
+      endsAt: SEASON_ENDS_AT,
       clientVersion: '2.0.0',
       rulesetVersion: 2,
       isActive: true,
@@ -443,7 +450,15 @@ export class MemoryDb implements Db {
     dateKey: string;
     settledAt: string;
     rewards: Array<{ playerId: string; seasonPoints: number }>;
-  }): Promise<void> {
+  }): Promise<boolean> {
+    const challenge = this.dailyChallenges.find(
+      (d) => d.seasonId === input.seasonId && d.dateKey === input.dateKey,
+    );
+    // Atomic claim: only the pass that flips settledAt from null wins. (In the
+    // single-threaded MemoryDb this is a plain check; SupabaseDb does the same
+    // via a conditional UPDATE ... WHERE settled_at IS NULL.)
+    if (!challenge || challenge.settledAt) return false;
+    challenge.settledAt = input.settledAt;
     for (const reward of input.rewards) {
       const row = this.bestScores.find(
         (b) =>
@@ -455,10 +470,7 @@ export class MemoryDb implements Db {
       // Overwrite (not max) with this day's settled rank reward.
       if (row) row.seasonPoints = reward.seasonPoints;
     }
-    const challenge = this.dailyChallenges.find(
-      (d) => d.seasonId === input.seasonId && d.dateKey === input.dateKey,
-    );
-    if (challenge) challenge.settledAt = input.settledAt;
+    return true;
   }
 
   async countResolvedDailyRuns(input: {
@@ -802,6 +814,19 @@ export class MemoryDb implements Db {
     previousRank: number | null;
     newRank: number | null;
   }): Promise<ScoreEventRow> {
+    // Backstop mirroring migration 0012's partial unique index: a DAILY_RANK_REWARD
+    // event is unique per (player, season, source_id=dateKey). Models the DB
+    // constraint so a duplicate settlement can never double-log here either.
+    if (input.sourceType === 'DAILY_RANK_REWARD') {
+      const existing = this.scoreEvents.find(
+        (e) =>
+          e.sourceType === 'DAILY_RANK_REWARD' &&
+          e.playerId === input.playerId &&
+          e.seasonId === input.seasonId &&
+          e.sourceId === (input.sourceId ?? null),
+      );
+      if (existing) return existing;
+    }
     const row: ScoreEventRow = {
       id: this.id('score-event'),
       playerId: input.playerId,
