@@ -837,22 +837,6 @@ export class SupabaseDb implements Db {
     });
   }
 
-  async reassignGuestQuickRuns(input: {
-    guestDisplayName: string;
-    playerId: string;
-    nickname: string;
-  }): Promise<number> {
-    const { data, error } = await this.sb
-      .from('game_runs')
-      .update({ player_id: input.playerId, nickname: input.nickname })
-      .eq('mode', 'quick')
-      .is('player_id', null)
-      .eq('nickname', input.guestDisplayName)
-      .select('id');
-    if (error) throw error;
-    return (data ?? []).length;
-  }
-
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
   async upsertPuzzleRecord(input: {
     playerId: string;

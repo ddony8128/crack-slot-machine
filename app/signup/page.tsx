@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signup, AuthApiError } from "@/lib/client/authApi";
-import { GUEST_NAME_KEY } from "@/lib/client/quickApi";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_nickname: "닉네임을 입력해 주세요.",
@@ -38,17 +37,12 @@ export default function SignupPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const guestName =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem(GUEST_NAME_KEY) ?? undefined
-          : undefined;
       await signup({
         nickname,
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
         password,
         agree,
-        guestName,
       });
       router.push("/season");
       router.refresh();

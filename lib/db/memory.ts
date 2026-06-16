@@ -629,26 +629,6 @@ export class MemoryDb implements Db {
     return [...best.values()].sort((a, b) => (quickBetter(a, b) ? -1 : quickBetter(b, a) ? 1 : 0));
   }
 
-  async reassignGuestQuickRuns(input: {
-    guestDisplayName: string;
-    playerId: string;
-    nickname: string;
-  }): Promise<number> {
-    let count = 0;
-    for (const r of this.runs) {
-      if (
-        r.mode === 'quick' &&
-        r.playerId === null &&
-        r.nickname === input.guestDisplayName
-      ) {
-        r.playerId = input.playerId;
-        r.nickname = input.nickname;
-        count += 1;
-      }
-    }
-    return count;
-  }
-
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
   async upsertPuzzleRecord(input: {
     playerId: string;

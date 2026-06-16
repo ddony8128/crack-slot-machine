@@ -27,8 +27,6 @@ export type SignupInput = {
   phone?: string;
   password: string;
   agree: boolean;
-  /** Optional: the stored guest display name, to merge guest quick runs. */
-  guestName?: string;
 };
 
 /** POST /api/auth/signup. Resolves with the new player, throws AuthApiError. */

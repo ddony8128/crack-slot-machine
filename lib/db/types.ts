@@ -354,17 +354,6 @@ export interface Db {
     rulesetVersion: number;
   }): Promise<Array<{ nickname: string; score: number; bestSpinScore: number; submittedAt: string }>>;
 
-  /**
-   * Guest→account merge: attach a guest's quick runs to a new account. Updates
-   * every mode='quick' run with player_id IS NULL and nickname === guestDisplayName,
-   * setting player_id + nickname to the account's. Returns the number updated.
-   */
-  reassignGuestQuickRuns(input: {
-    guestDisplayName: string;
-    playerId: string;
-    nickname: string;
-  }): Promise<number>;
-
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
   /**
    * Keep the player's best CLEAR for a puzzle. A record only "improves" when the
