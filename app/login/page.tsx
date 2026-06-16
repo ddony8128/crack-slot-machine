@@ -6,12 +6,15 @@ import { useRouter } from "next/navigation";
 import { login, AuthApiError } from "@/lib/client/authApi";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  invalid_credentials: "닉네임 또는 비밀번호가 올바르지 않습니다.",
+  invalid_credentials:
+    "로그인 정보가 올바르지 않습니다. 닉네임·이메일·전화번호와 비밀번호를 확인해 주세요.",
+  missing_identifier: "닉네임, 이메일 또는 전화번호를 입력해 주세요.",
+  missing_password: "비밀번호를 입력해 주세요.",
 };
 
 export default function LoginPage() {
   const router = useRouter();
-  const [nickname, setNickname] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,10 +22,18 @@ export default function LoginPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
+    if (identifier.trim().length === 0) {
+      setError(ERROR_MESSAGES.missing_identifier);
+      return;
+    }
+    if (password.length === 0) {
+      setError(ERROR_MESSAGES.missing_password);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await login(nickname, password);
+      await login(identifier, password);
       router.push("/season");
       router.refresh();
     } catch (err) {
@@ -49,10 +60,10 @@ export default function LoginPage() {
       <form className="flex w-full max-w-sm flex-col gap-3" onSubmit={onSubmit}>
         <input
           type="text"
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          placeholder="닉네임"
-          maxLength={60}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          placeholder="닉네임 / 이메일 / 전화번호"
+          maxLength={120}
           autoComplete="username"
           autoFocus
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center text-lg outline-none transition focus:border-emerald-400"
@@ -74,6 +85,13 @@ export default function LoginPage() {
         </button>
 
         {error && <p className="text-center text-sm text-rose-400">{error}</p>}
+
+        <Link
+          href="/login/recover"
+          className="text-center text-sm text-zinc-400 underline underline-offset-2 hover:text-zinc-200"
+        >
+          비밀번호를 잊으셨나요?
+        </Link>
       </form>
 
       <p className="text-sm text-zinc-400">

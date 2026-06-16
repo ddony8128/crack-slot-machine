@@ -41,15 +41,18 @@ export async function signup(input: SignupInput): Promise<AuthPlayer> {
   return body.player;
 }
 
-/** POST /api/auth/login. Resolves with the player, throws AuthApiError. */
+/**
+ * POST /api/auth/login. `identifier` is the user's nickname, email, OR phone.
+ * Resolves with the player, throws AuthApiError.
+ */
 export async function login(
-  nickname: string,
+  identifier: string,
   password: string,
 ): Promise<AuthPlayer> {
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nickname, password }),
+    body: JSON.stringify({ identifier, password }),
   });
   if (!res.ok) throw new AuthApiError(await errorCode(res));
   const body = (await res.json()) as { player: AuthPlayer };

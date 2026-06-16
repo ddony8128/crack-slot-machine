@@ -14,6 +14,9 @@ import { detectSpecials } from '@/lib/specials';
 import { rulePlayable } from '@/lib/rules/playable';
 import { RULES, RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS, CATS } from '@/data/symbols';
+import type { PuzzleGoal } from '@/lib/puzzle/config';
+import { checkPuzzleRun, type GoalContext } from '@/lib/puzzle/goals';
+import { computeHand } from '@/lib/score';
 
 const MAX_SPINS = 7;
 const SLOT_COUNT = 5;
@@ -54,6 +57,12 @@ export type RunConfig = {
   // CLEAN SWEEP scoring: position-aware (at the rule's moment) when true; the
   // legacy final-board reading when unset (빠른 게임/이벤트). Season modes set true.
   positionalCleanSweep?: boolean;
+  // Puzzle goals: when set (puzzle runs ONLY), the run ENDS IMMEDIATELY (status
+  // 'finished') as soon as every goal is met across the resolved spins, rather
+  // than waiting for maxSpins. quick/daily/spire leave this unset → unchanged.
+  // Reconstructed identically server-side (puzzleRunConfig), so client + replay
+  // end the run at the same spin from seed + actions.
+  puzzleGoals?: PuzzleGoal[];
 };
 
 /**
@@ -100,7 +109,14 @@ export type GameActions = {
   getActions: () => RecordedAction[];
 };
 
-export type GameStore = GameState & GameActions;
+/**
+ * The store exposes the active run's RunConfig as read-only state (null for
+ * legacy 빠른 게임/이벤트). It mirrors the private `runConfig` closure so UI
+ * (StatusBar's pool-aware ReferenceModal) can read the run's baseWeights without
+ * threading props through GameScreen. It does NOT affect engine state/replay —
+ * the closure `runConfig` remains the single source of truth for resolution.
+ */
+export type GameStore = GameState & GameActions & { runConfig: RunConfig | null };
 
 /**
  * Fisher-Yates shuffle driven by the injected rng (not Math.random).
@@ -117,6 +133,16 @@ function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
 }
 
 /**
+ * Builds that are NEVER offered in the 'offer' (legacy 빠른 게임/이벤트) path.
+ * combo (red-dye/blue-dye/ruby-convert/diamond-convert/…) and pair
+ * (pair-fruit-gem/…) rules are season-1 multi-set mechanics: even though their
+ * fruit/gem requirements pass rulePlayable on the legacy bag, 기획 keeps quick on
+ * the original number/fruit/gem rule set only. Season modes use 'pool'/'fixed'
+ * with explicit rulePoolIds, so this exclusion does not touch them.
+ */
+export const LEGACY_EXCLUDED_BUILDS = new Set<string>(['combo', 'pair']);
+
+/**
  * Offer `count` distinct rules (by id) that are NOT currently in a slot OR the
  * bag. Shuffles the allowed pool with the injected rng and takes the first
  * `count`. With 26 rules this never starves a 3- (or 4-) card offer.
@@ -124,6 +150,11 @@ function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
  * `count` defaults to OFFER_COUNT; the swiss-knife (맥가이버 칼) artifact bumps it
  * to 4 (passed via offerCount() at each call site). Config-driven → replays
  * identically.
+ *
+ * When `excludeLegacyBuilds` is true (the 'offer' provisioning path), combo/pair
+ * rules are dropped IN ADDITION to the rulePlayable filter — see
+ * LEGACY_EXCLUDED_BUILDS. Season pools ('pool'/'fixed') pass false so their
+ * curated rulePoolIds are unchanged.
  */
 function offerRules(
   rng: Rng,
@@ -132,6 +163,7 @@ function offerRules(
   pool: Rule[] = RULES,
   count: number = OFFER_COUNT,
   weights: Record<SymbolType, number> = BASE_WEIGHTS,
+  excludeLegacyBuilds = false,
 ): Rule[] {
   const usedIds = new Set<string>();
   for (const r of slots) if (r != null) usedIds.add(r.id);
@@ -139,7 +171,12 @@ function offerRules(
   // Only offer rules whose symbols can actually roll in this run's bag — keeps
   // cat/vehicle/monster rules out of 빠른 게임/이벤트 offers (their bag rolls
   // none), while season pools (already curated to the run's sets) are unchanged.
-  const allowed = pool.filter((r) => !usedIds.has(r.id) && rulePlayable(r, weights));
+  const allowed = pool.filter(
+    (r) =>
+      !usedIds.has(r.id) &&
+      rulePlayable(r, weights) &&
+      !(excludeLegacyBuilds && LEGACY_EXCLUDED_BUILDS.has(r.build ?? '')),
+  );
   return shuffle(allowed, rng).slice(0, count);
 }
 
@@ -226,6 +263,13 @@ function buildInitializer(initialRng: Rng): Initializer {
     runConfig?.provisioning === 'pool' && runConfig.rulePoolIds
       ? rulesFromIds(runConfig.rulePoolIds)
       : RULES;
+
+  // True for the legacy 'offer' path (빠른 게임/이벤트: undefined or explicit
+  // 'offer'). Drives the combo/pair exclusion in offerRules so quick offers stay
+  // on the original number/fruit/gem rule set. Season modes ('pool'/'fixed')
+  // return false → their curated rulePoolIds are untouched.
+  const isOfferProvisioning = (): boolean =>
+    runConfig?.provisioning == null || runConfig.provisioning === 'offer';
 
   // swiss-knife (맥가이버 칼): 4 rule offers instead of 3. Config-driven, so
   // replay reproduces the same offer size + draws.
@@ -350,14 +394,34 @@ function buildInitializer(initialRng: Rng): Initializer {
               done: true,
             };
 
+      const nextSpinLogs = [...state.spinLogs, log];
+
+      // Puzzle immediate-clear: when this run carries puzzleGoals, end the run the
+      // INSTANT every goal is satisfied across the resolved spins (incl. this one),
+      // instead of forcing the player through every spin. Driven purely by the
+      // deterministic spin logs + config, so the server replay (same puzzleGoals)
+      // ends at the identical spin. No-op for quick/daily/spire (no puzzleGoals).
+      let resolvedStatus: GameState['status'] = 'spin-result';
+      const goals = runConfig?.puzzleGoals;
+      if (goals && goals.length > 0) {
+        const ctxs: GoalContext[] = nextSpinLogs.map((l) => ({
+          board: l.finalResult,
+          hand: computeHand(l.finalResult).hand,
+          spinScore: l.roundScore,
+        }));
+        if (checkPuzzleRun(goals, ctxs).count === goals.length) {
+          resolvedStatus = 'finished';
+        }
+      }
+
       set({
         totalScore: state.totalScore + roundScore,
-        spinLogs: [...state.spinLogs, log],
+        spinLogs: nextSpinLogs,
         currentResult: finalResult,
         previousResult: finalResult,
         nextMultiplier: specials.nextMultiplier,
         extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
-        status: 'spin-result',
+        status: resolvedStatus,
         pendingSelection: null,
         revealStream,
         // Carry this spin's parking holds to the NEXT spin's preHeld pass. This
@@ -369,6 +433,9 @@ function buildInitializer(initialRng: Rng): Initializer {
 
     return {
     ...freshState(''),
+    // Mirror of the private runConfig closure, exposed for pool-aware UI. Kept in
+    // sync by configureRun/reset. Not read by the engine (the closure is).
+    runConfig: null,
 
     setNickname: (name: string) => set({ nickname: name }),
 
@@ -382,6 +449,9 @@ function buildInitializer(initialRng: Rng): Initializer {
 
     configureRun: (config: RunConfig | null) => {
       runConfig = config;
+      // Mirror into state so pool-aware UI (StatusBar) reacts. Server replay also
+      // calls configureRun; mirroring is a pure state write with no engine effect.
+      set({ runConfig: config });
     },
 
     startGame: () => {
@@ -432,7 +502,7 @@ function buildInitializer(initialRng: Rng): Initializer {
         picksLeft: 1 + (runConfig?.artifacts?.includes('engine') ? 1 : 0),
         pendingRule: null,
         spinLogs: [],
-        offeredRules: offerRules(rng, ruleSlots, bag, offerPool(), offerCount(), bagWeights()),
+        offeredRules: offerRules(rng, ruleSlots, bag, offerPool(), offerCount(), bagWeights(), isOfferProvisioning()),
         status: 'choosing-rule',
       });
     },
@@ -481,7 +551,7 @@ function buildInitializer(initialRng: Rng): Initializer {
           bag: nextBag,
           pendingRule: null,
           picksLeft: remaining,
-          offeredRules: offerRules(rng, nextSlots, nextBag, offerPool(), offerCount(), bagWeights()),
+          offeredRules: offerRules(rng, nextSlots, nextBag, offerPool(), offerCount(), bagWeights(), isOfferProvisioning()),
           status: 'choosing-rule',
         });
       } else {
@@ -714,7 +784,7 @@ function buildInitializer(initialRng: Rng): Initializer {
         spinIndex: nextSpinIndex,
         picksLeft: 1 + state.extraRulePickCount,
         extraRulePickCount: 0,
-        offeredRules: offerRules(rng, state.ruleSlots, state.bag, offerPool(), offerCount(), bagWeights()),
+        offeredRules: offerRules(rng, state.ruleSlots, state.bag, offerPool(), offerCount(), bagWeights(), isOfferProvisioning()),
         pendingRule: null,
         status: 'choosing-rule',
       });
@@ -727,7 +797,7 @@ function buildInitializer(initialRng: Rng): Initializer {
       activeSlots = null;
       recorded = [];
       runConfig = null;
-      set({ ...freshState(nickname) });
+      set({ ...freshState(nickname), runConfig: null });
     },
 
     getActions: () => [...recorded],

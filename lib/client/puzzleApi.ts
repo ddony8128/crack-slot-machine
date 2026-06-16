@@ -12,6 +12,10 @@ export type SubmitPuzzleResponse =
       totalGoals: number;
       cleared: boolean;
       spinCount: number;
+      /** 1-based spin the goal was FIRST met on (null when not cleared). */
+      clearSpin: number | null;
+      /** spinLimit − clearSpin on a clear; 0 otherwise. */
+      remainingSpins: number;
       distribution: PuzzleDistribution;
       scoreChange?: SeasonScoreChange;
     }

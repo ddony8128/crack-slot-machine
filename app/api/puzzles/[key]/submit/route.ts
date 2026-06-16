@@ -127,12 +127,26 @@ export async function POST(
 
   const { count: goalsAchieved } = checkPuzzleRun(puzzle.goals, ctxs);
   const totalGoals = puzzle.goals.length;
-  const cleared = goalsAchieved === totalGoals;
   const spinCount = spins.length;
-  const remainingSpins = Math.max(0, puzzle.spinLimit - spinCount);
+
+  // clearSpin = the 1-based index of the FIRST spin whose PREFIX of resolved
+  // spins clears ALL goals. This is the spin the goal was actually met on — not
+  // spins.length (which would bucket every clear at the spin limit and force the
+  // leftover-spin bonus to 0). null when the run never cleared.
+  let clearSpin: number | null = null;
+  for (let k = 1; k <= ctxs.length; k++) {
+    if (checkPuzzleRun(puzzle.goals, ctxs.slice(0, k)).count === totalGoals) {
+      clearSpin = k;
+      break;
+    }
+  }
+  const cleared = clearSpin !== null;
+  // 남긴 스핀: spinLimit − 클리어스핀 (only meaningful on a clear).
+  const remainingSpins = cleared ? Math.max(0, puzzle.spinLimit - clearSpin!) : 0;
   // v2 season score: 100 + leftover-spins×10 on clear (spec §3). best_scores
-  // keeps the highest, so a faster (more-leftover) clear replaces an earlier one.
-  const seasonScore = cleared ? puzzleScore(puzzle.spinLimit, spinCount) : 0;
+  // keeps the highest, so a faster (earlier-clearing) run replaces an earlier one.
+  // Scored from the TRUE clearing spin, so a faster clear earns more.
+  const seasonScore = cleared ? puzzleScore(puzzle.spinLimit, clearSpin!) : 0;
 
   // Prior puzzle record (BEFORE the upsert): drives the season-reason choice —
   // a first clear vs an improvement of an existing cleared record.
@@ -173,7 +187,7 @@ export async function POST(
     seasonId: run.seasonId!,
     puzzleKey: key,
     cleared,
-    clearSpin: cleared ? spinCount : null,
+    clearSpin: cleared ? clearSpin : null,
     remainingSpins: cleared ? remainingSpins : null,
     puzzleScore: cleared ? seasonScore : null,
     runId: run.id,
@@ -206,6 +220,8 @@ export async function POST(
     totalGoals,
     cleared,
     spinCount,
+    clearSpin,
+    remainingSpins,
     distribution,
     scoreChange,
   });

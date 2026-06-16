@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getDb } from "@/lib/db";
-import { dailyDateKey } from "@/lib/daily/challenge";
-import type { PlayerRow } from "@/lib/db/types";
+import { readDailyLeaderboard } from "@/lib/daily/leaderboard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,26 +8,14 @@ export const metadata: Metadata = {
   title: "RULE SLOT | 데일리 랭킹",
 };
 
-export default async function DailyLeaderboardPage() {
-  const db = getDb();
-  const dateKey = dailyDateKey(new Date());
-
-  const season = await db.getActiveSeason();
-  const rows = season ? await db.listDailyBestScores(season.id, dateKey) : [];
-
-  // Resolve nicknames once per distinct player.
-  const players = new Map<string, PlayerRow | null>();
-  for (const row of rows) {
-    if (!players.has(row.playerId)) {
-      players.set(row.playerId, await db.getPlayerById(row.playerId));
-    }
-  }
-
-  const items = rows.map((row, i) => ({
-    rank: i + 1,
-    nickname: players.get(row.playerId)?.nickname ?? "알 수 없음",
-    score: row.score,
-  }));
+export default async function DailyLeaderboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
+  const { date } = await searchParams;
+  // Shared read: validates ?date, settles any due windows, resolves nicknames.
+  const { dateKey, items } = await readDailyLeaderboard(date);
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-10">

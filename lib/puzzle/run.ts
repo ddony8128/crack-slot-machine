@@ -41,5 +41,9 @@ export function puzzleRunConfig(puzzleKey: string): RunConfig {
     // Number special hands are 빠른 게임-only.
     numberSpecials: { four: false, zero: false },
     positionalCleanSweep: true,
+    // Immediate-clear: the store ends the run the instant these goals are all met.
+    // Carried here so the SERVER replay (which reconstructs the run from this same
+    // config) ends at the identical spin → byte-identical client/server results.
+    puzzleGoals: p.goals,
   };
 }

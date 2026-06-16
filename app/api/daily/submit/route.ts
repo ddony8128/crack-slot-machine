@@ -60,6 +60,36 @@ export async function POST(req: Request) {
   const clientResults = body.clientResults ?? null;
   const now = new Date().toISOString();
 
+  // Reconstruct the day's run config from the STORED challenge row so the
+  // server replay matches the client's run exactly. Loaded up front because the
+  // window-closed guard below also reads it.
+  const challenge = await db.getDailyChallenge(run.seasonId!, run.dailyDateKey!);
+
+  // Daily-window-closed guard (spec §5): a run started just before the noon
+  // rollover must NOT be able to register a score on an ALREADY-ENDED or SETTLED
+  // day — doing so would upsertBestScore after settlement persisted that day's
+  // rank rewards, silently wiping them (seasonPoints reset). Reject and finalize
+  // the run; never upsert a best score for a closed/settled day.
+  const windowClosed =
+    !!challenge && (challenge.settledAt != null || now >= challenge.endsAt);
+  if (windowClosed) {
+    await db.finalizeRun(runId, {
+      nickname: player.nickname,
+      actions,
+      clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
+      score: null,
+      bestSpinScore: null,
+      status: 'rejected',
+      verified: false,
+      rejectReason: 'daily_window_closed',
+      submittedAt: now,
+    });
+    return Response.json(
+      { status: 'rejected', reason: 'daily_window_closed' },
+      { status: 409 },
+    );
+  }
+
   // Attempt-cap re-check (spec §13): /start enforces the per-day cap at run
   // creation, but re-assert it here so a raced or extra pending run can never
   // register a score beyond the day's 5 (or 10 with ad refill) attempts. This
@@ -106,9 +136,8 @@ export async function POST(req: Request) {
     return Response.json({ status: 'rejected', reason: 'version_mismatch' });
   }
 
-  // Reconstruct the day's run config from the STORED challenge row so the
-  // server replay matches the client's run exactly.
-  const challenge = await db.getDailyChallenge(run.seasonId!, run.dailyDateKey!);
+  // Build the day's run config from the STORED challenge row (loaded above) so
+  // the server replay matches the client's run exactly.
   const config = challenge
     ? dailyRunConfigFromRow(challenge)
     : dailyRunConfigFromParts({ seed: run.seed, ...resolveDailySetup(run.dailyDateKey!) });

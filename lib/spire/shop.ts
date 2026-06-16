@@ -63,6 +63,32 @@ export function spireBuyableRuleIds(state: SpireRunState): string[] {
   return [...candidates];
 }
 
+/**
+ * The seeded ARTIFACT-REWARD offer shown after clearing an artifact stage
+ * (3/6/9). This is independent of the shop generator: it uses a distinct salt
+ * (`${seed}:reward:${stage}`) so the ≤2 reward artifacts do NOT share the shop's
+ * `${seed}:shop:…` RNG and therefore can't overlap with the following shop's
+ * artifact offers.
+ *
+ * Determinism: `stage` is the artifact stage just cleared (3/6/9). The same
+ * (seed, stage, ownedSetIds, ownedArtifacts) always yields the same ≤2 ids, so
+ * the live client display and the server replayer (lib/spire/replay.ts
+ * `choose_artifact`) agree exactly — the replayer recomputes THIS offer to
+ * validate that the chosen id was actually presented.
+ */
+export const SPIRE_REWARD_ARTIFACT_SLOTS = 2;
+
+export function spireRewardArtifacts(state: SpireRunState, stage: number): ShopOffer[] {
+  const rng = createSeededRng(`${state.seed}:reward:${stage}`);
+  return shuffle(
+    ARTIFACTS.filter((a) => artifactOffered(a, state.ownedSetIds, state.artifacts)),
+    rng,
+  )
+    .slice(0, SPIRE_REWARD_ARTIFACT_SLOTS)
+    // Reward picks are FREE (no price), but reuse ShopOffer for a uniform shape.
+    .map((a) => ({ id: a.id, price: 0 }));
+}
+
 export function spireShopOffers(
   state: SpireRunState,
   shopVisitIndex: number,

@@ -81,7 +81,10 @@ function playOneSpin(store: StoreApi<GameStore>): RecordedAction[] | null {
     store.getState().selectCells(idxs);
   }
 
-  if (store.getState().status !== 'spin-result') return null;
+  // A spin resolves to 'spin-result' normally, OR 'finished' when puzzle
+  // immediate-clear ends the run the instant the goal is met on this spin.
+  const st = store.getState().status;
+  if (st !== 'spin-result' && st !== 'finished') return null;
   return store.getState().getActions();
 }
 
@@ -198,4 +201,91 @@ describe('Season 1 puzzles are intentionally solvable (deterministic, not luck)'
       );
     });
   }
+});
+
+/** First 1-based spin whose prefix clears all goals (mirrors the submit route). */
+function firstClearSpin(
+  goals: Parameters<typeof checkPuzzleRun>[0],
+  ctxs: GoalContext[],
+): number | null {
+  for (let k = 1; k <= ctxs.length; k++) {
+    if (checkPuzzleRun(goals, ctxs.slice(0, k)).count === goals.length) return k;
+  }
+  return null;
+}
+
+describe('puzzle immediate-clear: the run ends on the clearing spin', () => {
+  for (const key of ['p01', 'p02']) {
+    it(`${key} drives status:'finished' the instant goals are met (no exhausting spins)`, () => {
+      const solution = solve(key);
+      expect(solution, `no clearing sequence found for ${key}`).not.toBeNull();
+
+      // Replay the SOLVED action sequence through a fresh seeded+configured store,
+      // exactly the server-replay path. With puzzleGoals in the config, the store
+      // must end on the clearing spin — NOT play out the full spinLimit.
+      const store = freshStore(key);
+      for (const a of solution!.actions) {
+        switch (a.type) {
+          case 'selectRule':
+            store.getState().selectRule(RULES_BY_ID[a.ruleId]);
+            break;
+          case 'cancelSelection':
+            store.getState().cancelSelection();
+            break;
+          case 'placePending':
+            store.getState().placePending(a.target);
+            break;
+          case 'moveRule':
+            store.getState().moveRule(a.from, a.to);
+            break;
+          case 'spin':
+            store.getState().spin();
+            break;
+          case 'selectCells':
+            store.getState().selectCells(a.indices);
+            break;
+          case 'next':
+            store.getState().next();
+            break;
+        }
+      }
+
+      const p = PUZZLES_BY_KEY[key];
+      const finalState = store.getState();
+      // Cleared → finished, and it ended early (logs ≤ the solver's clearSpin,
+      // strictly < spinLimit when the solver cleared before the limit).
+      expect(finalState.status).toBe('finished');
+      expect(finalState.spinLogs.length).toBe(solution!.clearSpin);
+
+      // The submit-route clearSpin computation returns the SAME first-meeting spin.
+      const ctxs: GoalContext[] = finalState.spinLogs.map((l) => ctxFor(l.finalResult));
+      const clearSpin = firstClearSpin(p.goals, ctxs);
+      expect(clearSpin).toBe(solution!.clearSpin);
+      expect(clearSpin).toBeLessThanOrEqual(p.spinLimit);
+    });
+  }
+});
+
+describe('submit-route clearSpin = FIRST spin whose prefix clears all goals', () => {
+  it('returns the earliest meeting spin, not spins.length', () => {
+    const goals: Parameters<typeof checkPuzzleRun>[0] = [
+      { type: 'exact_board', board: ['seven', 'seven', 'seven', 'seven', 'seven'] },
+    ];
+    // Goal met on spin 2 of a 4-spin array → clearSpin must be 2.
+    const ctxs: GoalContext[] = [
+      ctxFor(['four', 'four', 'four', 'four', 'four']),
+      ctxFor(['seven', 'seven', 'seven', 'seven', 'seven']),
+      ctxFor(['four', 'four', 'four', 'four', 'four']),
+      ctxFor(['seven', 'seven', 'seven', 'seven', 'seven']),
+    ];
+    expect(firstClearSpin(goals, ctxs)).toBe(2);
+  });
+
+  it('returns null when no prefix clears the goals', () => {
+    const goals: Parameters<typeof checkPuzzleRun>[0] = [
+      { type: 'exact_board', board: ['seven', 'seven', 'seven', 'seven', 'seven'] },
+    ];
+    const ctxs: GoalContext[] = [ctxFor(['four', 'four', 'four', 'four', 'four'])];
+    expect(firstClearSpin(goals, ctxs)).toBeNull();
+  });
 });

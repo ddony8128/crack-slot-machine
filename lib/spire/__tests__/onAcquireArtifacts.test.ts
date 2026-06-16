@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   initialSpireState,
+  applyInitialSetChoice,
   applyArtifactAcquire,
   bagTotal,
   type SpireRunState,
@@ -12,6 +13,40 @@ import {
 } from '@/lib/spire/config';
 import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { replaySpireRun, type SpireAction } from '@/lib/spire/replay';
+import { createGameStore, type RunConfig, type RecordedAction } from '@/store/gameStore';
+import { createSeededRng } from '@/lib/rng';
+import { spireStageRunConfig, spireStageTarget } from '@/lib/spire/stage';
+
+/** Drive a real store through one stage greedily (see replay.test.ts). */
+function playStage(seed: string, config: RunConfig, target: number): RecordedAction[] {
+  const store = createGameStore(createSeededRng(seed));
+  const s = () => store.getState();
+  s().setNickname('t');
+  s().configureRun(config);
+  s().startGame();
+  let guard = 0;
+  while (s().status !== 'finished' && guard++ < 300) {
+    const st = s();
+    if (st.status === 'choosing-rule') {
+      st.selectRule(st.offeredRules[0]);
+      s().placePending({ type: 'slot', index: 0 });
+    } else if (st.status === 'ready-to-spin') {
+      st.spin();
+    } else if (st.status === 'awaiting-selection') {
+      const sel = st.pendingSelection!;
+      const idx: number[] = [];
+      for (let i = 0; i < sel.selectable.length && idx.length < sel.count; i++) {
+        if (sel.selectable[i]) idx.push(i);
+      }
+      st.selectCells(idx);
+    } else if (st.status === 'spin-result') {
+      const cum = s().spinLogs.reduce((a, l) => a + l.roundScore, 0);
+      if (cum >= target) break;
+      st.next();
+    } else break;
+  }
+  return s().getActions() as RecordedAction[];
+}
 
 /** A fixed seed used across the determinism assertions in this file. */
 const DETERMINISM_SEED = 'onacquire-test-seed';
@@ -127,18 +162,32 @@ describe('applyArtifactAcquire — no-effect artifact', () => {
   });
 });
 
-describe('replaySpireRun determinism with choose_artifact watering-can', () => {
+describe('replaySpireRun determinism with a shop-acquired watering-can', () => {
   it('yields identical finalState.symbolBag on two runs (same seed + stream)', () => {
+    // `choose_artifact` is reward-gated (3/6/9) now, so the onAcquire effect is
+    // exercised through a LEGITIMATE shop purchase instead: on DETERMINISM_SEED the
+    // fruit set clears stage 1 (a non-reward stage), banking enough to buy the
+    // general-pool watering-can. Its onAcquire must run identically on replay.
     const seed = DETERMINISM_SEED;
+    const choice = applyInitialSetChoice(initialSpireState(seed), 'fruit');
+    if (!choice.ok) throw new Error('setup');
+    const st = choice.state;
+    const stage1 = playStage(
+      `${seed}:stage-1:attempt-1`,
+      spireStageRunConfig(seed, 1, 1, st.symbolBag, st.rulePool, st.handUpgrades),
+      spireStageTarget(1),
+    );
     const actions: SpireAction[] = [
       { type: 'choose_set', chosenSetId: 'fruit' },
-      { type: 'choose_artifact', artifactId: 'watering-can' },
+      { type: 'play_stage', actions: stage1 }, // clears stage 1 → money to spend
+      { type: 'buy_artifact', artifactId: 'watering-can', cost: 5 },
     ];
     const r1 = replaySpireRun(seed, actions);
     const r2 = replaySpireRun(seed, actions);
 
     expect(r1.ok).toBe(true);
     expect(r2.ok).toBe(true);
+    expect(r1.finalState.artifacts).toContain('watering-can');
     expect(r1.finalState.symbolBag).toEqual(r2.finalState.symbolBag);
     // watering-can ran: bag still totals 20.
     expect(bagTotal(r1.finalState.symbolBag)).toBe(SPIRE_BAG_TOTAL);
