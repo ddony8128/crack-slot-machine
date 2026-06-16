@@ -60,6 +60,7 @@ export default function AdminDashboard() {
 
   // 후원자 칭호 grant/revoke state.
   const [supporterNickname, setSupporterNickname] = useState("");
+  const [supporterNote, setSupporterNote] = useState("");
   const [supporterPending, setSupporterPending] = useState(false);
   const [supporterError, setSupporterError] = useState<string | null>(null);
   const [supporterResult, setSupporterResult] = useState<string | null>(null);
@@ -239,10 +240,14 @@ export default function AdminDashboard() {
     setSupporterError(null);
     setSupporterResult(null);
     try {
-      const player = await setSupporterBadge(nickname, granted);
+      const player = await setSupporterBadge(
+        nickname,
+        granted,
+        granted ? supporterNote.trim() || undefined : undefined,
+      );
       setSupporterResult(
         player.supporterBadge
-          ? `'${player.nickname}'님에게 후원자 칭호를 부여했습니다.`
+          ? `'${player.nickname}'님에게 후원자 칭호를 부여했습니다.${player.supporterNote ? ` (메모: ${player.supporterNote})` : ""}`
           : `'${player.nickname}'님의 후원자 칭호를 해제했습니다.`,
       );
     } catch (err) {
@@ -379,6 +384,14 @@ export default function AdminDashboard() {
             </button>
           </div>
         </div>
+        <input
+          type="text"
+          value={supporterNote}
+          onChange={(e) => setSupporterNote(e.target.value)}
+          placeholder="후원 메모 (입금일·금액·입금자명 등) — 부여 시 함께 저장"
+          maxLength={500}
+          className="mt-3 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-emerald-400"
+        />
         {supporterError && (
           <p className="mt-3 text-sm text-rose-400">{supporterError}</p>
         )}

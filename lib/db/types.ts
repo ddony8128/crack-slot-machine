@@ -38,6 +38,8 @@ export type PlayerRow = {
   supporterBadge: boolean;
   /** When the badge was granted (ISO), or null when not a supporter. */
   supporterBadgeGrantedAt: string | null;
+  /** Admin 후원 메모 (입금일/금액/입금자명 등), or null. */
+  supporterNote: string | null;
 };
 
 /** A row in `seasons`. */
@@ -251,10 +253,12 @@ export interface Db {
    * for reuse (the active-nickname index only constrains non-deleted rows).
    */
   deactivatePlayer(playerId: string): Promise<void>;
-  /** Grant or revoke the 후원자(supporter) badge for a player. */
+  /** Grant or revoke the 후원자(supporter) badge for a player, with an optional
+   *  admin note (stored on grant; cleared on revoke when omitted). */
   grantSupporterBadge(
     playerId: string,
     granted: boolean,
+    note?: string | null,
   ): Promise<PlayerRow | null>;
 
   // ── Season 1: seasons ──────────────────────────────────────────────────────

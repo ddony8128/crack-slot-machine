@@ -28,12 +28,14 @@ export default function DonationModal({
         </p>
 
         <p className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 font-semibold text-emerald-200">
-          후원은 선택이며, 게임 플레이와 시즌 점수에는 영향을 주지 않습니다.
+          후원은 선택이며, 게임 플레이와 시즌 점수 및 랭킹 산정에는 영향을 주지
+          않습니다.
         </p>
 
         <p>
-          만원 이상 후원해주신 분께는 이번 시즌 랭킹에 &lsquo;후원자&rsquo;
-          칭호를 달아드립니다.
+          후원은 1인당 최대 3만 원까지만 부탁드립니다.
+          <br />1만 원 이상 후원해주신 분께는 감사 표시로 이번 시즌 랭킹에
+          &lsquo;후원자&rsquo; 칭호를 달아드립니다.
           <br />
           그 외의 리워드는 아직 없습니다.
         </p>

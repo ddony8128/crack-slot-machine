@@ -292,6 +292,7 @@ export class MemoryDb implements Db {
       deletedAt: null,
       supporterBadge: false,
       supporterBadgeGrantedAt: null,
+      supporterNote: null,
     };
     this.players.push(row);
     return row;
@@ -313,6 +314,7 @@ export class MemoryDb implements Db {
   async grantSupporterBadge(
     playerId: string,
     granted: boolean,
+    note?: string | null,
   ): Promise<PlayerRow | null> {
     const row = this.players.find((p) => p.id === playerId);
     if (!row) return null;
@@ -322,6 +324,12 @@ export class MemoryDb implements Db {
     row.supporterBadgeGrantedAt = granted
       ? (row.supporterBadgeGrantedAt ?? new Date(0).toISOString())
       : null;
+    // Store the note on grant (keep existing when omitted); clear on revoke.
+    if (granted) {
+      if (note !== undefined) row.supporterNote = note;
+    } else {
+      row.supporterNote = null;
+    }
     return row;
   }
 

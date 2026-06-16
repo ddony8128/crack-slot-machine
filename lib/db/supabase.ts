@@ -78,6 +78,7 @@ function toPlayer(row: any): PlayerRow {
     deletedAt: row.deleted_at ?? null,
     supporterBadge: row.supporter_badge ?? false,
     supporterBadgeGrantedAt: row.supporter_badge_granted_at ?? null,
+    supporterNote: row.supporter_note ?? null,
   };
 }
 
@@ -436,13 +437,18 @@ export class SupabaseDb implements Db {
   async grantSupporterBadge(
     playerId: string,
     granted: boolean,
+    note?: string | null,
   ): Promise<PlayerRow | null> {
+    const patch: Record<string, unknown> = {
+      supporter_badge: granted,
+      supporter_badge_granted_at: granted ? new Date().toISOString() : null,
+    };
+    // Store the note on grant (only when provided); clear it on revoke.
+    if (!granted) patch.supporter_note = null;
+    else if (note !== undefined) patch.supporter_note = note;
     const { data, error } = await this.sb
       .from('players')
-      .update({
-        supporter_badge: granted,
-        supporter_badge_granted_at: granted ? new Date().toISOString() : null,
-      })
+      .update(patch)
       .eq('id', playerId)
       .select('*')
       .maybeSingle();
