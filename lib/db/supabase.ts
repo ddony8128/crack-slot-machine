@@ -27,6 +27,31 @@ import type { RecordedAction } from '@/store/gameStore';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/**
+ * Escape Postgres LIKE/ILIKE metacharacters so a value with `%`, `_`, or `\`
+ * is matched LITERALLY (e.g. nickname "a_b" must not also match "axb", and a
+ * "%"-containing value must not pattern-match many rows and blow up
+ * `.maybeSingle()`). Use with `.ilike(col, likeEscape(value))`.
+ */
+function likeEscape(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
+ * From an ilike/eq result set (capped at 2 rows by the caller), resolve the row
+ * for a case-insensitive contact lookup WITHOUT throwing on >1 match. Prefers an
+ * exact-case hit; otherwise returns the first row. Returns null when empty.
+ */
+function pickContactMatch(
+  rows: any[] | null,
+  field: (row: any) => string | null,
+  query: string,
+): PlayerRow | null {
+  if (!rows || rows.length === 0) return null;
+  const exact = rows.find((r) => field(r) === query);
+  return toPlayer(exact ?? rows[0]);
+}
+
 function toEvent(row: any): EventRow {
   return {
     id: row.id,
@@ -434,14 +459,18 @@ export class SupabaseDb implements Db {
   }
 
   async getPlayerByNickname(nickname: string): Promise<PlayerRow | null> {
+    // Escape LIKE metacharacters so the nickname is matched literally, and do
+    // NOT use `.maybeSingle()` (it THROWS if >1 row matches). The active-nickname
+    // unique index makes >1 match impossible in practice, but a case-insensitive
+    // ilike + a defensive exact-case tiebreak keeps this robust either way.
     const { data, error } = await this.sb
       .from('players')
       .select('*')
       .is('deleted_at', null)
-      .ilike('nickname', nickname)
-      .maybeSingle();
+      .ilike('nickname', likeEscape(nickname))
+      .limit(2);
     if (error) throw error;
-    return data ? toPlayer(data) : null;
+    return pickContactMatch(data, (row) => row.nickname, nickname);
   }
 
   async getPlayerByEmail(email: string): Promise<PlayerRow | null> {
@@ -449,10 +478,10 @@ export class SupabaseDb implements Db {
       .from('players')
       .select('*')
       .is('deleted_at', null)
-      .ilike('email', email)
-      .maybeSingle();
+      .ilike('email', likeEscape(email))
+      .limit(2);
     if (error) throw error;
-    return data ? toPlayer(data) : null;
+    return pickContactMatch(data, (row) => row.email, email);
   }
 
   async getPlayerByPhone(phone: string): Promise<PlayerRow | null> {
@@ -461,9 +490,9 @@ export class SupabaseDb implements Db {
       .select('*')
       .is('deleted_at', null)
       .eq('phone', phone)
-      .maybeSingle();
+      .limit(2);
     if (error) throw error;
-    return data ? toPlayer(data) : null;
+    return pickContactMatch(data, (row) => row.phone, phone);
   }
 
   async grantSupporterBadge(

@@ -206,6 +206,61 @@ describe('MemoryDb players', () => {
     expect((await db.getPlayerById(p.id))?.deletedAt).not.toBeNull();
   });
 
+  it('getPlayerByEmail is case-insensitive; getPlayerByPhone is exact; both exclude soft-deleted', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Mailer',
+      contactType: 'email',
+      contactValue: 'Mailer@Example.com',
+      email: 'Mailer@Example.com',
+      phone: '010-1111-2222',
+      passwordHash: 'h',
+    });
+    // email: case-insensitive
+    expect((await db.getPlayerByEmail('mailer@example.com'))?.id).toBe(p.id);
+    expect((await db.getPlayerByEmail('MAILER@EXAMPLE.COM'))?.id).toBe(p.id);
+    expect(await db.getPlayerByEmail('other@example.com')).toBeNull();
+    // phone: exact
+    expect((await db.getPlayerByPhone('010-1111-2222'))?.id).toBe(p.id);
+    expect(await db.getPlayerByPhone('0101111222')).toBeNull();
+
+    // soft-delete clears contacts → excluded from both lookups
+    const fetched = await db.getPlayerById(p.id);
+    fetched!.deletedAt = new Date().toISOString();
+    fetched!.email = null;
+    fetched!.phone = null;
+    expect(await db.getPlayerByEmail('mailer@example.com')).toBeNull();
+    expect(await db.getPlayerByPhone('010-1111-2222')).toBeNull();
+  });
+
+  it('treats LIKE wildcards in a nickname literally and never throws on lookup', async () => {
+    // A nickname with % / _ must be matched literally — not as a SQL pattern —
+    // and a lookup that could otherwise match many rows must not throw. (This is
+    // the SupabaseDb crash this change fixes; MemoryDb encodes the same contract.)
+    const db = new MemoryDb();
+    const wild = await db.createPlayer({
+      nickname: 'a_b%c',
+      contactType: 'email',
+      contactValue: 'w@e.com',
+      email: 'w@e.com',
+      passwordHash: 'h',
+    });
+    const plain = await db.createPlayer({
+      nickname: 'axbYc',
+      contactType: 'email',
+      contactValue: 'x@e.com',
+      email: 'x@e.com',
+      passwordHash: 'h',
+    });
+
+    // The wildcard nickname resolves to ITS row, not the one it would "match"
+    // under LIKE semantics.
+    expect((await db.getPlayerByNickname('a_b%c'))?.id).toBe(wild.id);
+    expect((await db.getPlayerByNickname('axbYc'))?.id).toBe(plain.id);
+    // A literal '%' query does not pattern-match every row (would be >1 → throw).
+    await expect(db.getPlayerByNickname('%')).resolves.toBeNull();
+  });
+
   it('updatePlayerPassword replaces the stored hash', async () => {
     const db = new MemoryDb();
     const p = await db.createPlayer({
