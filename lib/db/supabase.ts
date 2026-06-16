@@ -22,7 +22,7 @@ import type {
   ScoreEventRow,
   RunMode,
 } from '@/lib/db/types';
-import { TOTAL_SLUG } from '@/lib/db/types';
+import { TOTAL_SLUG, normalizePhone } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -441,14 +441,20 @@ export class SupabaseDb implements Db {
     phone?: string | null;
     passwordHash: string;
   }): Promise<PlayerRow> {
+    // Canonicalize contacts at the storage boundary so every caller stores the
+    // same form: email lower-cased, phone reduced to digits-only. This is what
+    // makes the lower(email) / digits-only-phone unique indexes meaningful.
+    const email = input.email != null ? input.email.trim().toLowerCase() : null;
+    const phone =
+      input.phone != null ? normalizePhone(input.phone) || null : null;
     const { data, error } = await this.sb
       .from('players')
       .insert({
         nickname: input.nickname,
         contact_type: input.contactType,
         contact_value: input.contactValue,
-        email: input.email ?? null,
-        phone: input.phone ?? null,
+        email,
+        phone,
         password_hash: input.passwordHash,
       })
       .select('*')
@@ -483,25 +489,32 @@ export class SupabaseDb implements Db {
   }
 
   async getPlayerByEmail(email: string): Promise<PlayerRow | null> {
+    // Compare on the canonical (trimmed, lower-cased) form; ilike keeps it
+    // case-insensitive even though emails are stored lower-cased.
+    const canonical = email.trim().toLowerCase();
     const { data, error } = await this.sb
       .from('players')
       .select('*')
       .is('deleted_at', null)
-      .ilike('email', likeEscape(email))
+      .ilike('email', likeEscape(canonical))
       .limit(2);
     if (error) throw error;
-    return pickContactMatch(data, (row) => row.email, email);
+    return pickContactMatch(data, (row) => row.email, canonical);
   }
 
   async getPlayerByPhone(phone: string): Promise<PlayerRow | null> {
+    // Compare on the digits-only form so a query in either "000-0000-0000" or
+    // "00000000000" format matches the stored (also digits-only) phone.
+    const digits = normalizePhone(phone);
+    if (digits.length === 0) return null;
     const { data, error } = await this.sb
       .from('players')
       .select('*')
       .is('deleted_at', null)
-      .eq('phone', phone)
+      .eq('phone', digits)
       .limit(2);
     if (error) throw error;
-    return pickContactMatch(data, (row) => row.phone, phone);
+    return pickContactMatch(data, (row) => row.phone, digits);
   }
 
   async grantSupporterBadge(
@@ -862,19 +875,23 @@ export class SupabaseDb implements Db {
     const { data, error } = await query;
     if (error) throw error;
 
-    // Dedupe by IDENTITY, not display name: members collapse to one best per
-    // player_id; guests (player_id null) have no persisted id, so each guest run
-    // is its own entry (keyed by run id) — two guests sharing a display name, or
-    // a guest colliding with a member nickname, never merge/mask each other.
-    // Rows arrive already sorted (score desc, best_spin_score desc,
-    // submitted_at asc), so the first occurrence per key is the best one. The
-    // nickname is still carried for display.
+    // Dedupe by IDENTITY: members collapse to one best per player_id; guests
+    // (player_id null) collapse to one best per guest nickname (`guest:{name}`),
+    // so a single guest's many runs no longer flood the board. The distinct
+    // `guest:`/`player:` prefixes keep a guest from colliding with a member who
+    // shares the nickname; two DIFFERENT guests sharing a nickname merge to the
+    // better entry (acceptable + rare). Rows arrive already sorted (score desc,
+    // best_spin_score desc, submitted_at asc), so the first occurrence per key is
+    // the best one. The nickname is still carried for display.
     const best = new Map<
       string,
       { nickname: string; score: number; bestSpinScore: number; submittedAt: string }
     >();
     for (const row of (data ?? []) as any[]) {
-      const key = row.player_id != null ? `player:${row.player_id}` : `run:${row.id}`;
+      const key =
+        row.player_id != null
+          ? `player:${row.player_id}`
+          : `guest:${(row.nickname ?? 'Anonymous') as string}`;
       if (best.has(key)) continue;
       best.set(key, {
         nickname: (row.nickname ?? 'Anonymous') as string,

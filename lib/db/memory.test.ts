@@ -233,6 +233,41 @@ describe('MemoryDb players', () => {
     expect(await db.getPlayerByPhone('010-1111-2222')).toBeNull();
   });
 
+  it('normalizes phone to digits-only on store + lookup (both formats match, dupes collide)', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Dialer',
+      contactType: 'phone',
+      contactValue: '010-9999-8888',
+      phone: '010-9999-8888', // stored as digits-only
+      passwordHash: 'h',
+    });
+    // Stored canonical form is digits-only.
+    expect((await db.getPlayerById(p.id))?.phone).toBe('01099998888');
+    // A lookup in EITHER format resolves to the same player.
+    expect((await db.getPlayerByPhone('010-9999-8888'))?.id).toBe(p.id);
+    expect((await db.getPlayerByPhone('01099998888'))?.id).toBe(p.id);
+    expect((await db.getPlayerByPhone('010 9999 8888'))?.id).toBe(p.id);
+    // A different number does not match.
+    expect(await db.getPlayerByPhone('010-0000-0000')).toBeNull();
+    // Empty / no-digit query never matches.
+    expect(await db.getPlayerByPhone('')).toBeNull();
+  });
+
+  it('lowercases email on store so a different-case dupe collides on lookup', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Caser',
+      contactType: 'email',
+      contactValue: 'Mixed@Example.com',
+      email: 'Mixed@Example.com', // stored lower-cased
+      passwordHash: 'h',
+    });
+    expect((await db.getPlayerById(p.id))?.email).toBe('mixed@example.com');
+    expect((await db.getPlayerByEmail('MIXED@EXAMPLE.COM'))?.id).toBe(p.id);
+    expect((await db.getPlayerByEmail('mixed@example.com'))?.id).toBe(p.id);
+  });
+
   it('treats LIKE wildcards in a nickname literally and never throws on lookup', async () => {
     // A nickname with % / _ must be matched literally — not as a SQL pattern —
     // and a lookup that could otherwise match many rows must not throw. (This is
@@ -692,19 +727,37 @@ describe('MemoryDb quick best scores', () => {
     expect(nullRows.map((r) => r.nickname)).toEqual(['Guest']);
   });
 
-  it('does NOT merge distinct guests (playerId null) that share a display name', async () => {
+  it("collapses a single guest's many runs to ONE best entry (keyed by guest nickname)", async () => {
     const db = new MemoryDb();
     const season = await db.getActiveSeason();
     const seasonId = season!.id;
 
-    // Two different guests both rendered as "게스트-1234": each keeps its own row.
+    // One guest "게스트-1234" plays several quick runs — they must NOT flood the
+    // board; only their best surfaces (best per guest:{nickname}).
+    await seedQuick(db, seasonId, { nickname: '게스트-1234', score: 100, best: 10 });
+    await seedQuick(db, seasonId, { nickname: '게스트-1234', score: 300, best: 30 });
+    await seedQuick(db, seasonId, { nickname: '게스트-1234', score: 200, best: 20 });
+
+    const rows = await db.listQuickBestScores(QUICK_SCOPE(seasonId));
+    expect(rows.length).toBe(1);
+    expect(rows[0].score).toBe(300); // the guest's best of the three
+    expect(rows[0].nickname).toBe('게스트-1234');
+  });
+
+  it('merges two DIFFERENT guests sharing a nickname to the better entry (acceptable + rare)', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const seasonId = season!.id;
+
+    // Two distinct guests both rendered as "게스트-1234" share the guest key, so
+    // they merge to the single better entry (the keyed-by-nickname tradeoff).
     await seedQuick(db, seasonId, { nickname: '게스트-1234', score: 300, best: 30 });
     await seedQuick(db, seasonId, { nickname: '게스트-1234', score: 100, best: 10 });
 
     const rows = await db.listQuickBestScores(QUICK_SCOPE(seasonId));
-    // Two distinct entries, highest first — neither masks the other.
-    expect(rows.map((r) => r.score)).toEqual([300, 100]);
-    expect(rows.map((r) => r.nickname)).toEqual(['게스트-1234', '게스트-1234']);
+    expect(rows.length).toBe(1);
+    expect(rows[0].score).toBe(300); // better of the two
+    expect(rows[0].nickname).toBe('게스트-1234');
   });
 
   it('does NOT let a guest collide with a member who shares the same nickname', async () => {

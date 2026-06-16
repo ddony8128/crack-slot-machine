@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db';
+import { normalizePhone } from '@/lib/db/types';
 import { hashPassword } from '@/lib/server/password';
 import { setPlayerCookie } from '@/lib/server/playerAuth';
 import { sanitizeNickname } from '@/lib/server/validation';
@@ -27,15 +28,22 @@ export async function POST(req: Request) {
   }
 
   // Email + phone are BOTH optional, but at least ONE must be provided (§1.3).
-  const email = typeof body.email === 'string' ? body.email.trim() : '';
-  const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+  // Email: trim + lowercase for storage/compare (the lower(email) unique index
+  // and case-insensitive lookups assume a single canonical form). Phone: strip
+  // every non-digit so "010-1234-5678" and "01012345678" are the SAME value,
+  // which is what makes players_active_phone_uidx catch format-variant dupes.
+  const rawPhone = typeof body.phone === 'string' ? body.phone.trim() : '';
+  const email =
+    typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const phone = normalizePhone(body.phone);
   if (email.length === 0 && phone.length === 0) {
     return Response.json({ error: 'contact_required' }, { status: 400 });
   }
   if (email.length > 0 && !email.includes('@')) {
     return Response.json({ error: 'invalid_email' }, { status: 400 });
   }
-  if (phone.length > 0 && !/\d/.test(phone)) {
+  // A phone that was provided but normalizes to no digits is malformed.
+  if (rawPhone.length > 0 && phone.length === 0) {
     return Response.json({ error: 'invalid_phone' }, { status: 400 });
   }
   // Primary contact (back-compat for contact_type/contact_value reads): email

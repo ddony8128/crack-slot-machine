@@ -75,21 +75,14 @@ export default function PrivacyPage() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-lg font-bold text-zinc-100">5. 개인정보 처리 위탁</h2>
-          <p className="text-zinc-400">
-            서비스 운영을 위해 Supabase, Vercel 등 외부 서비스를 사용할 수 있습니다.
-          </p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="text-lg font-bold text-zinc-100">6. 이용자의 권리</h2>
+          <h2 className="text-lg font-bold text-zinc-100">5. 이용자의 권리</h2>
           <p className="text-zinc-400">
             이용자는 개인정보 열람, 수정, 삭제, 탈퇴를 요청할 수 있습니다.
           </p>
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-lg font-bold text-zinc-100">7. 문의</h2>
+          <h2 className="text-lg font-bold text-zinc-100">6. 문의</h2>
           <p className="text-zinc-400">
             개인정보 관련 문의는 아래 이메일로 연락해주세요.{" "}
             <a

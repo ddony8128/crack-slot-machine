@@ -520,3 +520,15 @@ export type DailyRankItem = {
 };
 
 export const TOTAL_SLUG = 'total';
+
+/**
+ * Normalize a phone number to digits-only for storage and comparison. Strips
+ * every non-digit (hyphens, spaces, parens, +, etc.) so the same number entered
+ * as "010-1234-5678" or "01012345678" maps to the SAME stored value — which is
+ * what lets players_active_phone_uidx actually catch duplicates and what lets a
+ * login lookup match regardless of formatting. Returns '' for non-strings.
+ */
+export function normalizePhone(input: unknown): string {
+  if (typeof input !== 'string') return '';
+  return input.replace(/\D/g, '');
+}

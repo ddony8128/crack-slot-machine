@@ -11,6 +11,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_email: "이메일 형식이 올바르지 않습니다.",
   invalid_phone: "전화번호 형식이 올바르지 않습니다.",
   weak_password: "비밀번호는 8자 이상이어야 합니다.",
+  password_mismatch: "비밀번호가 일치하지 않습니다.",
   agreement_required: "개인정보 처리방침에 동의해 주세요.",
   nickname_taken: "이미 사용 중인 닉네임입니다.",
   email_taken: "이미 사용 중인 이메일입니다.",
@@ -23,6 +24,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,14 @@ export default function SignupPage() {
     if (submitting) return;
     if (email.trim().length === 0 && phone.trim().length === 0) {
       setError(ERROR_MESSAGES.contact_required);
+      return;
+    }
+    if (password.length < 8) {
+      setError(ERROR_MESSAGES.weak_password);
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError(ERROR_MESSAGES.password_mismatch);
       return;
     }
     setSubmitting(true);
@@ -106,6 +116,14 @@ export default function SignupPage() {
           autoComplete="new-password"
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center text-lg outline-none transition focus:border-emerald-400"
         />
+        <input
+          type="password"
+          value={passwordConfirm}
+          onChange={(e) => setPasswordConfirm(e.target.value)}
+          placeholder="비밀번호 확인"
+          autoComplete="new-password"
+          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center text-lg outline-none transition focus:border-emerald-400"
+        />
 
         <label className="flex items-start gap-2 px-1 text-left text-sm text-zinc-400">
           <input
@@ -126,13 +144,23 @@ export default function SignupPage() {
           </span>
         </label>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
-        >
-          {submitting ? "가입 중…" : "회원가입"}
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            disabled={submitting}
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-5 py-3 text-lg font-semibold text-zinc-200 transition hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            ← 이전
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex-1 rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+          >
+            {submitting ? "가입 중…" : "회원가입"}
+          </button>
+        </div>
 
         {error && <p className="text-center text-sm text-rose-400">{error}</p>}
       </form>

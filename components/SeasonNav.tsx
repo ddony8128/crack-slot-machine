@@ -46,6 +46,14 @@ export default async function SeasonNav() {
           >
             내 기록
           </Link>
+          {player && (
+            <Link
+              href="/me/settings"
+              className="rounded-lg px-2.5 py-1.5 transition hover:bg-zinc-800/60 hover:text-zinc-100"
+            >
+              계정 설정
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2 text-sm">

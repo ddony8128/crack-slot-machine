@@ -290,6 +290,12 @@ export default async function SeasonHubPage() {
             시즌 랭킹
           </Link>
           <Link
+            href="/quick/leaderboard"
+            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            빠른 게임 랭킹 보기
+          </Link>
+          <Link
             href="/me"
             className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
           >

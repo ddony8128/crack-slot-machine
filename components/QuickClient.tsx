@@ -109,6 +109,13 @@ export default function QuickClient() {
       {startError && <p className="text-sm text-rose-400">{startError}</p>}
 
       <Link
+        href="/quick/leaderboard"
+        className="flex w-full max-w-sm items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+      >
+        빠른 게임 랭킹 보기
+      </Link>
+
+      <Link
         href="/season"
         className="flex w-full max-w-sm items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
       >
