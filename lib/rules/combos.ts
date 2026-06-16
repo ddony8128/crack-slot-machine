@@ -16,6 +16,7 @@ export const COMBO_RULE_SETS: Record<string, [string, string]> = {
   'ruby-convert': ['number', 'gem'],
   'diamond-convert': ['number', 'gem'],
   vandalism: ['cat', 'vehicle'],
+  'why-here': ['cat', 'vehicle'],
   shakedown: ['monster', 'gem'],
 };
 

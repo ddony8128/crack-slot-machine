@@ -431,6 +431,14 @@ export const RULES: Rule[] = [
     build: 'combo',
     description: '드라큘라와 이웃한 보석마다 70점을 얻고, 그 보석들을 다시 굴린다.',
   },
+  {
+    id: 'why-here',
+    name: '왜 여기 타 있어',
+    type: 'select',
+    phase: 'sequential',
+    build: 'combo',
+    description: '교통수단과 이웃한 고양이 중 가장 왼쪽 고양이를 직접 고른 칸과 자리를 바꾼다.',
+  },
 
   // ---- pair (A–B conditional bonus; DATA in lib/pairRules.ts) ----
   ...PAIR_RULES.map((p) => ({

@@ -86,7 +86,7 @@ export type SpinLog = {
   haunted: boolean[];
 };
 
-export type SelectKind = 'copy' | 'swap' | 'reroll' | 'family' | 'park';
+export type SelectKind = 'copy' | 'swap' | 'reroll' | 'family' | 'park' | 'catswap';
 
 // A `select` rule that paused the cascade for player input.
 export type PendingSelection = {

@@ -491,6 +491,8 @@ const SELECT_KIND: Record<string, SelectKind> = {
   // The two RULE SLOT rules that became PLAYER-SELECTED (직접 선택).
   'monster-family': 'family',
   'vehicle-parking': 'park',
+  // cat×vehicle combo: swap the leftmost vehicle-adjacent cat into the chosen cell.
+  'why-here': 'catswap',
 };
 
 // Inverse of SELECT_KIND: the select rule id for a given kind. Used to tag the
@@ -501,7 +503,23 @@ const SELECT_RULE_ID: Record<SelectKind, string> = {
   reroll: 'select-reroll',
   family: 'monster-family',
   park: 'vehicle-parking',
+  catswap: 'why-here',
 };
+
+/**
+ * 왜 여기 타 있어 (cat×vehicle combo) source: the smallest index of a CAT cell
+ * that has a VEHICLE on its immediate left or right. Returns -1 if no such cat
+ * exists (in which case the select rule auto-skips). Pure read — no rng.
+ */
+function leftmostCatNextToVehicle(working: SymbolType[]): number {
+  for (let i = 0; i < working.length; i++) {
+    if (!CAT_SET.has(working[i])) continue;
+    const left = i > 0 && VEHICLE_SET.has(working[i - 1]);
+    const right = i + 1 < working.length && VEHICLE_SET.has(working[i + 1]);
+    if (left || right) return i;
+  }
+  return -1;
+}
 
 /**
  * Cells the player may pick for the given select rule. Under the PURE SEQUENTIAL +
@@ -528,6 +546,8 @@ function isApplicable(kind: SelectKind, selectable: boolean[], working: SymbolTy
   if (kind === 'swap') return free >= 2;
   // family ALSO requires a dracula on the board (the copy source).
   if (kind === 'family') return free >= 1 && working.includes('dracula');
+  // catswap ALSO requires a cat adjacent to a vehicle (the swap source).
+  if (kind === 'catswap') return free >= 1 && leftmostCatNextToVehicle(working) !== -1;
   // copy / reroll / park each need at least one eligible cell (park: ≥1 vehicle).
   return free >= 1;
 }
@@ -814,6 +834,23 @@ export function resolveSelection(
       const c = indices[0];
       write(working, locked, c, 'dracula');
       frame.events.push({ type: 'symbol_copied', symbolId: 'dracula', fromIndex: dIdx, toIndex: c, byRuleId: selectRuleId });
+      break;
+    }
+    case 'catswap': {
+      // 왜 여기 타 있어: the LEFTMOST cat with a vehicle neighbour is swapped with
+      // the single chosen cell. (isApplicable guaranteed such a cat exists.) No rng
+      // -> replay-deterministic. A self-swap (src === c) is a harmless no-op.
+      const src = leftmostCatNextToVehicle(working);
+      const c = indices[0];
+      if (src !== c) {
+        const cat = working[src];
+        const other = working[c];
+        // SWAP: each cell's prior value leaves it and arrives at the other cell.
+        write(working, locked, c, cat);
+        write(working, locked, src, other);
+        frame.events.push({ type: 'symbol_moved', symbolId: cat, fromIndex: src, toIndex: c, byRuleId: selectRuleId });
+        frame.events.push({ type: 'symbol_moved', symbolId: other, fromIndex: c, toIndex: src, byRuleId: selectRuleId });
+      }
       break;
     }
     case 'park': {

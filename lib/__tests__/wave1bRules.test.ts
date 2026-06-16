@@ -30,8 +30,8 @@ describe('comboRulesForSets', () => {
     expect(ids).not.toContain('shakedown'); // needs monster too
   });
 
-  it('cat+vehicle -> vandalism only', () => {
-    expect(comboRulesForSets(['cat', 'vehicle'])).toEqual(['vandalism']);
+  it('cat+vehicle -> vandalism and why-here (declaration order)', () => {
+    expect(comboRulesForSets(['cat', 'vehicle'])).toEqual(['vandalism', 'why-here']);
   });
 
   it('monster+gem -> shakedown', () => {
