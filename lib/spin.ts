@@ -1,7 +1,11 @@
 import type { Rule, SymbolType } from '@/types';
-import { FRUITS, GEMS, VEHICLES, CATS, MONSTERS } from '@/data/symbols';
+import { FRUITS, GEMS, VEHICLES } from '@/data/symbols';
 import { rollSymbol, rollSymbolFrom, type Rng } from '@/lib/rng';
 import { expandRules } from '@/lib/expandRules';
+import {
+  POSITIONAL_WEIGHT_RULES,
+  type PositionalWeightRule,
+} from '@/lib/rules/positionalWeights';
 
 const NUMBER_SPIN_POOL: SymbolType[] = ['seven', 'zero', 'four'];
 
@@ -78,17 +82,17 @@ export function baseSpin(
  * cell position or the previous spin (so they cannot live in the board-global
  * `computeWeights` vector):
  *
- *  - `number-spin`: every cell whose `previousResult` value was a number
- *    (seven/zero/four) rolls restricted to {seven, zero, four}.
- *  - 백귀야행 `night-parade` (monster): board-global — monster weights are
- *    multiplied by (number of monsters in `previousResult` + 3) for this spin.
- *  - 고양이 확률 증가 `cat-odds` (cat): position-conditional — on the odd cells
- *    (1-indexed 1st/3rd/5th → indices 0/2/4) cat weights are multiplied by 4.
+ *  - `number-spin`: a POOL restriction — every cell whose `previousResult` value
+ *    was a number (seven/zero/four) rolls restricted to {seven, zero, four}.
+ *  - positional/prev-state WEIGHT rules (고양이 확률 증가, 백귀야행): each active
+ *    slot rule registered in `POSITIONAL_WEIGHT_RULES` transforms the per-cell
+ *    weights before the draw. Adding such a rule is data — see that registry.
  *
  * Each cell still consumes exactly ONE rng draw, so replay stays byte-identical;
- * and because cat/monster carry weight 0 in legacy/quick/event bags (and these
- * rules are only offered when their set is rollable), the modifiers are no-ops
- * there. With none of these rules present this is equivalent to `baseSpin`.
+ * and because the registered transforms only scale their own set's symbols
+ * (weight 0 in legacy/quick/event bags, and the rules are only offered when their
+ * set is rollable), they are no-ops there. With no such rules present this is
+ * equivalent to `baseSpin`.
  *
  * Matches `number-spin`'s convention of reading the raw slot array (no
  * copy-above expansion), so each modifier applies once regardless of stacking.
@@ -101,28 +105,19 @@ export function rollBoard(
   n = 5,
 ): SymbolType[] {
   const numberSpin = rules.some((r) => r?.id === 'number-spin');
-  const catOdds = rules.some((r) => r?.id === 'cat-odds');
-  const nightParade = rules.some((r) => r?.id === 'night-parade');
 
-  // 백귀야행: board-global monster boost based on the previous spin's monsters.
-  let boardWeights = weights;
-  if (nightParade) {
-    const prevMonsters = previousResult.reduce(
-      (n2, s) => (MONSTERS.includes(s) ? n2 + 1 : n2),
-      0,
-    );
-    const mult = prevMonsters + 3;
-    boardWeights = { ...weights };
-    for (const m of MONSTERS) boardWeights[m] *= mult;
+  // Collect active positional/prev-state weight transforms, in slot order.
+  const transforms: PositionalWeightRule[] = [];
+  for (const r of rules) {
+    const t = r && POSITIONAL_WEIGHT_RULES[r.id];
+    if (t) transforms.push(t);
   }
 
   const result: SymbolType[] = [];
   for (let i = 0; i < n; i++) {
-    // 고양이 확률 증가: odd cells (1-indexed) get a ×4 cat boost.
-    let cellWeights = boardWeights;
-    if (catOdds && i % 2 === 0) {
-      cellWeights = { ...boardWeights };
-      for (const c of CATS) cellWeights[c] *= 4;
+    let cellWeights = weights;
+    for (const t of transforms) {
+      cellWeights = t(cellWeights, { cellIndex: i, previousResult });
     }
 
     const prev = previousResult[i];

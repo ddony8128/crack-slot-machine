@@ -6,6 +6,7 @@ import { BASE_WEIGHTS } from '@/data/symbols';
 import { rulePlayable } from '@/lib/rules/playable';
 import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { createSeededRng } from '@/lib/rng';
+import { POSITIONAL_WEIGHT_RULES } from '@/lib/rules/positionalWeights';
 
 const CAT_ODDS = RULES_BY_ID['cat-odds'];
 const NIGHT_PARADE = RULES_BY_ID['night-parade'];
@@ -92,5 +93,9 @@ describe('rulePlayable + set wiring', () => {
   it('belong to the cat / monster sets', () => {
     expect(SYMBOL_SETS_BY_ID.cat.ruleIds).toContain('cat-odds');
     expect(SYMBOL_SETS_BY_ID.monster.ruleIds).toContain('night-parade');
+  });
+
+  it('are registered as positional-weight transforms (single source of truth)', () => {
+    expect(Object.keys(POSITIONAL_WEIGHT_RULES).sort()).toEqual(['cat-odds', 'night-parade']);
   });
 });
