@@ -197,6 +197,14 @@ export class MemoryDb implements Db {
     return row;
   }
 
+  async invalidateRun(runId: string, reason: string): Promise<void> {
+    const row = this.runs.find((r) => r.id === runId);
+    if (!row) return;
+    row.status = 'rejected';
+    row.rejectReason = reason;
+    row.verified = false;
+  }
+
   async listRecentRuns(input: {
     mode?: RunMode;
     seasonId?: string;

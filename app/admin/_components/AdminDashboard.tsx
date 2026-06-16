@@ -12,6 +12,7 @@ import {
   fetchAdminEvents,
   setAdminEventActive,
   setSupporterBadge,
+  settleDaily,
   updateAdminEvent,
 } from "@/lib/client/adminApi";
 
@@ -62,6 +63,11 @@ export default function AdminDashboard() {
   const [supporterPending, setSupporterPending] = useState(false);
   const [supporterError, setSupporterError] = useState<string | null>(null);
   const [supporterResult, setSupporterResult] = useState<string | null>(null);
+
+  // 일일 정산 state.
+  const [settlePending, setSettlePending] = useState(false);
+  const [settleError, setSettleError] = useState<string | null>(null);
+  const [settleResult, setSettleResult] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -184,6 +190,34 @@ export default function AdminDashboard() {
     }
   }
 
+  async function onSettleDaily() {
+    if (settlePending) return;
+    setSettlePending(true);
+    setSettleError(null);
+    setSettleResult(null);
+    try {
+      const { settled } = await settleDaily();
+      setSettleResult(
+        settled > 0
+          ? `${settled}일치 일일 랭킹을 정산했습니다.`
+          : "정산할 일일 랭킹이 없습니다.",
+      );
+    } catch (err) {
+      const code = err instanceof AdminApiError ? err.code : "unknown";
+      if (code === "unauthorized") {
+        router.refresh();
+        return;
+      }
+      setSettleError(
+        code === "no_active_season"
+          ? "활성 시즌이 없습니다."
+          : "정산에 실패했습니다.",
+      );
+    } finally {
+      setSettlePending(false);
+    }
+  }
+
   async function onLogout() {
     try {
       await adminLogout();
@@ -239,7 +273,19 @@ export default function AdminDashboard() {
           </h1>
           <p className="mt-1 text-sm text-zinc-400">관리자 콘솔</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Link
+            href="/admin/users"
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            유저 검색
+          </Link>
+          <Link
+            href="/admin/daily"
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            일일 도전
+          </Link>
           <Link
             href="/admin/runs"
             className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
@@ -338,6 +384,31 @@ export default function AdminDashboard() {
         )}
         {supporterResult && (
           <p className="mt-3 text-sm text-emerald-300">{supporterResult}</p>
+        )}
+      </section>
+
+      {/* 일일 랭킹 정산 */}
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
+        <h2 className="text-lg font-bold text-zinc-100">일일 랭킹 정산</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          윈도우가 종료된(어제까지) 미정산 일일 랭킹을 정산합니다. 멱등하므로
+          여러 번 눌러도 안전합니다.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onSettleDaily}
+            disabled={settlePending}
+            className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+          >
+            {settlePending ? "정산 중…" : "어제까지 일일 랭킹 정산"}
+          </button>
+        </div>
+        {settleError && (
+          <p className="mt-3 text-sm text-rose-400">{settleError}</p>
+        )}
+        {settleResult && (
+          <p className="mt-3 text-sm text-emerald-300">{settleResult}</p>
         )}
       </section>
 

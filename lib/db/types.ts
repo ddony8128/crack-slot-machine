@@ -201,6 +201,12 @@ export interface Db {
   createRun(input: CreateRunInput): Promise<RunRow>;
   getRun(runId: string): Promise<RunRow | null>;
   finalizeRun(runId: string, input: FinalizeRunInput): Promise<RunRow | null>;
+  /**
+   * Admin invalidation: mark a run rejected with the given reason and clear its
+   * verified flag. Does NOT recompute best_scores (a future cleanup pass owns
+   * that) — rankings read from best_scores, so the run row alone is updated.
+   */
+  invalidateRun(runId: string, reason: string): Promise<void>;
 
   /**
    * Recent runs for admin balance tuning, newest first (submittedAt DESC, with

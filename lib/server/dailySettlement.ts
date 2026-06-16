@@ -12,12 +12,17 @@ import { seasonBreakdown, recordSeasonChange } from '@/lib/server/seasonChange';
  *
  * Called before reading the season ranking/rows so settlement is owned here
  * (no cron) instead of being recomputed on every page view.
+ *
+ * Returns the dateKeys that were newly settled by THIS pass (empty when nothing
+ * was due). Most callers ignore the return; the admin manual-settle button
+ * reports the count.
  */
 export async function settleDueDailyChallenges(
   db: Db,
   seasonId: string,
   nowIso: string,
-): Promise<void> {
+): Promise<string[]> {
+  const settled: string[] = [];
   const challenges = await db.listSeasonDailyChallenges(seasonId);
   for (const c of challenges) {
     if (c.settledAt || c.endsAt > nowIso) continue; // already settled or not ended
@@ -58,5 +63,8 @@ export async function settleDueDailyChallenges(
         after: afterBreakdown,
       });
     }
+
+    settled.push(c.dateKey);
   }
+  return settled;
 }

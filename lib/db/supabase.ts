@@ -323,6 +323,14 @@ export class SupabaseDb implements Db {
     return data ? toRun(data) : null;
   }
 
+  async invalidateRun(runId: string, reason: string): Promise<void> {
+    const { error } = await this.sb
+      .from('game_runs')
+      .update({ status: 'rejected', reject_reason: reason, verified: false })
+      .eq('id', runId);
+    if (error) throw error;
+  }
+
   async listRecentRuns(input: {
     mode?: RunMode;
     seasonId?: string;

@@ -20,6 +20,23 @@ export function dailyDateKey(now: Date): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+/**
+ * The list of daily date keys whose noon window STARTS within [startIso, endIso).
+ * Used to generate a season's daily_challenges up front. `startIso`/`endIso` are
+ * the season's SEASON_STARTS_AT/ENDS_AT (each at 03:00Z = noon KST), so a 14-day
+ * season yields exactly 14 keys (the start day through the day before the end).
+ */
+export function dailyDateKeysInRange(startIso: string, endIso: string): string[] {
+  const keys: string[] = [];
+  const start = Date.parse(startIso);
+  const end = Date.parse(endIso);
+  if (Number.isNaN(start) || Number.isNaN(end)) return keys;
+  for (let t = start; t < end; t += 24 * 3600_000) {
+    keys.push(dailyDateKey(new Date(t)));
+  }
+  return keys;
+}
+
 /** ISO window [startsAt, endsAt) for a date key. */
 export function dailyWindow(dateKey: string): { startsAt: string; endsAt: string } {
   const start = new Date(`${dateKey}T${String(DAY_BOUNDARY_UTC_HOURS).padStart(2, '0')}:00:00Z`);

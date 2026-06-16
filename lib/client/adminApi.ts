@@ -85,6 +85,14 @@ export async function setSupporterBadge(
   return body.player;
 }
 
+/** POST /api/admin/settle-daily — settle every due daily ranking. */
+export async function settleDaily(): Promise<{ settled: number }> {
+  const res = await fetch('/api/admin/settle-daily', { method: 'POST' });
+  if (!res.ok) throw new AdminApiError(await errorCode(res));
+  const body = (await res.json()) as { settled: number };
+  return body;
+}
+
 /** POST /api/admin/events/[slug]/active — toggle active state. */
 export async function setAdminEventActive(
   slug: string,

@@ -3,12 +3,40 @@ import Link from "next/link";
 import { isAdmin } from "@/lib/server/auth";
 import AdminLogin from "@/app/admin/_components/AdminLogin";
 import { getDb } from "@/lib/db";
+import type { RunMode, RunRow, RunStatus } from "@/lib/db/types";
 import { decodeSpireRun, type SpireRunSummary } from "@/lib/server/runLog";
+import InvalidateRunButton from "@/app/admin/runs/_components/InvalidateRunButton";
 
 // Reads the session cookie + live run data, so it must render per-request.
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "RULE SLOT | 런 로그" };
+
+const MODE_OPTIONS: Array<RunMode | "all"> = [
+  "all",
+  "spire",
+  "daily",
+  "puzzle",
+  "quick",
+  "event",
+];
+const STATUS_OPTIONS: Array<RunStatus | "all"> = [
+  "all",
+  "submitted",
+  "rejected",
+  "pending",
+];
+
+function parseMode(v: string | undefined): RunMode | "all" {
+  return MODE_OPTIONS.includes(v as RunMode | "all")
+    ? (v as RunMode | "all")
+    : "spire";
+}
+function parseStatus(v: string | undefined): RunStatus | "all" {
+  return STATUS_OPTIONS.includes(v as RunStatus | "all")
+    ? (v as RunStatus | "all")
+    : "submitted";
+}
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -25,7 +53,14 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function RunCard({ run }: { run: SpireRunSummary }) {
+/** Spire + submitted rows: decoded balance summary. */
+function SpireRunCard({
+  run,
+  raw,
+}: {
+  run: SpireRunSummary;
+  raw: RunRow;
+}) {
   const bagEntries = Object.entries(run.symbolBag).sort((a, b) => b[1] - a[1]);
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -70,26 +105,128 @@ function RunCard({ run }: { run: SpireRunSummary }) {
           </p>
         </div>
       </details>
+
+      <div className="flex items-center gap-2 border-t border-zinc-800 pt-3">
+        <Stat label="seed" value={raw.seed} />
+        <InvalidateRunButton runId={raw.id} />
+      </div>
     </li>
   );
 }
 
-export default async function AdminRunsPage() {
+/** Non-spire OR non-submitted rows: raw fields, no decode. */
+function RawRunCard({ run }: { run: RunRow }) {
+  const rejected = run.status === "rejected";
+  return (
+    <li className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded border border-zinc-700 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400">
+          {run.mode}
+        </span>
+        <span className="font-semibold text-zinc-100">
+          {run.nickname ?? "Anonymous"}
+        </span>
+        <span className="font-mono text-[11px] text-zinc-500">{run.id}</span>
+        <span className="text-xs text-zinc-500">
+          {formatDate(run.submittedAt ?? run.createdAt)}
+        </span>
+        <span
+          className={
+            rejected
+              ? "rounded-full border border-rose-700/60 bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold text-rose-300"
+              : run.status === "pending"
+                ? "rounded-full border border-amber-700/60 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300"
+                : "rounded-full border border-emerald-700/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
+          }
+        >
+          {run.status}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        <Stat label="점수" value={run.score ?? "—"} />
+        {run.bestSpinScore !== null && (
+          <Stat label="최고스핀" value={run.bestSpinScore} />
+        )}
+        <Stat label="seed" value={run.seed} />
+      </div>
+
+      {rejected && (
+        <p className="rounded-lg border border-rose-700/40 bg-rose-500/5 px-3 py-2 text-sm text-rose-300">
+          <span className="text-rose-400/80">반려 사유: </span>
+          {run.rejectReason ?? "—"}
+        </p>
+      )}
+
+      {!rejected && <InvalidateRunButton runId={run.id} />}
+    </li>
+  );
+}
+
+function FilterBar({
+  mode,
+  status,
+}: {
+  mode: RunMode | "all";
+  status: RunStatus | "all";
+}) {
+  const chip = (active: boolean) =>
+    active
+      ? "rounded-lg border border-emerald-700/60 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300"
+      : "rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-800/60";
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-zinc-500">모드</span>
+        {MODE_OPTIONS.map((m) => (
+          <Link
+            key={m}
+            href={`/admin/runs?mode=${m}&status=${status}`}
+            className={chip(m === mode)}
+          >
+            {m}
+          </Link>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-zinc-500">상태</span>
+        {STATUS_OPTIONS.map((s) => (
+          <Link
+            key={s}
+            href={`/admin/runs?mode=${mode}&status=${s}`}
+            className={chip(s === status)}
+          >
+            {s}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default async function AdminRunsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mode?: string; status?: string }>;
+}) {
   if (!(await isAdmin())) {
     return <AdminLogin />;
   }
+
+  const { mode: modeParam, status: statusParam } = await searchParams;
+  const mode = parseMode(modeParam);
+  const status = parseStatus(statusParam);
 
   const db = getDb();
   const season = await db.getActiveSeason();
   const runs = season
     ? await db.listRecentRuns({
-        mode: "spire",
+        ...(mode !== "all" ? { mode } : {}),
         seasonId: season.id,
-        status: "submitted",
+        ...(status !== "all" ? { status } : {}),
         limit: 50,
       })
     : [];
-  const summaries = runs.map(decodeSpireRun);
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
@@ -99,7 +236,7 @@ export default async function AdminRunsPage() {
             <span className="text-emerald-400">RULE</span>{" "}
             <span className="text-amber-300">SLOT</span>
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">첨탑 런 로그 (밸런스 튜닝)</p>
+          <p className="mt-1 text-sm text-zinc-400">런 로그 (밸런스 튜닝 · 무효 처리)</p>
         </div>
         <Link
           href="/admin"
@@ -110,23 +247,35 @@ export default async function AdminRunsPage() {
       </header>
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
+        <FilterBar mode={mode} status={status} />
+      </section>
+
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
         <h2 className="text-lg font-bold text-zinc-100">
-          최근 첨탑 런{season ? ` · ${season.title}` : ""}
+          최근 런{season ? ` · ${season.title}` : ""}
         </h2>
 
         {!season ? (
           <div className="mt-4 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-10 text-center text-sm text-zinc-500">
             활성 시즌이 없습니다.
           </div>
-        ) : summaries.length === 0 ? (
+        ) : runs.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-10 text-center text-sm text-zinc-500">
-            제출된 첨탑 런이 없습니다.
+            해당 조건의 런이 없습니다.
           </div>
         ) : (
           <ul className="mt-4 space-y-3">
-            {summaries.map((run) => (
-              <RunCard key={run.runId} run={run} />
-            ))}
+            {runs.map((run) =>
+              run.mode === "spire" && run.status === "submitted" ? (
+                <SpireRunCard
+                  key={run.id}
+                  run={decodeSpireRun(run)}
+                  raw={run}
+                />
+              ) : (
+                <RawRunCard key={run.id} run={run} />
+              ),
+            )}
           </ul>
         )}
       </section>
