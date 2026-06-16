@@ -48,11 +48,17 @@ export default function DonationModal({
           <p className="text-zinc-400">또는 카카오페이 송금</p>
         </div>
 
-        {/* KakaoPay QR placeholder (no image asset yet). */}
-        <div className="flex aspect-square w-32 flex-col items-center justify-center self-center rounded-xl border border-dashed border-zinc-600 bg-zinc-900/40 text-center text-xs text-zinc-500">
-          카카오페이 QR
-          <br />
-          (준비 중)
+        {/* 카카오페이 송금 QR */}
+        <div className="self-center text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/kakaopay-qr.jpg"
+            alt="카카오페이 송금 QR 코드"
+            width={180}
+            height={180}
+            className="aspect-square w-44 rounded-xl border border-zinc-700 bg-white object-contain p-2"
+          />
+          <p className="mt-1 text-xs text-zinc-500">카카오페이 송금 QR</p>
         </div>
 
         <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-200">
