@@ -8,7 +8,7 @@ import {
   resolveDailySetup,
 } from '@/lib/daily/run';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
-import { seasonSnapshot, makeSeasonScoreChange } from '@/lib/server/seasonChange';
+import { seasonBreakdown, recordSeasonChange } from '@/lib/server/seasonChange';
 import { settleDueDailyChallenges } from '@/lib/server/dailySettlement';
 import type { ClientResults } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
@@ -115,10 +115,10 @@ export async function POST(req: Request) {
   // persisted before we read the season snapshot.
   await settleDueDailyChallenges(db, run.seasonId!, now);
 
-  // Season total + rank BEFORE the upsert. The daily +20 first-play grant is
-  // derived in buildSeasonRanking from the presence of a daily best_scores row,
-  // so capturing before the upsert below is what surfaces it as the delta.
-  const before = await seasonSnapshot(db, run.seasonId!, player.id);
+  // Season total + rank + per-mode split BEFORE the upsert. The daily +20
+  // first-play grant is derived in buildSeasonRanking from the presence of a
+  // daily best_scores row, so capturing before the upsert surfaces it as the delta.
+  const before = await seasonBreakdown(db, run.seasonId!, player.id);
 
   await db.finalizeRun(runId, {
     nickname: player.nickname,
@@ -144,8 +144,15 @@ export async function POST(req: Request) {
 
   const attemptsLeft = await dailyAttemptsLeft(db, player.id, run.seasonId!, run.dailyDateKey!);
 
-  const after = await seasonSnapshot(db, run.seasonId!, player.id);
-  const scoreChange = makeSeasonScoreChange(before, after, 'DAILY_FIRST_PLAY');
+  const after = await seasonBreakdown(db, run.seasonId!, player.id);
+  const scoreChange = await recordSeasonChange(db, {
+    seasonId: run.seasonId!,
+    playerId: player.id,
+    sourceType: 'DAILY_FIRST_PLAY',
+    sourceId: run.dailyDateKey!,
+    before,
+    after,
+  });
 
   return Response.json({
     status: 'submitted',

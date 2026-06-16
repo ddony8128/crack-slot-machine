@@ -367,6 +367,35 @@ export interface Db {
   }): Promise<SpireRecordRow>;
   getSpireRecord(playerId: string, seasonId: string): Promise<SpireRecordRow | null>;
   listSpireRecords(seasonId: string): Promise<SpireRecordRow[]>;
+
+  // ── §6 season-score ledger ─────────────────────────────────────────────────
+  /** Overwrite a player's cached per-mode + total season score for a season. */
+  upsertSeasonScore(input: {
+    playerId: string;
+    seasonId: string;
+    puzzleScore: number;
+    dailyScore: number;
+    spireScore: number;
+    totalScore: number;
+  }): Promise<void>;
+  /** Append one audit-trail row to the season-score ledger. Returns the row. */
+  insertScoreEvent(input: {
+    playerId: string;
+    seasonId: string;
+    sourceType: string;
+    sourceId?: string | null;
+    previousTotalScore: number;
+    newTotalScore: number;
+    delta: number;
+    previousRank: number | null;
+    newRank: number | null;
+  }): Promise<ScoreEventRow>;
+  /** A player's score events for a season, newest first (default 50). */
+  listScoreEvents(
+    playerId: string,
+    seasonId: string,
+    limit?: number,
+  ): Promise<ScoreEventRow[]>;
 }
 
 /** A row in `puzzle_user_records` — best goals achieved per puzzle. */
@@ -390,6 +419,32 @@ export type SpireRecordRow = {
   bestTotalScore: number;
   bestRunId: string | null;
   updatedAt: string;
+};
+
+/** A row in `season_scores` — the cached per-mode + total season score. */
+export type SeasonScoreRow = {
+  playerId: string;
+  seasonId: string;
+  puzzleScore: number;
+  dailyScore: number;
+  spireScore: number;
+  totalScore: number;
+  updatedAt: string;
+};
+
+/** A row in `score_events` — one audit-trail entry for a season-points change. */
+export type ScoreEventRow = {
+  id: string;
+  playerId: string;
+  seasonId: string;
+  sourceType: string;
+  sourceId: string | null;
+  previousTotalScore: number;
+  newTotalScore: number;
+  delta: number;
+  previousRank: number | null;
+  newRank: number | null;
+  createdAt: string;
 };
 
 /** One row of a season-points ranking (nickname resolved). */

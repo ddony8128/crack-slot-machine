@@ -13,6 +13,8 @@ import type {
   BestScoreRow,
   PuzzleRecordRow,
   SpireRecordRow,
+  SeasonScoreRow,
+  ScoreEventRow,
   RunMode,
   RunStatus,
 } from '@/lib/db/types';
@@ -73,6 +75,8 @@ export class MemoryDb implements Db {
   private bestScores: BestScoreRow[] = [];
   private puzzleRecords: PuzzleRecordRow[] = [];
   private spireRecords: SpireRecordRow[] = [];
+  private seasonScores: SeasonScoreRow[] = [];
+  private scoreEvents: ScoreEventRow[] = [];
   private counter = 0;
 
   constructor(events?: EventRow[]) {
@@ -717,5 +721,73 @@ export class MemoryDb implements Db {
 
   async listSpireRecords(seasonId: string): Promise<SpireRecordRow[]> {
     return this.spireRecords.filter((s) => s.seasonId === seasonId);
+  }
+
+  // ── §6 season-score ledger ─────────────────────────────────────────────────
+  async upsertSeasonScore(input: {
+    playerId: string;
+    seasonId: string;
+    puzzleScore: number;
+    dailyScore: number;
+    spireScore: number;
+    totalScore: number;
+  }): Promise<void> {
+    const existing = this.seasonScores.find(
+      (s) => s.playerId === input.playerId && s.seasonId === input.seasonId,
+    );
+    // MemoryDb has no clock; use a fixed sentinel so updatedAt is non-null and
+    // tests stay deterministic (they only assert the score values).
+    const updatedAt = new Date(0).toISOString();
+    if (existing) {
+      existing.puzzleScore = input.puzzleScore;
+      existing.dailyScore = input.dailyScore;
+      existing.spireScore = input.spireScore;
+      existing.totalScore = input.totalScore;
+      existing.updatedAt = updatedAt;
+      return;
+    }
+    this.seasonScores.push({ ...input, updatedAt });
+  }
+
+  async insertScoreEvent(input: {
+    playerId: string;
+    seasonId: string;
+    sourceType: string;
+    sourceId?: string | null;
+    previousTotalScore: number;
+    newTotalScore: number;
+    delta: number;
+    previousRank: number | null;
+    newRank: number | null;
+  }): Promise<ScoreEventRow> {
+    const row: ScoreEventRow = {
+      id: this.id('score-event'),
+      playerId: input.playerId,
+      seasonId: input.seasonId,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId ?? null,
+      previousTotalScore: input.previousTotalScore,
+      newTotalScore: input.newTotalScore,
+      delta: input.delta,
+      previousRank: input.previousRank,
+      newRank: input.newRank,
+      // Fixed sentinel (no clock); newest-first ordering uses insertion order.
+      createdAt: new Date(0).toISOString(),
+    };
+    this.scoreEvents.push(row);
+    return row;
+  }
+
+  async listScoreEvents(
+    playerId: string,
+    seasonId: string,
+    limit = 50,
+  ): Promise<ScoreEventRow[]> {
+    // Newest first: createdAt has no clock, so reverse insertion order stands in.
+    return this.scoreEvents
+      .filter((e) => e.playerId === playerId && e.seasonId === seasonId)
+      .slice()
+      .reverse()
+      .slice(0, limit);
   }
 }

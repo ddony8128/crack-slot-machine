@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Db } from '@/lib/db/types';
 import { dailyRankReward } from '@/lib/season/scoring';
+import { seasonBreakdown, recordSeasonChange } from '@/lib/server/seasonChange';
 
 /**
  * Lazily settle every daily challenge whose noon window has ENDED but isn't yet
@@ -28,6 +29,34 @@ export async function settleDueDailyChallenges(
       playerId: row.playerId,
       seasonPoints: dailyRankReward(i + 1, sorted.length),
     }));
+
+    // §6 ledger: snapshot each participant's season total BEFORE applying this
+    // day's rank rewards, settle, then snapshot AFTER. The settledAt gate below
+    // means this whole block runs exactly once per day → one event per player
+    // whose total moved (DAILY_RANK_REWARD). recordSeasonChange skips zero-delta
+    // players (rank rewards of 0) but still refreshes their score cache.
+    const before = new Map(
+      await Promise.all(
+        rewards.map(
+          async (r) =>
+            [r.playerId, await seasonBreakdown(db, seasonId, r.playerId)] as const,
+        ),
+      ),
+    );
+
     await db.settleDailyChallenge({ seasonId, dateKey: c.dateKey, settledAt: nowIso, rewards });
+
+    for (const r of rewards) {
+      const beforeBreakdown = before.get(r.playerId)!;
+      const afterBreakdown = await seasonBreakdown(db, seasonId, r.playerId);
+      await recordSeasonChange(db, {
+        seasonId,
+        playerId: r.playerId,
+        sourceType: 'DAILY_RANK_REWARD',
+        sourceId: c.dateKey,
+        before: beforeBreakdown,
+        after: afterBreakdown,
+      });
+    }
   }
 }

@@ -18,6 +18,7 @@ import type {
   BestScoreRow,
   PuzzleRecordRow,
   SpireRecordRow,
+  ScoreEventRow,
   RunMode,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
@@ -158,6 +159,22 @@ function toSpireRecord(row: any): SpireRecordRow {
     bestTotalScore: row.best_total_score,
     bestRunId: row.best_run_id ?? null,
     updatedAt: row.updated_at,
+  };
+}
+
+function toScoreEvent(row: any): ScoreEventRow {
+  return {
+    id: row.id,
+    playerId: row.player_id,
+    seasonId: row.season_id,
+    sourceType: row.source_type,
+    sourceId: row.source_id ?? null,
+    previousTotalScore: row.previous_total_score,
+    newTotalScore: row.new_total_score,
+    delta: row.delta,
+    previousRank: row.previous_rank ?? null,
+    newRank: row.new_rank ?? null,
+    createdAt: row.created_at,
   };
 }
 
@@ -953,5 +970,75 @@ export class SupabaseDb implements Db {
       .eq('season_id', seasonId);
     if (error) throw error;
     return (data ?? []).map(toSpireRecord);
+  }
+
+  // ── §6 season-score ledger ─────────────────────────────────────────────────
+  async upsertSeasonScore(input: {
+    playerId: string;
+    seasonId: string;
+    puzzleScore: number;
+    dailyScore: number;
+    spireScore: number;
+    totalScore: number;
+  }): Promise<void> {
+    const { error } = await this.sb.from('season_scores').upsert(
+      {
+        player_id: input.playerId,
+        season_id: input.seasonId,
+        puzzle_score: input.puzzleScore,
+        daily_score: input.dailyScore,
+        spire_score: input.spireScore,
+        total_score: input.totalScore,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'player_id,season_id' },
+    );
+    if (error) throw error;
+  }
+
+  async insertScoreEvent(input: {
+    playerId: string;
+    seasonId: string;
+    sourceType: string;
+    sourceId?: string | null;
+    previousTotalScore: number;
+    newTotalScore: number;
+    delta: number;
+    previousRank: number | null;
+    newRank: number | null;
+  }): Promise<ScoreEventRow> {
+    const { data, error } = await this.sb
+      .from('score_events')
+      .insert({
+        player_id: input.playerId,
+        season_id: input.seasonId,
+        source_type: input.sourceType,
+        source_id: input.sourceId ?? null,
+        previous_total_score: input.previousTotalScore,
+        new_total_score: input.newTotalScore,
+        delta: input.delta,
+        previous_rank: input.previousRank,
+        new_rank: input.newRank,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toScoreEvent(data);
+  }
+
+  async listScoreEvents(
+    playerId: string,
+    seasonId: string,
+    limit = 50,
+  ): Promise<ScoreEventRow[]> {
+    const { data, error } = await this.sb
+      .from('score_events')
+      .select('*')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []).map(toScoreEvent);
   }
 }
