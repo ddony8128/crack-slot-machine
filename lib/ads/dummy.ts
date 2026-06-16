@@ -9,8 +9,8 @@ export type DummyAdConfig = {
 };
 
 export const DEFAULT_DUMMY_AD: DummyAdConfig = {
-  title: '광고 보기',
-  body: '이곳에는 추후 광고가 들어갑니다. 현재는 테스트용 더미 광고입니다.',
+  title: '광고 시청 후 일일 도전 5회 추가 (하루 1회)',
+  body: '이곳에는 추후 광고가 들어갑니다. 현재는 테스트용 더미 광고입니다. 시청을 완료하면 오늘의 일일 도전 횟수가 5회 추가됩니다.',
   linkUrl: undefined,
   linkText: '자세히 보기',
 };

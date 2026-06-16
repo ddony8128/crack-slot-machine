@@ -11,6 +11,10 @@ import {
 } from "@/lib/client/dailyApi";
 import { fetchMe } from "@/lib/client/authApi";
 import { dailyRunConfigFromParts } from "@/lib/daily/run";
+import {
+  DAILY_BASE_ATTEMPTS,
+  DAILY_MAX_ATTEMPTS,
+} from "@/lib/daily/challenge";
 import GameScreen from "@/components/GameScreen";
 import DailyResultScreen from "@/components/DailyResultScreen";
 import DummyAdModal from "@/components/DummyAdModal";
@@ -19,6 +23,28 @@ import { useDonationPrompt } from "@/components/useDonationPrompt";
 import ModeIntro from "@/components/ModeIntro";
 import DailySetupPreview from "@/components/DailySetupPreview";
 import { dailyRefillGate } from "@/components/dailyRefillGate";
+
+/** "5시간 23분" style remaining-time label from now until endsAt (KST noon). */
+function formatRemaining(endsAt: string, nowMs: number): string {
+  const ms = Date.parse(endsAt) - nowMs;
+  if (!Number.isFinite(ms) || ms <= 0) return "마감됨";
+  const totalMin = Math.floor(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0) return `${h}시간 ${m}분 남음`;
+  if (m > 0) return `${m}분 남음`;
+  return "1분 미만 남음";
+}
+
+/** Local-time HH:MM display of the day's 마감 시각 (window end). */
+function formatDeadline(endsAt: string): string {
+  const d = new Date(endsAt);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function startErrorMessage(code: string): string {
   if (code === "daily_attempts_exhausted") return "오늘 도전 횟수를 모두 소진했습니다.";
@@ -42,6 +68,13 @@ export default function DailyClient() {
   const [adOpen, setAdOpen] = useState(false);
   const [refilling, setRefilling] = useState(false);
   const [refillError, setRefillError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // Tick once a minute so the 남은 시간 countdown stays current without churn.
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // The store is a module singleton that survives client navigations, so reset
   // to a clean 'start' state whenever this page mounts, then load the day's info.
@@ -175,9 +208,20 @@ export default function DailyClient() {
               <p className="font-mono text-lg font-bold text-zinc-200">
                 {current.dateKey}
               </p>
+              <p className="mt-1 text-sm text-zinc-400">
+                마감 {formatDeadline(current.endsAt)} ·{" "}
+                <span className="font-semibold text-amber-300">
+                  {formatRemaining(current.endsAt, nowMs)}
+                </span>
+              </p>
             </div>
 
-            {current.setup && <DailySetupPreview setup={current.setup} />}
+            {current.setup && (
+              <DailySetupPreview
+                setup={current.setup}
+                dateKey={current.dateKey}
+              />
+            )}
 
             {current.loggedIn ? (
               <div className="space-y-3">
@@ -186,8 +230,17 @@ export default function DailyClient() {
                 </p>
                 <p className="font-mono text-lg font-bold text-amber-300">
                   공식 도전: {current.attemptsLeft} /{" "}
-                  {current.allowed ?? current.attemptsLeft}회 남음
+                  {current.allowed ??
+                    (current.adRefillUsed
+                      ? DAILY_MAX_ATTEMPTS
+                      : DAILY_BASE_ATTEMPTS)}
+                  회 남음
                 </p>
+                {current.attemptsUsed === 0 && (
+                  <p className="text-sm text-emerald-300">
+                    오늘 첫 플레이 시 시즌 점수 +20점 (하루 1회)
+                  </p>
+                )}
 
                 {showRefillCta ? (
                   <>
