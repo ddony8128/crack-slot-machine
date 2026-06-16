@@ -1,8 +1,25 @@
 import Image from "next/image";
 import type { SymbolType } from "@/types";
 import { SYMBOL_EMOJI } from "@/data/symbols";
+import { SYMBOL_SETS } from "@/lib/symbols/sets";
 
 const NUMBER_SYMBOLS = new Set<SymbolType>(["seven", "zero", "four"]);
+
+/**
+ * Korean display name per symbol id, sourced from SYMBOL_SETS (single source of
+ * truth). Used for the box title/aria-label so symbols that share a similar emoji
+ * — notably the three cats (치즈냥/턱시도냥/삼색냥) — are always identifiable on
+ * hover and to screen readers. Hybrids fall back to their own friendly names.
+ */
+const SYMBOL_NAME: Partial<Record<SymbolType, string>> = (() => {
+  const map: Partial<Record<SymbolType, string>> = {};
+  for (const set of SYMBOL_SETS) {
+    for (const s of set.symbols) map[s.id as SymbolType] = s.name;
+  }
+  map.zombie_cat = "좀비고양이";
+  map.ghost_cat = "유령고양이";
+  return map;
+})();
 
 const NUMBER_STYLE: Record<string, string> = {
   seven: "text-amber-300 border-amber-400/50 bg-amber-500/10",
@@ -66,9 +83,14 @@ export default function SymbolView({
 }) {
   const isNumber = NUMBER_SYMBOLS.has(symbol);
   const svg = SYMBOL_SVG[symbol];
+  // Korean name (e.g. 치즈냥) for hover/title + a11y. Falls back to the raw id so
+  // nothing ever renders nameless.
+  const name = SYMBOL_NAME[symbol] ?? symbol;
 
   return (
     <span
+      title={name}
+      aria-label={name}
       className={`inline-flex items-center justify-center rounded-lg border ${
         SIZE_BOX[size]
       } ${
@@ -84,7 +106,7 @@ export default function SymbolView({
       ) : (
         <Image
           src={svg}
-          alt={symbol}
+          alt={name}
           width={SIZE_IMG[size]}
           height={SIZE_IMG[size]}
           className="h-3/4 w-3/4 object-contain"

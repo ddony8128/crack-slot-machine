@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useGameStore } from "@/store/gameStore";
 import ReferenceModal from "@/components/ReferenceModal";
+import { BASE_WEIGHTS } from "@/data/symbols";
 
 export default function StatusBar() {
   const nickname = useGameStore((s) => s.nickname);
@@ -10,6 +11,9 @@ export default function StatusBar() {
   const maxSpins = useGameStore((s) => s.maxSpins);
   const totalScore = useGameStore((s) => s.totalScore);
   const nextMultiplier = useGameStore((s) => s.nextMultiplier);
+  // The active run's symbol bag drives the pool-aware ReferenceModal. Legacy
+  // (빠른 게임/이벤트) runs have no config → BASE_WEIGHTS (combo/pair hidden).
+  const baseWeights = useGameStore((s) => s.runConfig?.baseWeights) ?? BASE_WEIGHTS;
 
   const [refView, setRefView] = useState<"rules" | "scores" | null>(null);
 
@@ -70,6 +74,7 @@ export default function StatusBar() {
       <ReferenceModal
         open={refView !== null}
         view={refView ?? "rules"}
+        weights={baseWeights}
         onClose={() => setRefView(null)}
       />
     </>

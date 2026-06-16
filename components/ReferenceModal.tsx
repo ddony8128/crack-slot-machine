@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { RULES, RULE_PHASE_LABELS } from "@/data/rules";
+import type { Rule, SymbolType } from "@/types";
+import { BASE_WEIGHTS } from "@/data/symbols";
+import { rulePlayable } from "@/lib/rules/playable";
+import { LEGACY_EXCLUDED_BUILDS } from "@/store/gameStore";
 import {
   SEVEN_SCORE,
   HAND_PAIR,
@@ -21,6 +25,11 @@ import {
   type SymbolSet,
 } from "@/lib/symbols/sets";
 import { PAIR_RULES } from "@/lib/pairRules";
+
+/** Does this set have ≥1 symbol that can roll in `weights`? */
+function setRollable(set: SymbolSet, weights: Record<SymbolType, number>): boolean {
+  return set.symbols.some((s) => (weights[s.id as SymbolType] ?? 0) > 0);
+}
 
 type PerEventTag = Extract<SetBonus, { type: "per-event" }>["event"];
 
@@ -63,7 +72,20 @@ export function bonusRowLabel(
 }
 
 // Build keys -> clean Korean section headers.
-const BUILD_ORDER = ["7", "fruit", "gem", "color", "order", "safe", "score"];
+const BUILD_ORDER = [
+  "7",
+  "fruit",
+  "gem",
+  "color",
+  "order",
+  "safe",
+  "score",
+  "cat",
+  "vehicle",
+  "monster",
+  "combo",
+  "pair",
+];
 const BUILD_LABEL: Record<string, string> = {
   "7": "7/잭팟",
   fruit: "과일",
@@ -72,11 +94,16 @@ const BUILD_LABEL: Record<string, string> = {
   order: "순서",
   safe: "안전",
   score: "점수",
+  cat: "고양이",
+  vehicle: "교통수단",
+  monster: "괴물",
+  combo: "콤보 (2세트)",
+  pair: "페어 (2세트)",
 };
 
-function groupByBuild() {
-  const groups = new Map<string, typeof RULES>();
-  for (const rule of RULES) {
+function groupByBuild(rules: Rule[]) {
+  const groups = new Map<string, Rule[]>();
+  for (const rule of rules) {
     const key = rule.build ?? "기타";
     const arr = groups.get(key) ?? [];
     arr.push(rule);
@@ -91,7 +118,7 @@ function groupByBuild() {
     }
   }
   for (const [key, arr] of groups) ordered.push([key, arr]);
-  return ordered;
+  return ordered as Array<[string, Rule[]]>;
 }
 
 function ScoreRow({
@@ -145,10 +172,20 @@ export default function ReferenceModal({
   open,
   onClose,
   view = "rules",
+  weights = BASE_WEIGHTS,
 }: {
   open: boolean;
   onClose: () => void;
   view?: "rules" | "scores";
+  /**
+   * The active run's symbol bag (as weights). Defaults to BASE_WEIGHTS = the
+   * legacy 빠른 게임/이벤트 bag, so existing callers (StartScreen,
+   * DailySetupPreview, SpireClient) compile and render unchanged. The reference
+   * is filtered to match what the run actually offers/scores: only rules whose
+   * symbols can roll (rulePlayable), only set bonuses for rollable sets, and —
+   * on the legacy bag — combo/pair rules are hidden (mirrors the offer filter).
+   */
+  weights?: Record<SymbolType, number>;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -171,7 +208,28 @@ export default function ReferenceModal({
 
   if (!open) return null;
 
-  const groups = groupByBuild();
+  // Legacy = the default BASE_WEIGHTS bag (빠른 게임/이벤트). On that bag we hide
+  // combo/pair rules so the reference matches the offer filter (gameStore's
+  // LEGACY_EXCLUDED_BUILDS); season runs pass their own baseWeights → shown.
+  const legacy = weights === BASE_WEIGHTS;
+  const visibleRules = RULES.filter(
+    (r) =>
+      rulePlayable(r, weights) &&
+      !(legacy && LEGACY_EXCLUDED_BUILDS.has(r.build ?? "")),
+  );
+  const groups = groupByBuild(visibleRules);
+
+  // 세트 보너스 / 페어 보너스 are shown only for sets/pairs that can roll in this
+  // run's bag, so the 점수표 reflects only achievable bonuses.
+  const visibleSets = SYMBOL_SETS.filter(
+    (set) => !set.isNumberSet && set.bonuses.length > 0 && setRollable(set, weights),
+  );
+  const visiblePairs = PAIR_RULES.filter((pair) => {
+    const a = SYMBOL_SETS_BY_ID[pair.setA];
+    const b = SYMBOL_SETS_BY_ID[pair.setB];
+    return !!a && !!b && setRollable(a, weights) && setRollable(b, weights);
+  });
+
   const isRules = view === "rules";
 
   return (
@@ -213,7 +271,7 @@ export default function ReferenceModal({
           {isRules && (
           <section className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-400">
-              규칙 ({RULES.length})
+              규칙 ({visibleRules.length})
             </h3>
             {groups.map(([build, rules]) => (
               <div key={build} className="space-y-2">
@@ -252,34 +310,50 @@ export default function ReferenceModal({
               점수표
             </h3>
 
-            <ScoreCard title="7 점수">
-              <ScoreRow label="1개" value={`+${SEVEN_SCORE[1]}`} />
-              <ScoreRow label="2개" value={`+${SEVEN_SCORE[2]}`} />
-              <ScoreRow label="3개" value={`+${SEVEN_SCORE[3]}`} />
-              <ScoreRow label="4개" value={`+${SEVEN_SCORE[4]}`} />
-              <ScoreRow label="5개" value={`+${SEVEN_SCORE[5]}`} />
+            <ScoreCard
+              title="7 점수"
+              note="보드에 나온 7의 개수만큼 점수를 얻는다. 많을수록 폭발적으로 커지며, 5개(잭팟)면 777점이다."
+            >
+              <ScoreRow label="7이 1개" value={`+${SEVEN_SCORE[1]}`} />
+              <ScoreRow label="7이 2개" value={`+${SEVEN_SCORE[2]}`} />
+              <ScoreRow label="7이 3개" value={`+${SEVEN_SCORE[3]}`} />
+              <ScoreRow label="7이 4개" value={`+${SEVEN_SCORE[4]}`} />
+              <ScoreRow label="7이 5개 (잭팟)" value={`+${SEVEN_SCORE[5]}`} />
             </ScoreCard>
 
             <ScoreCard
               title="족보"
-              note="※ 신체/색이 아니라 숫자를 제외한 모든 세트 심볼에 적용."
+              note="숫자(0·4·7)를 제외한 같은 심볼이 N개 모이면 성립한다. 과일·보석·고양이 등 세트 심볼이 대상이며, 가장 높은 족보 하나만 점수로 계산된다."
             >
-              <ScoreRow label="페어" value={`+${HAND_PAIR}`} />
-              <ScoreRow label="투페어" value={`+${HAND_TWO_PAIR}`} />
-              <ScoreRow label="트리플" value={`+${HAND_TRIPLE}`} />
-              <ScoreRow label="풀하우스" value={`+${HAND_FULL_HOUSE}`} />
-              <ScoreRow label="포카드" value={`+${HAND_FOUR_KIND}`} />
-              <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
+              <ScoreRow label="페어 — 같은 심볼 2개" value={`+${HAND_PAIR}`} />
+              <ScoreRow label="투페어 — 2개짜리 페어 2쌍" value={`+${HAND_TWO_PAIR}`} />
+              <ScoreRow label="트리플 — 같은 심볼 3개" value={`+${HAND_TRIPLE}`} />
+              <ScoreRow label="풀하우스 — 트리플 + 페어" value={`+${HAND_FULL_HOUSE}`} />
+              <ScoreRow label="포카드 — 같은 심볼 4개" value={`+${HAND_FOUR_KIND}`} />
+              <ScoreRow label="파이브카드 — 같은 심볼 5개" value={`+${HAND_FIVE_KIND}`} />
             </ScoreCard>
 
-            <ScoreCard title="세트 보너스">
-              {SYMBOL_SETS.filter((set) => !set.isNumberSet && set.bonuses.length > 0).map(
-                (set) => (
+            {visibleSets.length > 0 && (
+            <ScoreCard
+              title="세트 보너스"
+              note="같은 세트(과일/보석/고양이/교통수단/괴물) 심볼이 모이면 추가 점수. 세트별 효과는 아래와 같다."
+            >
+              {visibleSets.map((set) => (
                   <li key={set.id} className="space-y-1">
-                    <div className="flex items-center gap-1.5 pt-1 text-xs font-bold text-zinc-400">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1 text-xs font-bold text-zinc-400">
                       <span>{set.name}</span>
-                      <span className="font-normal text-zinc-500">
-                        {set.symbols.map((s) => s.emoji).join(" ")}
+                      <span className="flex flex-wrap items-center gap-2 font-normal text-zinc-500">
+                        {set.symbols.map((s) => (
+                          <span
+                            key={s.id}
+                            className="inline-flex items-center gap-0.5"
+                            title={s.name}
+                            aria-label={s.name}
+                          >
+                            <span aria-hidden="true">{s.emoji}</span>
+                            <span>{s.name}</span>
+                          </span>
+                        ))}
                       </span>
                     </div>
                     <ul className="space-y-1 pl-2">
@@ -299,9 +373,14 @@ export default function ReferenceModal({
                 ),
               )}
             </ScoreCard>
+            )}
 
-            <ScoreCard title="페어 보너스">
-              {PAIR_RULES.map((pair) => (
+            {visiblePairs.length > 0 && (
+            <ScoreCard
+              title="페어 보너스"
+              note="서로 다른 두 세트가 보드에 각각 하나 이상 있으면 주어지는 보너스."
+            >
+              {visiblePairs.map((pair) => (
                 <li key={pair.id} className="space-y-0.5">
                   <ScoreRow label={pair.name} value={`+${pair.points}`} />
                   <p className="text-xs text-zinc-500">
@@ -311,10 +390,14 @@ export default function ReferenceModal({
                 </li>
               ))}
             </ScoreCard>
+            )}
 
-            <ScoreCard title="4 페널티">
+            <ScoreCard
+              title="4 페널티"
+              note="보드의 4는 불운의 숫자다. 4 하나당 점수가 깎인다. (일부 규칙은 이 페널티를 보너스로 뒤집기도 한다.)"
+            >
               <ScoreRow
-                label="개당"
+                label="4 1개당"
                 value={`-${FOUR_PENALTY_PER}`}
                 negative
               />
@@ -322,11 +405,11 @@ export default function ReferenceModal({
 
             <ScoreCard
               title="특수 족보"
-              note="※ 특수 족보의 효과는 다음 스핀에만 적용됩니다."
+              note="특정 숫자가 일정 개수 이상 나오면 발동하는 특수 효과. ※ 효과는 모두 다음 스핀에만 적용됩니다."
             >
-              <ScoreRow label="0이 3개 이상" value="규칙 1장 추가" />
-              <ScoreRow label="4가 4개" value={`점수 ×${FOURS_4_MULT}`} />
-              <ScoreRow label="4가 5개" value={`점수 ×${FOURS_5_MULT}`} />
+              <ScoreRow label="0이 3개 이상 → 규칙 추첨 1장 더" value="규칙 1장 추가" />
+              <ScoreRow label="4가 4개 → 다음 스핀 점수 배수" value={`점수 ×${FOURS_4_MULT}`} />
+              <ScoreRow label="4가 5개 → 다음 스핀 점수 배수" value={`점수 ×${FOURS_5_MULT}`} />
             </ScoreCard>
           </section>
           )}

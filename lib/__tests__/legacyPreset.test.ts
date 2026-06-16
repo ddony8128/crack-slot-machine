@@ -45,16 +45,22 @@ describe('LEGACY (no-config) quick/event behavior', () => {
     expect(positional.bonusScore).toBeGreaterThanOrEqual(0);
   });
 
-  it('offers only BASE-rollable rules (no cat/vehicle/monster) in a no-config run', () => {
+  it('offers only legacy rules (no cat/vehicle/monster, no combo/pair) in a no-config run', () => {
     const store = createGameStore(createSeededRng('legacy-offer'));
     const s = () => store.getState();
     s().setNickname('t');
     s().startGame();
     let guard = 0;
-    const dead = new Set(['cat', 'vehicle', 'monster']);
+    // 기획: 빠른 게임 = 기존(레거시) 규칙만 — 숫자/과일/보석. Cat/vehicle/monster
+    // never roll on BASE_WEIGHTS, AND combo/pair (multi-set season-1 mechanics)
+    // are excluded from the offer even though their fruit/gem needs would pass
+    // rulePlayable on the legacy bag.
+    const dead = new Set(['cat', 'vehicle', 'monster', 'combo', 'pair']);
+    let sawOffer = false;
     while (s().status !== 'finished' && guard++ < 80) {
       const st = s();
       if (st.status === 'choosing-rule') {
+        sawOffer = true;
         for (const r of st.offeredRules) expect(dead.has(r.build ?? '')).toBe(false);
         st.selectRule(st.offeredRules[0]);
         s().placePending({ type: 'slot', index: 0 });
@@ -68,6 +74,7 @@ describe('LEGACY (no-config) quick/event behavior', () => {
       else break;
     }
     expect(guard).toBeGreaterThan(1);
+    expect(sawOffer).toBe(true);
   });
 });
 
