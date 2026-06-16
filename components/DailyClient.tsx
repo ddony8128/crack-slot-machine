@@ -153,7 +153,16 @@ export default function DailyClient() {
     storageKey: "daily-exhausted",
   });
 
-  if (status === "finished") return <DailyResultScreen />;
+  // §1: the result screen is the natural "session over" moment, but DailyClient
+  // owns the donation hook/modal — render the modal alongside the result screen
+  // too (it opens only when fullyExhausted, i.e. no attempts left and no refill).
+  if (status === "finished")
+    return (
+      <>
+        <DailyResultScreen />
+        <DonationModal open={donation.open} onClose={donation.close} />
+      </>
+    );
 
   if (status !== "start")
     return (

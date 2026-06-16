@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/gameStore";
 import { startSpire, submitSpire } from "@/lib/client/spireApi";
 import { fetchMe } from "@/lib/client/authApi";
@@ -123,6 +124,8 @@ export default function SpireClient() {
   const setNickname = useGameStore((s) => s.setNickname);
   const reset = useGameStore((s) => s.reset);
   const getActions = useGameStore((s) => s.getActions);
+
+  const router = useRouter();
 
   // Resolve any saved run during the first render (loadSpire is SSR-guarded).
   const [phase, setPhase] = useState<Phase>(() =>
@@ -393,6 +396,22 @@ export default function SpireClient() {
     setResumeSave(null);
     setPhase("loading");
     startFresh();
+  }
+
+  // §8: exit the spire run (Policy A — no save). Confirm, drop the in-progress
+  // run (the pending server run is harmless; a future start supersedes it), then
+  // navigate to the season hub via next/navigation router.
+  function exitRun() {
+    if (
+      !window.confirm(
+        "첨탑을 나가면 현재 런이 사라집니다. 나가시겠어요?",
+      )
+    ) {
+      return;
+    }
+    clearSpire();
+    reset();
+    router.push("/season");
   }
 
   // ── set choice ─────────────────────────────────────────────────────────────
@@ -768,6 +787,18 @@ export default function SpireClient() {
             startStage();
           }}
         />
+        <div className="mx-auto -mt-2 mb-4 flex w-full max-w-md flex-col items-center gap-1 px-4">
+          <button
+            type="button"
+            onClick={exitRun}
+            className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-zinc-300 transition hover:border-rose-400 hover:text-rose-300"
+          >
+            나가기
+          </button>
+          <p className="text-[11px] text-zinc-600">
+            첨탑은 저장되지 않습니다 — 나가면 현재 런이 사라집니다.
+          </p>
+        </div>
       </>
     );
   }
@@ -794,6 +825,15 @@ export default function SpireClient() {
             <span className="text-zinc-400">클리어 {stage - 1}</span>
           </div>
           <p className="mt-1 text-center text-xs text-zinc-500">심볼 주머니: {bag}</p>
+          <details className="text-center">
+            <summary className="cursor-pointer text-[11px] text-zinc-600">
+              심볼 주머니란?
+            </summary>
+            <p className="mx-auto mt-0.5 max-w-md text-[11px] text-zinc-500">
+              각 칸은 매 스핀 이 주머니에서 뽑습니다. 숫자는 최대 등장 횟수가 아니라
+              등장 확률(가중치)입니다.
+            </p>
+          </details>
           {runState.artifacts.length > 0 && (
             <div className="mt-1 flex flex-wrap justify-center gap-1.5">
               {runState.artifacts.map((id) => (
@@ -818,6 +858,18 @@ export default function SpireClient() {
               {runState.rulePool.map(ruleNameOf).join(" · ")}
             </p>
           </details>
+          <div className="mt-2 flex flex-col items-center gap-1">
+            <button
+              type="button"
+              onClick={exitRun}
+              className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-zinc-300 transition hover:border-rose-400 hover:text-rose-300"
+            >
+              나가기
+            </button>
+            <p className="text-[11px] text-zinc-600">
+              첨탑은 저장되지 않습니다 — 나가면 현재 런이 사라집니다.
+            </p>
+          </div>
         </div>
         <GameScreen />
       </>

@@ -13,6 +13,12 @@ import { fetchMe } from "@/lib/client/authApi";
  *
  * Returns `{ open, close }`: wire `open` to <DonationModal open=… /> and
  * `close` to its onClose. Donation is purely cosmetic and never touches scoring.
+ *
+ * Reliability: the "already shown" localStorage key is written on CLOSE (first
+ * dismissal), NOT on trigger. This guarantees the modal is actually seen before
+ * it's suppressed — if `when` flickers true while the modal is never rendered
+ * (a screen transition/unmount), nothing is persisted and the prompt can still
+ * show later. The mount-time read of the key still gates against re-showing.
  */
 export function useDonationPrompt({
   when,
@@ -26,26 +32,33 @@ export function useDonationPrompt({
   const [open, setOpen] = useState(false);
   const key = `rule-slot-donation-${storageKey}`;
 
+  // Read the "already shown" flag once on mount so a prior dismissal gates the
+  // prompt for the rest of this session (and re-reads aren't needed thereafter).
+  const [alreadyShown, setAlreadyShown] = useState<boolean | null>(null);
+  useEffect(() => {
+    // Read the persisted flag once after mount (localStorage is unavailable
+    // during SSR, so this can't be a lazy useState initializer). The synchronous
+    // setState is intentional — we're syncing an external store into React.
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAlreadyShown(!!localStorage.getItem(key));
+    } catch {
+      // localStorage unavailable (private mode etc.) — treat as "skip" so we
+      // never nag in an environment where we can't remember the dismissal.
+      setAlreadyShown(true);
+    }
+  }, [key]);
+
   useEffect(() => {
     if (!when) return;
+    if (alreadyShown !== false) return; // not yet resolved, or already shown
 
     let cancelled = false;
 
-    // Already shown for this key → never again.
-    try {
-      if (localStorage.getItem(key)) return;
-    } catch {
-      // localStorage unavailable (private mode etc.) — just skip the prompt.
-      return;
-    }
-
     const trigger = (supporter: boolean) => {
       if (cancelled || supporter) return;
-      try {
-        localStorage.setItem(key, "1");
-      } catch {
-        // ignore — worst case it shows again next time.
-      }
+      // Do NOT write localStorage here — only open. The "shown" key is written
+      // on close() so the modal is guaranteed to be seen before it's suppressed.
       setOpen(true);
     };
 
@@ -62,7 +75,18 @@ export function useDonationPrompt({
     return () => {
       cancelled = true;
     };
-  }, [when, key, isSupporter]);
+  }, [when, key, isSupporter, alreadyShown]);
 
-  return { open, close: () => setOpen(false) };
+  const close = () => {
+    setOpen(false);
+    // Persist the dismissal so the prompt never shows again for this key.
+    try {
+      localStorage.setItem(key, "1");
+    } catch {
+      // ignore — worst case it shows again next time.
+    }
+    setAlreadyShown(true);
+  };
+
+  return { open, close };
 }
