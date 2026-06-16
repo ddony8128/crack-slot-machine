@@ -21,6 +21,7 @@ export const RULE_BUILD_LABELS: Record<string, string> = {
   monster: '괴물',
   safe: '안전',
   pair: '조합',
+  combo: '조합',
   score: '점수',
 };
 
@@ -395,6 +396,40 @@ export const RULES: Rule[] = [
     phase: 'scoring',
     build: 'score',
     description: '4가 나올 확률이 네 배가 되고, 이번 스핀에서 4는 감점 대신 개당 +20점이 된다.',
+  },
+
+  // ---- combo (A–B board effect; set membership in lib/rules/combos.ts) ----
+  {
+    id: 'ruby-convert',
+    name: '루비 변환',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'combo',
+    description: '0과 7이 루비로 바뀐다.',
+  },
+  {
+    id: 'diamond-convert',
+    name: '다이아 변환',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'combo',
+    description: '4가 다이아몬드로 바뀐다.',
+  },
+  {
+    id: 'vandalism',
+    name: '기물 파손',
+    type: 'reroll',
+    phase: 'sequential',
+    build: 'combo',
+    description: '고양이와 이웃한 교통수단을 모두 다시 굴린다.',
+  },
+  {
+    id: 'shakedown',
+    name: '금품 갈취',
+    type: 'reroll',
+    phase: 'sequential',
+    build: 'combo',
+    description: '드라큘라와 이웃한 보석마다 70점을 얻고, 그 보석들을 다시 굴린다.',
   },
 
   // ---- pair (A–B conditional bonus; DATA in lib/pairRules.ts) ----

@@ -193,6 +193,43 @@ function applyOne(
       }
       return targets;
     }
+    case 'vandalism': {
+      // 기물 파손 (combo cat×vehicle): reroll every VEHICLE cell with an adjacent
+      // (left/right) CAT. Compute targets FIRST (adjacency read before any reroll
+      // changes the board), THEN reroll them. Same pattern as vehicle-crash but
+      // gated on a CAT neighbour.
+      const targets: number[] = [];
+      for (let i = 0; i < working.length; i++) {
+        if (!VEHICLE_SET.has(working[i])) continue;
+        const left = i > 0 && CAT_SET.has(working[i - 1]);
+        const right = i + 1 < working.length && CAT_SET.has(working[i + 1]);
+        if (left || right) targets.push(i);
+      }
+      for (const i of targets) {
+        const old = working[i];
+        write(working, locked, i, rollSymbol(weights, rng));
+        emitReroll(old, i);
+      }
+      return targets;
+    }
+    case 'shakedown': {
+      // 금품 갈취 (combo monster×gem): reroll every GEM cell with an adjacent
+      // (left/right) dracula. Compute targets FIRST, THEN reroll. The +70 per
+      // rerolled gem is EVENT-scored in score.ts (one symbol_rerolled per target).
+      const targets: number[] = [];
+      for (let i = 0; i < working.length; i++) {
+        if (!GEM_SET.has(working[i])) continue;
+        const left = i > 0 && working[i - 1] === 'dracula';
+        const right = i + 1 < working.length && working[i + 1] === 'dracula';
+        if (left || right) targets.push(i);
+      }
+      for (const i of targets) {
+        const old = working[i];
+        write(working, locked, i, rollSymbol(weights, rng));
+        emitReroll(old, i);
+      }
+      return targets;
+    }
     case 'four-parry': {
       const idx = working.findIndex((s) => s === 'four');
       if (idx !== -1) {
@@ -289,6 +326,24 @@ function applyOne(
         const old = working[i];
         if (old === 'zero') {
           if (write(working, locked, i, 'seven')) emitTransform(old, 'seven', i);
+        }
+      }
+      return [];
+    case 'ruby-convert':
+      // 루비 변환 (combo number×gem): every 0 OR 7 becomes a ruby.
+      for (let i = 0; i < working.length; i++) {
+        const old = working[i];
+        if (old === 'zero' || old === 'seven') {
+          if (write(working, locked, i, 'ruby')) emitTransform(old, 'ruby', i);
+        }
+      }
+      return [];
+    case 'diamond-convert':
+      // 다이아 변환 (combo number×gem): every 4 becomes a diamond.
+      for (let i = 0; i < working.length; i++) {
+        const old = working[i];
+        if (old === 'four') {
+          if (write(working, locked, i, 'diamond')) emitTransform(old, 'diamond', i);
         }
       }
       return [];

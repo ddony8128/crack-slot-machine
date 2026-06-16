@@ -41,6 +41,10 @@ export const FOUR_FORTUNE_PER = 20;
 // symbol_rerolled event log, so it reflects fruits AT the rule's moment).
 export const VITAMIN_PER = 5;
 
+// 금품 갈취 (shakedown combo): +this per gem rerolled by the rule (counted via the
+// symbol_rerolled event log tagged 'shakedown', so it reflects gems AT the moment).
+export const SHAKEDOWN_PER = 70;
+
 // 첨탑 hand upgrade: +this per flat upgrade. Final hand = (base + this×flat) × 2^double.
 export const HAND_FLAT_UPGRADE = 50;
 

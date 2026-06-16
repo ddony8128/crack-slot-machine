@@ -21,6 +21,7 @@ import {
   BONUS_77,
   CLEAN_BONUS,
   GEM_BEAUTY,
+  SHAKEDOWN_PER,
 } from '@/data/scoreTable';
 
 /** 첨탑 per-hand upgrades, keyed by computeHand's hand name. */
@@ -40,6 +41,15 @@ function vitaminFruits(events?: EngineEvent[]): number {
   if (!events) return 0;
   return events.filter(
     (e) => e.type === 'symbol_rerolled' && e.byRuleId === 'fruit-vitamin',
+  ).length;
+}
+
+/** +SHAKEDOWN_PER per gem rerolled by 금품 갈취 (shakedown), counted from the event
+ *  log so it reflects the gems adjacent to a dracula AT the rule's moment. */
+function shakedownGems(events?: EngineEvent[]): number {
+  if (!events) return 0;
+  return events.filter(
+    (e) => e.type === 'symbol_rerolled' && e.byRuleId === 'shakedown',
   ).length;
 }
 
@@ -456,6 +466,9 @@ export function scoreItems(
   const vit = vitaminFruits(events);
   if (vit > 0) items.push({ label: `비타민 보충 (${vit}과일)`, points: VITAMIN_PER * vit });
 
+  const shaken = shakedownGems(events);
+  if (shaken > 0) items.push({ label: `금품 갈취 (${shaken})`, points: SHAKEDOWN_PER * shaken });
+
   items.push(...pairBonus(expanded, result).items);
 
   const clean = cleanSweepCount(expanded, result, scoreBoards);
@@ -539,6 +552,7 @@ export function scoreResult(
   // ≥1 gem. No gem -> no points even if slotted.
   if (boardHasGem(result)) bonusScore += GEM_BEAUTY * countRule(expanded, 'gem-beauty');
   bonusScore += VITAMIN_PER * vitaminFruits(events);
+  bonusScore += SHAKEDOWN_PER * shakedownGems(events);
   bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 

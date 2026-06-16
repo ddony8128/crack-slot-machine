@@ -1,6 +1,7 @@
 import type { Rule, SymbolType } from '@/types';
 import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { PAIR_RULES_BY_ID } from '@/lib/pairRules';
+import { COMBO_RULE_SETS } from '@/lib/rules/combos';
 
 /** Builds that map 1:1 to a non-number symbol set whose symbols must be rollable
  *  for the rule to do anything (fruit-surge needs fruits, 우다다다 needs cats, …). */
@@ -10,6 +11,8 @@ const SET_BUILD_IDS = new Set(['fruit', 'gem', 'cat', 'vehicle', 'monster']);
 function requiredSetIds(rule: Rule): string[] {
   const pair = PAIR_RULES_BY_ID[rule.id];
   if (pair) return [pair.setA, pair.setB];
+  const combo = COMBO_RULE_SETS[rule.id];
+  if (combo) return [combo[0], combo[1]];
   if (rule.build && SET_BUILD_IDS.has(rule.build)) return [rule.build];
   return [];
 }
