@@ -10,6 +10,8 @@ import { fetchMe } from "@/lib/client/authApi";
 import GameScreen from "@/components/GameScreen";
 import PuzzleResultScreen from "@/components/PuzzleResultScreen";
 import ModeIntro from "@/components/ModeIntro";
+import SymbolView from "@/components/SymbolView";
+import type { PuzzleGoal } from "@/lib/puzzle/config";
 
 function startErrorMessage(code: string): string {
   if (code === "unauthorized") return "로그인이 필요합니다.";
@@ -21,6 +23,8 @@ function startErrorMessage(code: string): string {
 
 export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
   const status = useGameStore((s) => s.status);
+  const spinIndex = useGameStore((s) => s.spinIndex);
+  const maxSpins = useGameStore((s) => s.maxSpins);
   const setNickname = useGameStore((s) => s.setNickname);
   const beginRun = useGameStore((s) => s.beginRun);
   const configureRun = useGameStore((s) => s.configureRun);
@@ -72,13 +76,19 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
       <div className="flex w-full flex-1 flex-col">
         {puzzle && (
           <div className="mx-auto w-full max-w-md px-4 pt-4">
-            <div className="space-y-1 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center">
-              <p className="text-sm font-bold text-amber-200">
-                목표: {puzzle.goalText}
-              </p>
+            <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-amber-200/80">
+                  목표
+                </span>
+                <PuzzleGoalTiles goals={puzzle.goals} />
+              </div>
               <p className="text-xs text-amber-200/80">
-                스핀 제한 {puzzle.spinLimit}회 · 규칙은 가방에서 시작합니다 —
-                슬롯으로 드래그해 배치하세요.
+                남은 스핀{" "}
+                <span className="font-bold text-amber-100">
+                  {Math.max(0, maxSpins - spinIndex)}
+                </span>
+                회 · 규칙은 가방에서 시작합니다 — 슬롯으로 드래그해 배치하세요.
               </p>
             </div>
           </div>
@@ -161,5 +171,40 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
         퍼즐 목록
       </Link>
     </main>
+  );
+}
+
+/**
+ * Renders a puzzle's goal(s) as compact tiles for the in-game banner: an
+ * `exact_board` goal shows its 5 target cells via SymbolView; a
+ * `contains_symbol_count` goal shows "<symbol> ×<n>". Other goal types fall back
+ * to nothing here (Season 1 ships only exact_board), so the banner stays clean.
+ */
+function PuzzleGoalTiles({ goals }: { goals: PuzzleGoal[] }) {
+  return (
+    <span className="inline-flex flex-wrap items-center justify-center gap-1">
+      {goals.map((goal, gi) => {
+        if (goal.type === "exact_board") {
+          return (
+            <span key={gi} className="inline-flex items-center gap-0.5">
+              {goal.board.map((sym, i) => (
+                <SymbolView key={i} symbol={sym} size="sm" />
+              ))}
+            </span>
+          );
+        }
+        if (goal.type === "contains_symbol_count") {
+          return (
+            <span key={gi} className="inline-flex items-center gap-1">
+              <SymbolView symbol={goal.symbolId} size="sm" />
+              <span className="text-sm font-bold text-amber-100">
+                ×{goal.count}
+              </span>
+            </span>
+          );
+        }
+        return null;
+      })}
+    </span>
   );
 }

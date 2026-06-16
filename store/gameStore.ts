@@ -14,6 +14,9 @@ import { detectSpecials } from '@/lib/specials';
 import { rulePlayable } from '@/lib/rules/playable';
 import { RULES, RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS, CATS } from '@/data/symbols';
+import type { PuzzleGoal } from '@/lib/puzzle/config';
+import { checkPuzzleRun, type GoalContext } from '@/lib/puzzle/goals';
+import { computeHand } from '@/lib/score';
 
 const MAX_SPINS = 7;
 const SLOT_COUNT = 5;
@@ -54,6 +57,12 @@ export type RunConfig = {
   // CLEAN SWEEP scoring: position-aware (at the rule's moment) when true; the
   // legacy final-board reading when unset (빠른 게임/이벤트). Season modes set true.
   positionalCleanSweep?: boolean;
+  // Puzzle goals: when set (puzzle runs ONLY), the run ENDS IMMEDIATELY (status
+  // 'finished') as soon as every goal is met across the resolved spins, rather
+  // than waiting for maxSpins. quick/daily/spire leave this unset → unchanged.
+  // Reconstructed identically server-side (puzzleRunConfig), so client + replay
+  // end the run at the same spin from seed + actions.
+  puzzleGoals?: PuzzleGoal[];
 };
 
 /**
@@ -350,14 +359,34 @@ function buildInitializer(initialRng: Rng): Initializer {
               done: true,
             };
 
+      const nextSpinLogs = [...state.spinLogs, log];
+
+      // Puzzle immediate-clear: when this run carries puzzleGoals, end the run the
+      // INSTANT every goal is satisfied across the resolved spins (incl. this one),
+      // instead of forcing the player through every spin. Driven purely by the
+      // deterministic spin logs + config, so the server replay (same puzzleGoals)
+      // ends at the identical spin. No-op for quick/daily/spire (no puzzleGoals).
+      let resolvedStatus: GameState['status'] = 'spin-result';
+      const goals = runConfig?.puzzleGoals;
+      if (goals && goals.length > 0) {
+        const ctxs: GoalContext[] = nextSpinLogs.map((l) => ({
+          board: l.finalResult,
+          hand: computeHand(l.finalResult).hand,
+          spinScore: l.roundScore,
+        }));
+        if (checkPuzzleRun(goals, ctxs).count === goals.length) {
+          resolvedStatus = 'finished';
+        }
+      }
+
       set({
         totalScore: state.totalScore + roundScore,
-        spinLogs: [...state.spinLogs, log],
+        spinLogs: nextSpinLogs,
         currentResult: finalResult,
         previousResult: finalResult,
         nextMultiplier: specials.nextMultiplier,
         extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
-        status: 'spin-result',
+        status: resolvedStatus,
         pendingSelection: null,
         revealStream,
         // Carry this spin's parking holds to the NEXT spin's preHeld pass. This

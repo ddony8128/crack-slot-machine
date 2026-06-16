@@ -12,6 +12,7 @@ import SeasonScoreRise from "@/components/SeasonScoreRise";
 import type { SeasonScoreChange } from "@/lib/season/scoring";
 import type { PuzzleDistribution } from "@/lib/db/types";
 import { PUZZLES_BY_KEY } from "@/lib/puzzle/config";
+import { puzzleScore } from "@/lib/season/scoring";
 
 type SubmitState =
   | { phase: "submitting" }
@@ -112,6 +113,8 @@ export default function PuzzleResultScreen({
       ? state.result
       : null;
   const change = scoreChange ?? done?.scoreChange;
+  const spinLimit =
+    PUZZLES_BY_KEY[puzzleKey]?.spinLimit ?? done?.spinCount ?? 0;
 
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
@@ -139,15 +142,42 @@ export default function PuzzleResultScreen({
               </p>
             </div>
 
-            <p className="text-sm text-zinc-400">
-              사용 스핀:{" "}
-              <span className="font-bold text-zinc-200">{done.spinCount}</span>회
-            </p>
+            {done.cleared ? (
+              <div className="space-y-1 text-sm text-zinc-400">
+                <p>
+                  클리어 스핀:{" "}
+                  <span className="font-bold text-zinc-200">
+                    {done.clearSpin}
+                  </span>{" "}
+                  / {spinLimit}
+                </p>
+                <p>
+                  남긴 스핀:{" "}
+                  <span className="font-bold text-emerald-300">
+                    {done.remainingSpins}
+                  </span>
+                </p>
+                <p>
+                  획득 점수:{" "}
+                  <span className="font-bold text-amber-300">
+                    {puzzleScore(spinLimit, done.clearSpin ?? spinLimit)}
+                  </span>
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-400">
+                사용 스핀:{" "}
+                <span className="font-bold text-zinc-200">
+                  {done.spinCount}
+                </span>
+                회
+              </p>
+            )}
 
             <Distribution
               distribution={done.distribution}
-              spinLimit={PUZZLES_BY_KEY[puzzleKey]?.spinLimit ?? done.spinCount}
-              mineSpin={done.cleared ? done.spinCount : null}
+              spinLimit={spinLimit}
+              mineSpin={done.cleared ? done.clearSpin : null}
             />
           </>
         ) : (
