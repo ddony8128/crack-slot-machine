@@ -639,6 +639,8 @@ describe('MemoryDb quick best scores', () => {
       nickname: string;
       score: number;
       best: number;
+      // Member runs pass a playerId; guests omit it (null) like quick/start does.
+      playerId?: string | null;
       submittedAt?: string;
       status?: 'submitted' | 'rejected';
       verified?: boolean;
@@ -647,6 +649,7 @@ describe('MemoryDb quick best scores', () => {
   ) {
     const run = await db.createRun({
       seasonId,
+      playerId: r.playerId ?? null,
       mode: r.mode ?? 'quick',
       seed: 's',
       ...VER,
@@ -659,23 +662,23 @@ describe('MemoryDb quick best scores', () => {
     });
   }
 
-  it('dedupes by nickname keeping the higher score; counts only quick+verified+matching-season', async () => {
+  it('dedupes a member by playerId keeping the higher score; counts only quick+verified+matching-season', async () => {
     const db = new MemoryDb();
     const season = await db.getActiveSeason();
     const seasonId = season!.id;
 
-    // Same nickname twice -> keep the higher score.
-    await seedQuick(db, seasonId, { nickname: 'Alice', score: 100, best: 10 });
-    await seedQuick(db, seasonId, { nickname: 'Alice', score: 250, best: 30 });
-    // Another nickname.
-    await seedQuick(db, seasonId, { nickname: 'Bob', score: 200, best: 20 });
+    // Same member (playerId p1) twice -> keep the higher score, one entry.
+    await seedQuick(db, seasonId, { nickname: 'Alice', score: 100, best: 10, playerId: 'p1' });
+    await seedQuick(db, seasonId, { nickname: 'Alice', score: 250, best: 30, playerId: 'p1' });
+    // Another member.
+    await seedQuick(db, seasonId, { nickname: 'Bob', score: 200, best: 20, playerId: 'p2' });
 
     // Excluded: rejected run.
-    await seedQuick(db, seasonId, { nickname: 'Cheater', score: 9999, best: 999, status: 'rejected', verified: false });
+    await seedQuick(db, seasonId, { nickname: 'Cheater', score: 9999, best: 999, playerId: 'p3', status: 'rejected', verified: false });
     // Excluded: not verified.
-    await seedQuick(db, seasonId, { nickname: 'Unver', score: 8888, best: 888, verified: false });
+    await seedQuick(db, seasonId, { nickname: 'Unver', score: 8888, best: 888, playerId: 'p4', verified: false });
     // Excluded: wrong mode (daily).
-    await seedQuick(db, seasonId, { nickname: 'Daily', score: 7777, best: 777, mode: 'daily' });
+    await seedQuick(db, seasonId, { nickname: 'Daily', score: 7777, best: 777, playerId: 'p5', mode: 'daily' });
     // Excluded: different season bucket (null).
     await seedQuick(db, null, { nickname: 'Guest', score: 6666, best: 666 });
 
@@ -687,6 +690,56 @@ describe('MemoryDb quick best scores', () => {
     // The null bucket sees only the guest run.
     const nullRows = await db.listQuickBestScores(QUICK_SCOPE(null));
     expect(nullRows.map((r) => r.nickname)).toEqual(['Guest']);
+  });
+
+  it('does NOT merge distinct guests (playerId null) that share a display name', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const seasonId = season!.id;
+
+    // Two different guests both rendered as "게스트-1234": each keeps its own row.
+    await seedQuick(db, seasonId, { nickname: '게스트-1234', score: 300, best: 30 });
+    await seedQuick(db, seasonId, { nickname: '게스트-1234', score: 100, best: 10 });
+
+    const rows = await db.listQuickBestScores(QUICK_SCOPE(seasonId));
+    // Two distinct entries, highest first — neither masks the other.
+    expect(rows.map((r) => r.score)).toEqual([300, 100]);
+    expect(rows.map((r) => r.nickname)).toEqual(['게스트-1234', '게스트-1234']);
+  });
+
+  it('does NOT let a guest collide with a member who shares the same nickname', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const seasonId = season!.id;
+
+    // Member "Nova" and a guest who typed the same name stay separate.
+    await seedQuick(db, seasonId, { nickname: 'Nova', score: 500, best: 50, playerId: 'p1' });
+    await seedQuick(db, seasonId, { nickname: 'Nova', score: 400, best: 40 });
+
+    const rows = await db.listQuickBestScores(QUICK_SCOPE(seasonId));
+    expect(rows.map((r) => r.score)).toEqual([500, 400]);
+    expect(rows.every((r) => r.nickname === 'Nova')).toBe(true);
+  });
+
+  it('caps the leaderboard at the TOP-N limit', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+    const seasonId = season!.id;
+
+    // 105 distinct member runs -> only the top 100 are returned.
+    for (let i = 0; i < 105; i++) {
+      await seedQuick(db, seasonId, {
+        nickname: `m${i}`,
+        score: 1000 - i,
+        best: 10,
+        playerId: `p${i}`,
+      });
+    }
+
+    const rows = await db.listQuickBestScores(QUICK_SCOPE(seasonId));
+    expect(rows.length).toBe(100);
+    expect(rows[0].score).toBe(1000); // highest first
+    expect(rows[99].score).toBe(901); // 100th
   });
 
   it('excludes mismatched versions', async () => {

@@ -62,6 +62,9 @@ type QuickEntry = {
   submittedAt: string;
 };
 
+/** Top-N cap for the quick leaderboard (the UI only renders a TOP slice). */
+const QUICK_LEADERBOARD_LIMIT = 100;
+
 /** Quick ranking order: score desc, then bestSpinScore desc, then submittedAt asc. */
 function quickBetter(a: QuickEntry, b: QuickEntry): boolean {
   if (a.score !== b.score) return a.score > b.score;
@@ -618,27 +621,30 @@ export class MemoryDb implements Db {
         r.rulesetVersion === input.rulesetVersion,
     );
 
-    // Dedupe by nickname, keeping the best:
-    // score desc, then bestSpinScore desc, then submittedAt asc.
-    const best = new Map<
-      string,
-      { nickname: string; score: number; bestSpinScore: number; submittedAt: string }
-    >();
+    // Dedupe by IDENTITY, not display name: members collapse to one best per
+    // playerId; guests (playerId null) have no persisted id, so each guest run
+    // is its own entry (keyed by runId) — two guests sharing a display name, or
+    // a guest colliding with a member nickname, never merge/mask each other.
+    // Within a key, keep the best: score desc, then bestSpinScore desc, then
+    // submittedAt asc. The nickname is still carried for display.
+    const best = new Map<string, QuickEntry>();
     for (const r of rows) {
-      const nickname = r.nickname ?? 'Anonymous';
-      const candidate = {
-        nickname,
+      const key = r.playerId !== null ? `player:${r.playerId}` : `run:${r.id}`;
+      const candidate: QuickEntry = {
+        nickname: r.nickname ?? 'Anonymous',
         score: r.score ?? 0,
         bestSpinScore: r.bestSpinScore ?? 0,
         submittedAt: r.submittedAt ?? '',
       };
-      const current = best.get(nickname);
+      const current = best.get(key);
       if (!current || quickBetter(candidate, current)) {
-        best.set(nickname, candidate);
+        best.set(key, candidate);
       }
     }
 
-    return [...best.values()].sort((a, b) => (quickBetter(a, b) ? -1 : quickBetter(b, a) ? 1 : 0));
+    return [...best.values()]
+      .sort((a, b) => (quickBetter(a, b) ? -1 : quickBetter(b, a) ? 1 : 0))
+      .slice(0, QUICK_LEADERBOARD_LIMIT);
   }
 
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────

@@ -11,8 +11,10 @@ import { buildClientResults } from "@/lib/clientResults";
 import SeasonScoreRise from "@/components/SeasonScoreRise";
 import type { SeasonScoreChange } from "@/lib/season/scoring";
 import type { PuzzleDistribution } from "@/lib/db/types";
-import { PUZZLES_BY_KEY } from "@/lib/puzzle/config";
+import { PUZZLES, PUZZLES_BY_KEY } from "@/lib/puzzle/config";
 import { puzzleScore } from "@/lib/season/scoring";
+import DonationModal from "@/components/DonationModal";
+import { useDonationPrompt } from "@/components/useDonationPrompt";
 
 type SubmitState =
   | { phase: "submitting" }
@@ -22,10 +24,16 @@ type SubmitState =
 export default function PuzzleResultScreen({
   puzzleKey,
   scoreChange,
+  onRetry,
+  retrying,
 }: {
   puzzleKey: string;
   /** Optional override; otherwise read from this screen's own submit response. */
   scoreChange?: SeasonScoreChange;
+  /** 다시 도전 handler — re-runs the full puzzle start flow (fresh server run). */
+  onRetry?: () => void;
+  /** True while the retry's new server run is being created (disables the button). */
+  retrying?: boolean;
 }) {
   const totalScore = useGameStore((s) => s.totalScore);
   const spinLogs = useGameStore((s) => s.spinLogs);
@@ -53,6 +61,23 @@ export default function PuzzleResultScreen({
     // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Surface the 후원 안내 right here when this clear means EVERY puzzle is now done,
+  // so players who stay on the result screen (instead of returning to the list)
+  // still see it. p02 is the last puzzle and unlocks only after p01 is cleared, so
+  // clearing it ⟹ all puzzles cleared. Reuses the SAME once-per-key gate
+  // ("all-puzzles-cleared") as PuzzleListDonationPrompt, so whichever fires first
+  // wins and it never double-fires. Hook is called before any early return to
+  // satisfy the Rules of Hooks.
+  const clearedAll =
+    state.phase === "done" &&
+    state.result.status === "submitted" &&
+    state.result.cleared &&
+    puzzleKey === PUZZLES[PUZZLES.length - 1]?.key;
+  const donation = useDonationPrompt({
+    when: clearedAll,
+    storageKey: "all-puzzles-cleared",
+  });
 
   const rejected = state.phase === "done" && state.result.status === "rejected";
   const rejectReason =
@@ -93,10 +118,11 @@ export default function PuzzleResultScreen({
         <p className="text-zinc-300">기록이 등록되지 않았습니다.</p>
         <button
           type="button"
-          onClick={reset}
-          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+          onClick={onRetry ?? reset}
+          disabled={retrying}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
         >
-          다시 도전
+          {retrying ? "준비 중…" : "다시 도전"}
         </button>
         <Link
           href="/season/puzzle"
@@ -199,11 +225,14 @@ export default function PuzzleResultScreen({
 
       <button
         type="button"
-        onClick={reset}
-        className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+        onClick={onRetry ?? reset}
+        disabled={retrying}
+        className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
       >
-        다시 도전
+        {retrying ? "준비 중…" : "다시 도전"}
       </button>
+
+      <DonationModal open={donation.open} onClose={donation.close} />
     </main>
   );
 }

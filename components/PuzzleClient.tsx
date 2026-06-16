@@ -7,6 +7,7 @@ import { startPuzzle } from "@/lib/client/puzzleApi";
 import { puzzleRunConfig } from "@/lib/puzzle/run";
 import { PUZZLES_BY_KEY } from "@/lib/puzzle/config";
 import { fetchMe } from "@/lib/client/authApi";
+import { RULES_BY_ID, RULE_PHASE_LABELS, RULE_BUILD_LABELS } from "@/data/rules";
 import GameScreen from "@/components/GameScreen";
 import PuzzleResultScreen from "@/components/PuzzleResultScreen";
 import ModeIntro from "@/components/ModeIntro";
@@ -50,6 +51,13 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
     setStarting(true);
     setStartError(null);
     try {
+      // Always begin from a clean store. On a fresh page load this is a no-op
+      // (the mount effect already reset); on 다시 도전 it clears the FINISHED run +
+      // its resolved runId so we don't try to reuse/submit an already-resolved run
+      // (which the server rejects with 409 — each run is single-submit).
+      reset();
+      // A new server run → a fresh runId + seed. The old run stays resolved on the
+      // server; this is what makes 다시 도전 a genuinely new attempt.
       const run = await startPuzzle(puzzleKey);
       // Apply the puzzle's fixed board / rule bag / spin limit BEFORE startGame()
       // so the client run matches the server replay.
@@ -68,7 +76,16 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
   }
 
   if (status === "finished") {
-    return <PuzzleResultScreen puzzleKey={puzzleKey} />;
+    // 다시 도전 re-runs the full start flow (reset → new server run → startGame),
+    // so the retry plays the SAME puzzle as a brand-new attempt instead of falling
+    // back to a legacy run with a cleared runConfig.
+    return (
+      <PuzzleResultScreen
+        puzzleKey={puzzleKey}
+        onRetry={handleStart}
+        retrying={starting}
+      />
+    );
   }
 
   if (status !== "start") {
@@ -90,6 +107,7 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
                 </span>
                 회 · 규칙은 가방에서 시작합니다 — 슬롯으로 드래그해 배치하세요.
               </p>
+              <PuzzleRuleReference ruleIds={puzzle.availableRuleIds} />
             </div>
           </div>
         )}
@@ -152,6 +170,8 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
           </p>
         </div>
 
+        <PuzzleRuleReference ruleIds={puzzle.availableRuleIds} />
+
         <button
           type="button"
           onClick={handleStart}
@@ -171,6 +191,55 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
         퍼즐 목록
       </Link>
     </main>
+  );
+}
+
+/**
+ * Collapsible reference listing every rule in the puzzle's bag with its name +
+ * effect (pulled from RULES_BY_ID). In puzzle mode provisioning is 'fixed', so
+ * RulePicker (which is what normally surfaces a rule's description during
+ * 'choosing-rule') never renders — players would otherwise see only rule NAMES on
+ * the tiles with no way to learn what each one does. This panel fills that gap.
+ */
+function PuzzleRuleReference({ ruleIds }: { ruleIds: string[] }) {
+  const [open, setOpen] = useState(false);
+  const rules = ruleIds
+    .map((id) => RULES_BY_ID[id])
+    .filter((r): r is NonNullable<typeof r> => Boolean(r));
+  if (rules.length === 0) return null;
+
+  return (
+    <details
+      open={open}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+      className="rounded-lg border border-amber-500/20 bg-zinc-950/40 text-left"
+    >
+      <summary className="cursor-pointer list-none px-3 py-2 text-center text-xs font-bold text-amber-200/90 transition hover:text-amber-100">
+        규칙 설명 {open ? "▲" : "▼"}
+      </summary>
+      <ul className="space-y-2 px-3 pb-3 pt-1">
+        {rules.map((rule) => (
+          <li key={rule.id} className="space-y-0.5">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="text-sm font-bold text-emerald-300">
+                {rule.name}
+              </span>
+              <span className="rounded-full border border-indigo-700/60 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-indigo-300">
+                {RULE_PHASE_LABELS[rule.phase]}
+              </span>
+              {rule.build && RULE_BUILD_LABELS[rule.build] && (
+                <span className="rounded-full border border-zinc-600/60 bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-300">
+                  {RULE_BUILD_LABELS[rule.build]}
+                </span>
+              )}
+            </span>
+            <p className="text-xs leading-snug text-zinc-400">
+              {rule.description}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

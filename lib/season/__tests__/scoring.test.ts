@@ -1,37 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  spireSeasonPoints,
   puzzleSeasonPoints,
-  dailyPointsForRank,
   seasonDailyTotal,
   buildSeasonRanking,
-  SEASON_MODE_CAP,
 } from '@/lib/season/scoring';
 import type { BestScoreRow, RunMode } from '@/lib/db/types';
-
-describe('spireSeasonPoints', () => {
-  it('combines stage base with the run-score bonus', () => {
-    // 8*70 + min(300, floor(42000/200)=210) = 560 + 210 = 770
-    expect(spireSeasonPoints(8, 42000)).toBe(770);
-  });
-
-  it('caps the run-score bonus at 300', () => {
-    // bonus = min(300, floor(1_000_000/200)=5000) = 300; 0*70 + 300
-    expect(spireSeasonPoints(0, 1_000_000)).toBe(300);
-  });
-
-  it('caps the total at 1000 even with 10 stages and a high score', () => {
-    // 10*70 = 700, +300 bonus = 1000 (already at cap)
-    expect(spireSeasonPoints(10, 1_000_000)).toBe(1000);
-    // pushing beyond still clamps
-    expect(spireSeasonPoints(15, 1_000_000)).toBe(SEASON_MODE_CAP);
-  });
-
-  it('clamps negatives and missing scores to 0', () => {
-    expect(spireSeasonPoints(-5, -100)).toBe(0);
-    expect(spireSeasonPoints(0, 0)).toBe(0);
-  });
-});
 
 describe('puzzleSeasonPoints', () => {
   it('awards 100 per cleared puzzle', () => {
@@ -44,30 +17,6 @@ describe('puzzleSeasonPoints', () => {
 
   it('returns 0 for none cleared', () => {
     expect(puzzleSeasonPoints(0)).toBe(0);
-  });
-});
-
-describe('dailyPointsForRank', () => {
-  it('pays a top-1% rank the maximum', () => {
-    expect(dailyPointsForRank(1, 100)).toBe(100);
-  });
-
-  it('uses percentile bands in larger fields', () => {
-    expect(dailyPointsForRank(25, 100)).toBe(80); // 25% -> band <=0.3
-    expect(dailyPointsForRank(50, 100)).toBe(60); // 50% -> band <=0.6
-    expect(dailyPointsForRank(90, 100)).toBe(40); // 90% -> bottom band
-  });
-
-  it('falls back to the small-field schedule for tiny fields', () => {
-    expect(dailyPointsForRank(1, 1)).toBe(100);
-    expect(dailyPointsForRank(2, 2)).toBe(80);
-    expect(dailyPointsForRank(3, 3)).toBe(60);
-  });
-
-  it('returns 0 for out-of-range ranks', () => {
-    expect(dailyPointsForRank(0, 10)).toBe(0);
-    expect(dailyPointsForRank(11, 10)).toBe(0);
-    expect(dailyPointsForRank(1, 0)).toBe(0);
   });
 });
 

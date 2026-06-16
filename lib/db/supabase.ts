@@ -37,6 +37,15 @@ function likeEscape(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
+/** Top-N cap for the quick leaderboard (the UI only renders a TOP slice). */
+const QUICK_LEADERBOARD_LIMIT = 100;
+/**
+ * Row window scanned before per-identity dedupe. Larger than the returned TOP-N
+ * so guest runs (one entry each) and members (one best each) still fill the
+ * board even when many low runs precede them in the best-first order.
+ */
+const QUICK_LEADERBOARD_FETCH_LIMIT = 1000;
+
 /**
  * From an ilike/eq result set (capped at 2 rows by the caller), resolve the row
  * for a case-insensitive contact lookup WITHOUT throwing on >1 match. Prefers an
@@ -831,7 +840,7 @@ export class SupabaseDb implements Db {
   > {
     let query = this.sb
       .from('game_runs')
-      .select('nickname, score, best_spin_score, submitted_at')
+      .select('id, player_id, nickname, score, best_spin_score, submitted_at')
       .eq('mode', 'quick')
       .eq('status', 'submitted')
       .eq('verified', true)
@@ -839,7 +848,10 @@ export class SupabaseDb implements Db {
       .eq('ruleset_version', input.rulesetVersion)
       .order('score', { ascending: false })
       .order('best_spin_score', { ascending: false })
-      .order('submitted_at', { ascending: true });
+      .order('submitted_at', { ascending: true })
+      // Bound the scan. Rows arrive best-first, and members collapse to one
+      // entry each, so this window comfortably covers the TOP-N we return.
+      .limit(QUICK_LEADERBOARD_FETCH_LIMIT);
 
     // Match the season bucket, treating null as the no-season bucket.
     query =
@@ -850,29 +862,35 @@ export class SupabaseDb implements Db {
     const { data, error } = await query;
     if (error) throw error;
 
-    // Dedupe by nickname keeping the best. Rows arrive already sorted
-    // (score desc, best_spin_score desc, submitted_at asc), so the first
-    // occurrence per nickname is the best one.
+    // Dedupe by IDENTITY, not display name: members collapse to one best per
+    // player_id; guests (player_id null) have no persisted id, so each guest run
+    // is its own entry (keyed by run id) — two guests sharing a display name, or
+    // a guest colliding with a member nickname, never merge/mask each other.
+    // Rows arrive already sorted (score desc, best_spin_score desc,
+    // submitted_at asc), so the first occurrence per key is the best one. The
+    // nickname is still carried for display.
     const best = new Map<
       string,
       { nickname: string; score: number; bestSpinScore: number; submittedAt: string }
     >();
     for (const row of (data ?? []) as any[]) {
-      const nickname = (row.nickname ?? 'Anonymous') as string;
-      if (best.has(nickname)) continue;
-      best.set(nickname, {
-        nickname,
+      const key = row.player_id != null ? `player:${row.player_id}` : `run:${row.id}`;
+      if (best.has(key)) continue;
+      best.set(key, {
+        nickname: (row.nickname ?? 'Anonymous') as string,
         score: row.score ?? 0,
         bestSpinScore: row.best_spin_score ?? 0,
         submittedAt: row.submitted_at ?? '',
       });
     }
 
-    return [...best.values()].sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.bestSpinScore !== a.bestSpinScore) return b.bestSpinScore - a.bestSpinScore;
-      return a.submittedAt < b.submittedAt ? -1 : a.submittedAt > b.submittedAt ? 1 : 0;
-    });
+    return [...best.values()]
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.bestSpinScore !== a.bestSpinScore) return b.bestSpinScore - a.bestSpinScore;
+        return a.submittedAt < b.submittedAt ? -1 : a.submittedAt > b.submittedAt ? 1 : 0;
+      })
+      .slice(0, QUICK_LEADERBOARD_LIMIT);
   }
 
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────

@@ -64,17 +64,11 @@ export default function SpinStage({
   const shakeClass = !reduced && rolling ? "stage-shake" : "";
   const riseClass = reduced ? "" : "stage-rise";
 
-  return (
-    <div
-      className={`fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm ${
-        reduced ? "" : "stage-in"
-      }`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={picking ? "칸 선택" : "스핀 진행 중"}
-    >
-      <div className={`w-full max-w-3xl ${riseClass}`}>
-        <div className={shakeClass}>
+  // Inner content (announce area + large reels) is identical in both paths —
+  // only the surrounding chrome differs.
+  const inner = (
+    <div className={`w-full max-w-3xl ${riseClass}`}>
+      <div className={shakeClass}>
           {/* Prominent announce area ABOVE the reels. */}
           <div className="mb-6 flex min-h-[4.5rem] items-center justify-center sm:min-h-[5.5rem]">
             {picking ? (
@@ -121,8 +115,36 @@ export default function SpinStage({
             stage
             hideSpinButton
           />
-        </div>
       </div>
+    </div>
+  );
+
+  // Reduced-motion: skip the full-screen takeover (no fixed overlay, dimming, or
+  // backdrop blur). Render a calm inline reveal in the normal document flow so
+  // the rest of the UI — including the StatusBar 규칙/점수표 buttons — stays
+  // visible and reachable in every status. Still a labelled region for AT.
+  if (reduced) {
+    return (
+      <div
+        className="flex w-full items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900/60 px-4 py-6"
+        role="group"
+        aria-label={picking ? "칸 선택" : "스핀 진행 중"}
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  // Full-motion: cinematic full-screen centered overlay that dims/blurs the rest
+  // of the UI.
+  return (
+    <div
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm stage-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label={picking ? "칸 선택" : "스핀 진행 중"}
+    >
+      {inner}
     </div>
   );
 }
