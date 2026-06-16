@@ -157,6 +157,42 @@ function applyOne(
       }
       return rolled;
     }
+    case 'cat-turf': {
+      // 영역 다툼: reroll every cat cell that has an adjacent (left/right) cat.
+      // Compute the targets FIRST (so adjacency is read at rule time, BEFORE any
+      // reroll changes the board), THEN reroll them. Mirrors four-shield but gated
+      // on the adjacency, like setBonuses' adjacent-penalty.
+      const targets: number[] = [];
+      for (let i = 0; i < working.length; i++) {
+        if (!CAT_SET.has(working[i])) continue;
+        const left = i > 0 && CAT_SET.has(working[i - 1]);
+        const right = i + 1 < working.length && CAT_SET.has(working[i + 1]);
+        if (left || right) targets.push(i);
+      }
+      for (const i of targets) {
+        const old = working[i];
+        write(working, locked, i, rollSymbol(weights, rng));
+        emitReroll(old, i);
+      }
+      return targets;
+    }
+    case 'vehicle-crash': {
+      // 교통사고: reroll every vehicle cell that has an adjacent (left/right)
+      // vehicle. Same adjacency-gated pattern as cat-turf, with VEHICLE_SET.
+      const targets: number[] = [];
+      for (let i = 0; i < working.length; i++) {
+        if (!VEHICLE_SET.has(working[i])) continue;
+        const left = i > 0 && VEHICLE_SET.has(working[i - 1]);
+        const right = i + 1 < working.length && VEHICLE_SET.has(working[i + 1]);
+        if (left || right) targets.push(i);
+      }
+      for (const i of targets) {
+        const old = working[i];
+        write(working, locked, i, rollSymbol(weights, rng));
+        emitReroll(old, i);
+      }
+      return targets;
+    }
     case 'four-parry': {
       const idx = working.findIndex((s) => s === 'four');
       if (idx !== -1) {

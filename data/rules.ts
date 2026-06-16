@@ -118,6 +118,14 @@ export const RULES: Rule[] = [
     build: 'gem',
     description: '가장 왼쪽의 보석이 아닌 칸을 보석이 나올 때까지 다시 굴린다.',
   },
+  {
+    id: 'gem-beauty',
+    name: '미의 추구',
+    type: 'score',
+    phase: 'scoring',
+    build: 'gem',
+    description: '보석이 하나라도 있으면 100점을 얻는다.',
+  },
 
   // ---- color ----
   {
@@ -244,6 +252,14 @@ export const RULES: Rule[] = [
     build: 'cat',
     description: '가장 왼쪽의 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽 칸과 자리를 바꾼다. (가능한 방향 중 무작위)',
   },
+  {
+    id: 'cat-turf',
+    name: '영역 다툼',
+    type: 'reroll',
+    phase: 'sequential',
+    build: 'cat',
+    description: '고양이와 이웃한 고양이를 모두 다시 굴린다.',
+  },
 
   // ---- vehicle ----
   {
@@ -277,6 +293,14 @@ export const RULES: Rule[] = [
     phase: 'sequential',
     build: 'vehicle',
     description: '가장 왼쪽 배의 양옆 칸이 그 배 심볼을 복사한다.',
+  },
+  {
+    id: 'vehicle-crash',
+    name: '교통사고',
+    type: 'reroll',
+    phase: 'sequential',
+    build: 'vehicle',
+    description: '이웃한 교통수단이 있는 교통수단들을 모두 다시 굴린다.',
   },
 
   // ---- monster ----

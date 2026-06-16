@@ -47,6 +47,9 @@ export const HAND_FLAT_UPGRADE = 50;
 // Score-rule bonuses.
 export const BONUS_77 = 77;
 export const CLEAN_BONUS = 120;
+// 미의 추구 (gem-beauty): +this when the board has ≥1 gem-set symbol, per rule
+// occurrence (×stacks via copy-above). Gated on a gem being present.
+export const GEM_BEAUTY = 100;
 
 // Multiplier triggers.
 export const ZERO_DRAW_MIN = 3; // zeros >= 3 grants an extra rule pick

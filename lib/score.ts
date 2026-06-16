@@ -20,6 +20,7 @@ import {
   HAND_FLAT_UPGRADE,
   BONUS_77,
   CLEAN_BONUS,
+  GEM_BEAUTY,
 } from '@/data/scoreTable';
 
 /** 첨탑 per-hand upgrades, keyed by computeHand's hand name. */
@@ -59,6 +60,12 @@ function parkingHolds(events?: EngineEvent[]): number {
 /** Draculas on the (final) board — drives the 가족 만들기 family bonus. */
 function countDraculas(result: SymbolType[]): number {
   return result.filter((s) => s === 'dracula').length;
+}
+
+/** Does the (final) board contain ≥1 gem-set symbol? Drives 미의 추구. */
+function boardHasGem(result: SymbolType[]): boolean {
+  const gem = SYMBOL_SETS_BY_ID['gem'];
+  return result.some((s) => symbolInSet(s, gem));
 }
 
 // Map an EngineEvent.type to the SetBonus.event tag it satisfies, plus where to
@@ -441,6 +448,11 @@ export function scoreItems(
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
 
+  // 미의 추구 (gem-beauty): mirror bonus-77, gated on a gem being present.
+  const beauty = countRule(expanded, 'gem-beauty');
+  if (beauty > 0 && boardHasGem(result))
+    items.push({ label: beauty > 1 ? `미의 추구 ×${beauty}` : '미의 추구 ×1', points: GEM_BEAUTY * beauty });
+
   const vit = vitaminFruits(events);
   if (vit > 0) items.push({ label: `비타민 보충 (${vit}과일)`, points: VITAMIN_PER * vit });
 
@@ -523,6 +535,9 @@ export function scoreResult(
 
   let bonusScore = setBonuses(result, events).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
+  // 미의 추구 (gem-beauty): +GEM_BEAUTY per rule occurrence, ONLY if the board has
+  // ≥1 gem. No gem -> no points even if slotted.
+  if (boardHasGem(result)) bonusScore += GEM_BEAUTY * countRule(expanded, 'gem-beauty');
   bonusScore += VITAMIN_PER * vitaminFruits(events);
   bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);

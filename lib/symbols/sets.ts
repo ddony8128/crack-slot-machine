@@ -83,7 +83,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { type: 'all-types', points: 80 },
       { type: 'all-symbols', points: 150 },
     ],
-    ruleIds: ['gem-surge', 'diamond-cut', 'gem-fish', 'gem-shuffle'],
+    ruleIds: ['gem-surge', 'diamond-cut', 'gem-fish', 'gem-shuffle', 'gem-beauty'],
   },
   {
     id: 'cat',
@@ -98,7 +98,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { type: 'adjacent-penalty', points: -60 },
       { type: 'all-types', points: 200 },
     ],
-    ruleIds: ['cat-hold', 'cat-zoomies', 'cat-jump'],
+    ruleIds: ['cat-hold', 'cat-zoomies', 'cat-jump', 'cat-turf'],
   },
   {
     id: 'vehicle',
@@ -112,7 +112,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { type: 'per-event', event: 'moved', points: 20 },
       { type: 'per-event', event: 'rerolled', points: 20 },
     ],
-    ruleIds: ['vehicle-parking', 'vehicle-surge', 'vehicle-logistics', 'vehicle-bigboat'],
+    ruleIds: ['vehicle-parking', 'vehicle-surge', 'vehicle-logistics', 'vehicle-bigboat', 'vehicle-crash'],
   },
   {
     id: 'monster',
