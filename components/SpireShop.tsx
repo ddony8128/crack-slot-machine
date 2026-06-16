@@ -190,10 +190,17 @@ export default function SpireShop({
                     onBuyRule(r.id);
                   }
                 }}
-                className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm transition enabled:hover:border-emerald-400 disabled:opacity-40"
+                className="flex flex-col gap-1 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-left text-sm transition enabled:hover:border-emerald-400 disabled:opacity-40"
               >
-                <span>{ruleName(r.id)}</span>
-                <span className="font-bold text-amber-200">{r.price}원</span>
+                <span className="flex items-center justify-between">
+                  <span className="font-bold text-zinc-100">{ruleName(r.id)}</span>
+                  <span className="font-bold text-amber-200">{r.price}원</span>
+                </span>
+                {RULES_BY_ID[r.id]?.description && (
+                  <span className="text-xs text-zinc-400">
+                    {RULES_BY_ID[r.id]?.description}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -286,6 +293,8 @@ export default function SpireShop({
           rows={runState.rulePool.map((id) => [id, 1] as [string, number])}
           need={1}
           label={ruleName}
+          describe={(id) => RULES_BY_ID[id]?.description}
+          columns={1}
           onCancel={() => setModal(null)}
           onConfirm={(picks) => {
             setModal(null);
@@ -316,6 +325,8 @@ function ReplacePicker({
   rows,
   need,
   label = emojiFor,
+  describe,
+  columns = 3,
   onConfirm,
   onCancel,
 }: {
@@ -323,11 +334,17 @@ function ReplacePicker({
   rows: Array<[string, number]>;
   need: number;
   label?: (id: string) => string;
+  /** Optional effect description shown under each option (e.g. rule text). */
+  describe?: (id: string) => string | undefined;
+  /** Grid column count (default 3); use 1 when showing descriptions. */
+  columns?: 1 | 2 | 3;
   onConfirm: (picks: string[]) => void;
   onCancel: () => void;
 }) {
   const [picks, setPicks] = useState<string[]>([]);
   const countOf = (id: string) => picks.filter((p) => p === id).length;
+  const gridCols =
+    columns === 1 ? "grid-cols-1" : columns === 2 ? "grid-cols-2" : "grid-cols-3";
 
   function toggle(id: string, max: number) {
     setPicks((prev) => {
@@ -345,25 +362,29 @@ function ReplacePicker({
   return (
     <Overlay>
       <p className="text-sm font-bold text-zinc-100">{title}</p>
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid ${gridCols} gap-2`}>
         {rows.map(([id, max]) => {
           const c = countOf(id);
+          const desc = describe?.(id);
           return (
             <button
               key={id}
               type="button"
               onClick={() => toggle(id, max)}
-              className={`rounded-lg border px-2 py-2 text-sm transition ${
+              className={`flex flex-col gap-0.5 rounded-lg border px-2 py-2 text-left text-sm transition ${
                 c > 0
                   ? "border-emerald-400 bg-emerald-950/40 text-emerald-200"
                   : "border-zinc-700 bg-zinc-900/60 text-zinc-200"
               }`}
             >
-              {label(id)}
-              <span className="ml-1 text-xs text-zinc-500">
-                ×{max}
-                {c > 0 ? ` (선택 ${c})` : ""}
+              <span>
+                {label(id)}
+                <span className="ml-1 text-xs text-zinc-500">
+                  ×{max}
+                  {c > 0 ? ` (선택 ${c})` : ""}
+                </span>
               </span>
+              {desc && <span className="text-xs text-zinc-400">{desc}</span>}
             </button>
           );
         })}
@@ -468,19 +489,22 @@ function SetBuyPicker({
           <p className="text-sm font-bold text-zinc-100">
             제거할 규칙 {overflow}개 이상 선택
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {runState.rulePool.map((id) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => toggleRemove(id)}
-                className={`rounded-lg border px-2 py-2 text-xs transition ${
+                className={`flex flex-col gap-0.5 rounded-lg border px-2 py-2 text-left text-xs transition ${
                   removed.includes(id)
                     ? "border-rose-400 bg-rose-950/40 text-rose-200"
                     : "border-zinc-700 bg-zinc-900/60 text-zinc-200"
                 }`}
               >
-                {ruleName(id)}
+                <span className="font-bold">{ruleName(id)}</span>
+                {RULES_BY_ID[id]?.description && (
+                  <span className="text-zinc-400">{RULES_BY_ID[id]?.description}</span>
+                )}
               </button>
             ))}
           </div>
