@@ -32,7 +32,11 @@ tests, replay-fuzz green, commit.
 - [x] 유령 고양이 (monster+cat): 유령들린 칸의 고양이 → ghost_cat + 해제
 
 ## Wave 4 — 위치/이전상태 조건부 확률
-- [ ] 고양이 확률 증가 (cat): 홀수 칸에서 고양이 확률 ×4
-- [ ] 백귀야행 (monster): 괴물 확률 = 이전 스핀 괴물 수 + 3배
+- [x] 고양이 확률 증가 (cat): 홀수 칸(1·3·5번째)에서 고양이 확률 ×4 (rollBoard per-cell)
+- [x] 백귀야행 (monster): 괴물 확률 ×(이전 스핀 괴물 수 + 3) (rollBoard board-global, prev-spin)
+
+모든 wave 완료. cat-odds/night-parade는 위치·이전상태 의존이라 board-global
+computeWeights가 아닌 rollBoard에서 처리 (number-spin과 동일 계층). 셀당 rng draw
+1회 유지 + 레거시 가중치 0 → replay byte-identical.
 
 Process per wave: subagent (supervised) → vitest + eslint → tsc → commit. replay-fuzz must stay green (new rules only fire in their sets; legacy unaffected).

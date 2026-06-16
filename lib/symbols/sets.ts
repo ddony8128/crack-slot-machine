@@ -98,7 +98,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { type: 'adjacent-penalty', points: -60 },
       { type: 'all-types', points: 200 },
     ],
-    ruleIds: ['cat-hold', 'cat-zoomies', 'cat-jump', 'cat-turf'],
+    ruleIds: ['cat-hold', 'cat-zoomies', 'cat-jump', 'cat-turf', 'cat-odds'],
   },
   {
     id: 'vehicle',
@@ -123,7 +123,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
       { id: 'ghost', name: '유령', emoji: '👻' },
     ],
     bonuses: [{ type: 'per-event', event: 'copied', points: 40 }],
-    ruleIds: ['monster-family', 'jibakryeong', 'plague', 'vampire-exorcist'],
+    ruleIds: ['monster-family', 'jibakryeong', 'plague', 'vampire-exorcist', 'night-parade'],
   },
 ];
 

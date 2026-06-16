@@ -1,5 +1,5 @@
 import type { Rule, SymbolType } from '@/types';
-import { FRUITS, GEMS, VEHICLES } from '@/data/symbols';
+import { FRUITS, GEMS, VEHICLES, CATS, MONSTERS } from '@/data/symbols';
 import { rollSymbol, rollSymbolFrom, type Rng } from '@/lib/rng';
 import { expandRules } from '@/lib/expandRules';
 
@@ -74,12 +74,24 @@ export function baseSpin(
 }
 
 /**
- * Roll the landing board honoring the `number-spin` PRE-ROLL roll-restriction.
+ * Roll the landing board honoring PRE-ROLL roll modifiers that depend on the
+ * cell position or the previous spin (so they cannot live in the board-global
+ * `computeWeights` vector):
  *
- * If `number-spin` is active (any slot rule id === 'number-spin'), every cell
- * whose `previousResult` value was a number (seven/zero/four) is rolled
- * restricted to {seven, zero, four} so it lands on a number again. All other
- * cells roll normally. With `number-spin` absent this is equivalent to `baseSpin`.
+ *  - `number-spin`: every cell whose `previousResult` value was a number
+ *    (seven/zero/four) rolls restricted to {seven, zero, four}.
+ *  - 백귀야행 `night-parade` (monster): board-global — monster weights are
+ *    multiplied by (number of monsters in `previousResult` + 3) for this spin.
+ *  - 고양이 확률 증가 `cat-odds` (cat): position-conditional — on the odd cells
+ *    (1-indexed 1st/3rd/5th → indices 0/2/4) cat weights are multiplied by 4.
+ *
+ * Each cell still consumes exactly ONE rng draw, so replay stays byte-identical;
+ * and because cat/monster carry weight 0 in legacy/quick/event bags (and these
+ * rules are only offered when their set is rollable), the modifiers are no-ops
+ * there. With none of these rules present this is equivalent to `baseSpin`.
+ *
+ * Matches `number-spin`'s convention of reading the raw slot array (no
+ * copy-above expansion), so each modifier applies once regardless of stacking.
  */
 export function rollBoard(
   rules: (Rule | null)[],
@@ -89,16 +101,38 @@ export function rollBoard(
   n = 5,
 ): SymbolType[] {
   const numberSpin = rules.some((r) => r?.id === 'number-spin');
+  const catOdds = rules.some((r) => r?.id === 'cat-odds');
+  const nightParade = rules.some((r) => r?.id === 'night-parade');
+
+  // 백귀야행: board-global monster boost based on the previous spin's monsters.
+  let boardWeights = weights;
+  if (nightParade) {
+    const prevMonsters = previousResult.reduce(
+      (n2, s) => (MONSTERS.includes(s) ? n2 + 1 : n2),
+      0,
+    );
+    const mult = prevMonsters + 3;
+    boardWeights = { ...weights };
+    for (const m of MONSTERS) boardWeights[m] *= mult;
+  }
+
   const result: SymbolType[] = [];
   for (let i = 0; i < n; i++) {
+    // 고양이 확률 증가: odd cells (1-indexed) get a ×4 cat boost.
+    let cellWeights = boardWeights;
+    if (catOdds && i % 2 === 0) {
+      cellWeights = { ...boardWeights };
+      for (const c of CATS) cellWeights[c] *= 4;
+    }
+
     const prev = previousResult[i];
     if (
       numberSpin &&
       (prev === 'seven' || prev === 'zero' || prev === 'four')
     ) {
-      result.push(rollSymbolFrom(NUMBER_SPIN_POOL, weights, rng));
+      result.push(rollSymbolFrom(NUMBER_SPIN_POOL, cellWeights, rng));
     } else {
-      result.push(rollSymbol(weights, rng));
+      result.push(rollSymbol(cellWeights, rng));
     }
   }
   return result;

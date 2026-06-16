@@ -261,6 +261,14 @@ export const RULES: Rule[] = [
     build: 'cat',
     description: '고양이와 이웃한 고양이를 모두 다시 굴린다.',
   },
+  {
+    id: 'cat-odds',
+    name: '고양이 확률 증가',
+    type: 'weight',
+    phase: 'pre-spin',
+    build: 'cat',
+    description: '홀수 번째 칸(1·3·5번째)에서 고양이가 나올 확률이 4배가 된다.',
+  },
 
   // ---- vehicle ----
   {
@@ -352,6 +360,14 @@ export const RULES: Rule[] = [
     phase: 'sequential',
     build: 'monster',
     description: '드라큘라가 있는 유령들린 칸의 유령들림을 풀고, 칸마다 200점을 얻는다.',
+  },
+  {
+    id: 'night-parade',
+    name: '백귀야행',
+    type: 'weight',
+    phase: 'pre-spin',
+    build: 'monster',
+    description: '이번 스핀에서 괴물이 나올 확률이 (이전 스핀의 괴물 수 + 3)배가 된다.',
   },
 
   // ---- safe ----
