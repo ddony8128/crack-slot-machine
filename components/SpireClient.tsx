@@ -6,12 +6,15 @@ import { useGameStore } from "@/store/gameStore";
 import { startSpire, submitSpire } from "@/lib/client/spireApi";
 import { fetchMe } from "@/lib/client/authApi";
 import { saveSpire, loadSpire, clearSpire, type SpireSave } from "@/lib/client/spireResume";
-import { SYMBOL_SETS_BY_ID } from "@/lib/symbols/sets";
+import { SYMBOL_SETS_BY_ID, type SetBonus } from "@/lib/symbols/sets";
 import { SYMBOL_EMOJI } from "@/data/symbols";
+import { RULES_BY_ID } from "@/data/rules";
 import {
   SPIRE_STAGE_COUNT,
   SPIRE_ARTIFACT_STAGES,
   SPIRE_ARTIFACTS,
+  SPIRE_MAX_FAILURES,
+  SPIRE_RULE_POOL_MAX,
 } from "@/lib/spire/config";
 import {
   initialSpireState,
@@ -35,7 +38,7 @@ import {
   spireStageTarget,
   goldBarMoney,
 } from "@/lib/spire/stage";
-import { spireShopOffers, type SpireShopOffers } from "@/lib/spire/shop";
+import { spireShopOffers, spireRewardArtifacts, type SpireShopOffers } from "@/lib/spire/shop";
 import { replaySpireRun, type SpireAction } from "@/lib/spire/replay";
 import GameScreen from "@/components/GameScreen";
 import SpireShop from "@/components/SpireShop";
@@ -58,6 +61,7 @@ type Phase =
   | "result";
 
 type ClearBreakdown = { interest: number; spinBonus: number; payout: number } | null;
+type FailBreakdown = { stage: number; failures: number; support: number } | null;
 type SubmitState = "submitting" | "submitted" | "rejected" | "error" | "version_mismatch";
 
 const ARTIFACT_BY_ID = Object.fromEntries(SPIRE_ARTIFACTS.map((a) => [a.id, a]));
@@ -65,6 +69,48 @@ const ARTIFACT_BY_ID = Object.fromEntries(SPIRE_ARTIFACTS.map((a) => [a.id, a]))
 /** Emoji for a symbol id, falling back to the id itself. */
 function emojiFor(id: string): string {
   return SYMBOL_EMOJI[id as SymbolType] ?? id;
+}
+
+/** Rule display name, falling back to the id. */
+function ruleNameOf(id: string): string {
+  return RULES_BY_ID[id]?.name ?? id;
+}
+
+const PER_EVENT_LABEL: Record<"moved" | "rerolled" | "copied", string> = {
+  moved: "이동",
+  rerolled: "재굴림",
+  copied: "복사",
+};
+
+/** Short active-effect note for the playing-HUD artifact strip (기획 §6 P3:
+ *  chime free-reroll count, swiss-knife 4-candidates, engine). */
+function activeArtifactNote(id: string): string {
+  switch (id) {
+    case "chime":
+      return "(상점 무료 리롤 2회)";
+    case "swiss-knife":
+      return "(규칙 후보 4개)";
+    case "engine":
+      return "(스테이지 첫 스핀 전 규칙 +1)";
+    default:
+      return "";
+  }
+}
+
+/** Human-readable 족보 보너스 line for the set-choice card (기획 §17). */
+function setBonusLabel(b: SetBonus): string {
+  switch (b.type) {
+    case "all-types":
+      return `세트 3종 모두 등장 시 +${b.points}점`;
+    case "all-symbols":
+      return `5칸 모두 이 세트 심볼이면 +${b.points}점`;
+    case "per-symbol":
+      return `보드의 이 세트 심볼 1개당 +${b.points}점`;
+    case "adjacent-penalty":
+      return `인접한 같은 세트 쌍마다 ${b.points}점`;
+    case "per-event":
+      return `${PER_EVENT_LABEL[b.event]} 1회당 +${b.points}점`;
+  }
 }
 
 export default function SpireClient() {
@@ -94,10 +140,14 @@ export default function SpireClient() {
   const [rerollCount, setRerollCount] = useState(0);
 
   const [clearBreakdown, setClearBreakdown] = useState<ClearBreakdown>(null);
+  const [failBreakdown, setFailBreakdown] = useState<FailBreakdown>(null);
   const [submitState, setSubmitState] = useState<SubmitState>("submitting");
   const [seasonPoints, setSeasonPoints] = useState<number | null>(null);
   const [scoreChange, setScoreChange] = useState<SeasonScoreChange | null>(null);
   const [rejectReason, setRejectReason] = useState<string | null>(null);
+  // Banked spins over CLEARED stages only (mirrors lib/spire/verify.ts) — drives
+  // the result-screen season-score breakdown (스테이지×100 + 돈×10 + 스핀×10).
+  const [unusedSpins, setUnusedSpins] = useState(0);
 
   const me = useRef<{ nickname: string } | null>(null);
   const startedRef = useRef(false);
@@ -154,6 +204,7 @@ export default function SpireClient() {
     if (me.current) setNickname(me.current.nickname);
     startGame();
     setClearBreakdown(null);
+    setFailBreakdown(null);
     setPhase("playing");
   }, [reset, beginRun, configureRun, setNickname, startGame]);
 
@@ -162,6 +213,16 @@ export default function SpireClient() {
     const st = runStateRef.current;
     if (!st) return;
     setPhase("result");
+    // Banked spins (cleared stages only) for the result-screen score breakdown —
+    // recomputed from the action stream so it matches the server's verify.ts.
+    const replay = replaySpireRun(seedRef.current, actionsRef.current);
+    if (replay.ok) {
+      setUnusedSpins(
+        replay.stageResults
+          .filter((s) => s.cleared)
+          .reduce((sum, s) => sum + s.remainingSpins, 0),
+      );
+    }
     if (submittedRef.current) return;
     submittedRef.current = true;
     setSubmitState("submitting");
@@ -225,6 +286,7 @@ export default function SpireClient() {
           spinBonus: r.breakdown.spinBonus,
           payout: r.breakdown.payout,
         });
+        setFailBreakdown(null);
         persist();
         if (stage >= SPIRE_STAGE_COUNT) {
           endRun();
@@ -246,6 +308,14 @@ export default function SpireClient() {
         if (r.breakdown.ended) {
           endRun();
         } else {
+          // Non-final fail: surface the failure + 지원금 + 재도전 messaging on the
+          // shop screen (settleFail already advanced the attempt, same stage).
+          setClearBreakdown(null);
+          setFailBreakdown({
+            stage,
+            failures: r.state.failures,
+            support: r.breakdown.support,
+          });
           setPhase("shop");
         }
       }
@@ -491,7 +561,24 @@ export default function SpireClient() {
                 <span className="text-xs text-zinc-400">
                   {set.symbols.map((s) => s.name).join(" / ")}
                 </span>
-                <span className="text-xs text-amber-200/80">규칙 {set.ruleIds.length}개 해금</span>
+                {set.bonuses.length > 0 && (
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">족보 보너스</span>
+                    {set.bonuses.map((b, i) => (
+                      <span key={i} className="text-xs text-emerald-200/90">
+                        · {setBonusLabel(b)}
+                      </span>
+                    ))}
+                  </span>
+                )}
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                    해금 규칙 {set.ruleIds.length}개
+                  </span>
+                  <span className="text-xs text-amber-200/80">
+                    {set.ruleIds.map(ruleNameOf).join(" · ")}
+                  </span>
+                </span>
                 <span className="mt-1 inline-block rounded-lg bg-emerald-500 px-3 py-1.5 text-center text-sm font-bold text-zinc-950">
                   이 세트 선택
                 </span>
@@ -513,6 +600,7 @@ export default function SpireClient() {
           stagesCleared={runState.currentStage - 1}
           totalScore={runState.totalRunScore}
           money={runState.money}
+          unusedSpins={unusedSpins}
           artifacts={runState.artifacts}
           endReason={runState.currentStage > SPIRE_STAGE_COUNT ? "completed" : "failed-out"}
           seasonPoints={seasonPoints}
@@ -544,7 +632,11 @@ export default function SpireClient() {
   }
 
   if (phase === "artifact" && runState && offers) {
-    const arts = offers.artifacts.slice(0, 2);
+    // The reward offer is SALTED INDEPENDENTLY of the shop (lib/spire/shop.ts
+    // spireRewardArtifacts) so reward and shop artifacts never overlap. The
+    // cleared artifact stage is currentStage-1 (settleClear already advanced).
+    const rewardStage = runState.currentStage - 1;
+    const arts = spireRewardArtifacts(runState, rewardStage);
     const choose = (id: string | null) => {
       recordAction({ type: "choose_artifact", artifactId: id });
       if (id) {
@@ -594,7 +686,19 @@ export default function SpireClient() {
         {clearBreakdown && (
           <div className="mx-auto mt-3 w-full max-w-md px-4">
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-2 text-center text-xs text-emerald-200">
-              이자 +{clearBreakdown.interest} · 스핀 보너스 +{clearBreakdown.spinBonus} · 클리어 보상 +{clearBreakdown.payout}
+              정산 — 이자 +{clearBreakdown.interest} · 남은 스핀 +{clearBreakdown.spinBonus} · 클리어 보수 +{clearBreakdown.payout}
+            </div>
+          </div>
+        )}
+        {failBreakdown && (
+          <div className="mx-auto mt-3 w-full max-w-md px-4">
+            <div className="space-y-1 rounded-xl border border-rose-500/40 bg-rose-950/20 px-4 py-2 text-center text-xs">
+              <p className="font-bold text-rose-300">
+                스테이지 실패 ({failBreakdown.failures}/{SPIRE_MAX_FAILURES}) · 지원금 +{failBreakdown.support}원 · 같은 스테이지 재도전
+              </p>
+              <p className="text-rose-200/70">
+                스테이지 {failBreakdown.stage} 재도전 — 정산 보상 없음(지원금만 지급)
+              </p>
             </div>
           </div>
         )}
@@ -690,6 +794,30 @@ export default function SpireClient() {
             <span className="text-zinc-400">클리어 {stage - 1}</span>
           </div>
           <p className="mt-1 text-center text-xs text-zinc-500">심볼 주머니: {bag}</p>
+          {runState.artifacts.length > 0 && (
+            <div className="mt-1 flex flex-wrap justify-center gap-1.5">
+              {runState.artifacts.map((id) => (
+                <span
+                  key={id}
+                  title={ARTIFACT_BY_ID[id]?.description}
+                  className="rounded-full border border-emerald-500/40 bg-emerald-950/20 px-2 py-0.5 text-[11px] text-emerald-200"
+                >
+                  {ARTIFACT_BY_ID[id]?.name ?? id}
+                  {activeArtifactNote(id) && (
+                    <span className="ml-1 text-emerald-300/70">{activeArtifactNote(id)}</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+          <details className="mt-1 text-center">
+            <summary className="cursor-pointer text-xs text-zinc-500">
+              규칙 풀 {runState.rulePool.length}/{SPIRE_RULE_POOL_MAX}
+            </summary>
+            <p className="mt-1 text-xs text-amber-200/80">
+              {runState.rulePool.map(ruleNameOf).join(" · ")}
+            </p>
+          </details>
         </div>
         <GameScreen />
       </>
