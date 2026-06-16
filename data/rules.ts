@@ -314,6 +314,22 @@ export const RULES: Rule[] = [
     description: '가장 왼쪽 괴물 칸이 유령 들린다. (이번 스핀의 족보 계산에서 유령 1개로 추가 계산)',
   },
   {
+    id: 'jibakryeong',
+    name: '지박령',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'monster',
+    description: '가장 왼쪽 유령이 있는 칸을 유령들리게 하고, 그 유령은 다시 굴린다.',
+  },
+  {
+    id: 'plague',
+    name: '퍼져나가는 역병',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'monster',
+    description: '가장 왼쪽 좀비의 양옆 칸이 좀비를 복사하고, 원본 좀비는 다시 굴린다.',
+  },
+  {
     id: 'monster-family',
     name: '가족 만들기',
     type: 'select',

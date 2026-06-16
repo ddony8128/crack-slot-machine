@@ -459,6 +459,42 @@ function applyOne(
       if (i !== -1) haunted[i] = true;
       return [];
     }
+    case 'jibakryeong': {
+      // 지박령: the leftmost ghost cell becomes "haunted" (phantom ghost at
+      // scoring, like monster-haunt) AND that ghost is rerolled. The cell stays
+      // haunted even though its symbol changed. No ghost -> no-op.
+      const i = working.findIndex((s) => s === 'ghost');
+      if (i === -1) return [];
+      haunted[i] = true;
+      const old = working[i];
+      write(working, locked, i, rollSymbol(weights, rng));
+      emitReroll(old, i);
+      return [i];
+    }
+    case 'plague': {
+      // 퍼져나가는 역병: the leftmost zombie copies itself into both neighbours
+      // (in range), THEN the original (center) zombie is rerolled. Copy the sides
+      // FIRST from the original zombie value, THEN reroll the center. No zombie ->
+      // no-op.
+      const i = working.findIndex((s) => s === 'zombie');
+      if (i === -1) return [];
+      const changed: number[] = [];
+      if (i - 1 >= 0) {
+        write(working, locked, i - 1, 'zombie');
+        emitCopy('zombie', i, i - 1);
+        changed.push(i - 1);
+      }
+      if (i + 1 < working.length) {
+        write(working, locked, i + 1, 'zombie');
+        emitCopy('zombie', i, i + 1);
+        changed.push(i + 1);
+      }
+      const old = working[i];
+      write(working, locked, i, rollSymbol(weights, rng));
+      emitReroll(old, i);
+      changed.push(i);
+      return changed;
+    }
     case 'monster-infect': {
       // 전염병: if ANY base monster is on the board, the leftmost BASE cat becomes
       // a zombie_cat HYBRID (scores as both cat AND monster, see lib/symbols/tags).
