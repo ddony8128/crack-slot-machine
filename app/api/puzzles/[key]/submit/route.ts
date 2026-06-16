@@ -129,6 +129,17 @@ export async function POST(
   const totalGoals = puzzle.goals.length;
   const cleared = goalsAchieved === totalGoals;
   const spinCount = spins.length;
+  const remainingSpins = Math.max(0, puzzle.spinLimit - spinCount);
+  // v2 season score: 100 + leftover-spins×10 on clear (spec §3). best_scores
+  // keeps the highest, so a faster (more-leftover) clear replaces an earlier one.
+  const seasonScore = cleared ? puzzleScore(puzzle.spinLimit, spinCount) : 0;
+
+  // Prior puzzle record (BEFORE the upsert): drives the season-reason choice —
+  // a first clear vs an improvement of an existing cleared record.
+  const myRecords = await db.listPlayerPuzzleRecords(player.id, run.seasonId!);
+  const priorRecord = myRecords.find((r) => r.puzzleKey === key) ?? null;
+  const hadPriorClear = !!priorRecord?.cleared;
+  const priorPuzzleScore = priorRecord?.bestPuzzleScore ?? 0;
 
   // Season total + rank + per-mode split BEFORE the upserts, so the after-difference is this run's grant.
   const before = await seasonBreakdown(db, run.seasonId!, player.id);
@@ -146,10 +157,6 @@ export async function POST(
     cleared,
   });
 
-  // v2 season score: 100 + leftover-spins×10 on clear (spec §3). best_scores
-  // keeps the highest, so a faster (more-leftover) clear replaces an earlier one.
-  const seasonScore = cleared ? puzzleScore(puzzle.spinLimit, spinCount) : 0;
-
   await db.upsertBestScore({
     playerId: player.id,
     seasonId: run.seasonId!,
@@ -165,22 +172,33 @@ export async function POST(
     playerId: player.id,
     seasonId: run.seasonId!,
     puzzleKey: key,
-    goalsAchieved,
-    spinCount,
+    cleared,
+    clearSpin: cleared ? spinCount : null,
+    remainingSpins: cleared ? remainingSpins : null,
+    puzzleScore: cleared ? seasonScore : null,
     runId: run.id,
+    clearedAt: cleared ? now : null,
   });
 
   const distribution = await db.getPuzzleDistribution(run.seasonId!, key);
 
   const after = await seasonBreakdown(db, run.seasonId!, player.id);
-  const scoreChange = await recordSeasonChange(db, {
-    seasonId: run.seasonId!,
-    playerId: player.id,
-    sourceType: 'PUZZLE_CLEAR',
-    sourceId: key,
-    before,
-    after,
-  });
+
+  // Season-score reason (spec §16): a brand-new clear is PUZZLE_FIRST_CLEAR; a
+  // clear that beats an existing cleared record's score is PUZZLE_RECORD_IMPROVED.
+  // Anything else (not cleared, or no score improvement) records nothing.
+  const improvedRecord = hadPriorClear && cleared && seasonScore > priorPuzzleScore;
+  let scoreChange = null;
+  if (cleared && (!hadPriorClear || improvedRecord)) {
+    scoreChange = await recordSeasonChange(db, {
+      seasonId: run.seasonId!,
+      playerId: player.id,
+      sourceType: hadPriorClear ? 'PUZZLE_RECORD_IMPROVED' : 'PUZZLE_FIRST_CLEAR',
+      sourceId: key,
+      before,
+      after,
+    });
+  }
 
   return Response.json({
     status: 'submitted',

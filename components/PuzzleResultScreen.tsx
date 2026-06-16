@@ -10,6 +10,8 @@ import {
 import { buildClientResults } from "@/lib/clientResults";
 import SeasonScoreRise from "@/components/SeasonScoreRise";
 import type { SeasonScoreChange } from "@/lib/season/scoring";
+import type { PuzzleDistribution } from "@/lib/db/types";
+import { PUZZLES_BY_KEY } from "@/lib/puzzle/config";
 
 type SubmitState =
   | { phase: "submitting" }
@@ -144,8 +146,8 @@ export default function PuzzleResultScreen({
 
             <Distribution
               distribution={done.distribution}
-              totalGoals={done.totalGoals}
-              mine={done.goalsAchieved}
+              spinLimit={PUZZLES_BY_KEY[puzzleKey]?.spinLimit ?? done.spinCount}
+              mineSpin={done.cleared ? done.spinCount : null}
             />
           </>
         ) : (
@@ -176,41 +178,51 @@ export default function PuzzleResultScreen({
   );
 }
 
-/** Small list of "N개 달성: M명" rows for every goal-count bucket (0..totalGoals). */
+/**
+ * Clear-spin distribution: one "{n}스핀 클리어: {count}명" row per spin count
+ * (1..spinLimit) plus a "미클리어: {count}명" row. The player's own bucket (their
+ * clear spin, or 미클리어) is highlighted.
+ */
 function Distribution({
   distribution,
-  totalGoals,
-  mine,
+  spinLimit,
+  mineSpin,
 }: {
-  distribution: Record<number, number>;
-  totalGoals: number;
-  mine: number;
+  distribution: PuzzleDistribution;
+  spinLimit: number;
+  mineSpin: number | null;
 }) {
-  const rows = [];
+  const rows: Array<{ key: string; label: string; count: number; mine: boolean }> = [];
   let max = 1;
-  for (let n = 0; n <= totalGoals; n++) {
-    const count = distribution[n] ?? 0;
+  for (let n = 1; n <= spinLimit; n++) {
+    const count = distribution.bySpin[n] ?? 0;
     if (count > max) max = count;
-    rows.push({ n, count });
+    rows.push({ key: `s${n}`, label: `${n}스핀 클리어`, count, mine: mineSpin === n });
   }
+  const notCleared = distribution.notCleared ?? 0;
+  if (notCleared > max) max = notCleared;
+  rows.push({
+    key: "none",
+    label: "미클리어",
+    count: notCleared,
+    mine: mineSpin === null,
+  });
 
   return (
     <div className="space-y-1.5 text-left">
-      <p className="text-xs uppercase tracking-wide text-zinc-500">달성 분포</p>
-      {rows.map(({ n, count }) => (
-        <div key={n} className="flex items-center gap-2">
+      <p className="text-xs uppercase tracking-wide text-zinc-500">클리어 분포</p>
+      {rows.map(({ key, label, count, mine }) => (
+        <div key={key} className="flex items-center gap-2">
           <span
-            className={`w-16 shrink-0 text-xs font-semibold ${
-              n === mine ? "text-emerald-400" : "text-zinc-400"
+            className={`w-24 shrink-0 text-xs font-semibold ${
+              mine ? "text-emerald-400" : "text-zinc-400"
             }`}
           >
-            {n}개 달성
+            {label}
           </span>
           <div className="h-2 flex-1 overflow-hidden rounded bg-zinc-800">
             <div
-              className={`h-full ${
-                n === mine ? "bg-emerald-500" : "bg-zinc-600"
-              }`}
+              className={`h-full ${mine ? "bg-emerald-500" : "bg-zinc-600"}`}
               style={{ width: `${(count / max) * 100}%` }}
             />
           </div>

@@ -17,6 +17,7 @@ import type {
   DailyUserStatusRow,
   BestScoreRow,
   PuzzleRecordRow,
+  PuzzleDistribution,
   SpireRecordRow,
   ScoreEventRow,
   RunMode,
@@ -146,9 +147,12 @@ function toPuzzleRecord(row: any): PuzzleRecordRow {
     playerId: row.player_id,
     seasonId: row.season_id,
     puzzleKey: row.puzzle_key,
-    bestGoalsAchieved: row.best_goals_achieved,
-    bestSpinCount: row.best_spin_count ?? null,
+    cleared: !!row.cleared,
+    bestClearSpin: row.best_clear_spin ?? null,
+    bestRemainingSpins: row.best_remaining_spins ?? null,
+    bestPuzzleScore: row.best_puzzle_score ?? null,
     bestRunId: row.best_run_id ?? null,
+    clearedAt: row.cleared_at ?? null,
     updatedAt: row.updated_at,
   };
 }
@@ -854,9 +858,12 @@ export class SupabaseDb implements Db {
     playerId: string;
     seasonId: string;
     puzzleKey: string;
-    goalsAchieved: number;
-    spinCount: number | null;
+    cleared: boolean;
+    clearSpin: number | null;
+    remainingSpins: number | null;
+    puzzleScore: number | null;
     runId: string | null;
+    clearedAt: string | null;
   }): Promise<PuzzleRecordRow> {
     const { data: existingRow, error: selectError } = await this.sb
       .from('puzzle_user_records')
@@ -874,9 +881,12 @@ export class SupabaseDb implements Db {
           player_id: input.playerId,
           season_id: input.seasonId,
           puzzle_key: input.puzzleKey,
-          best_goals_achieved: input.goalsAchieved,
-          best_spin_count: input.spinCount,
-          best_run_id: input.runId,
+          cleared: input.cleared,
+          best_clear_spin: input.cleared ? input.clearSpin : null,
+          best_remaining_spins: input.cleared ? input.remainingSpins : null,
+          best_puzzle_score: input.cleared ? input.puzzleScore : null,
+          best_run_id: input.cleared ? input.runId : null,
+          cleared_at: input.cleared ? input.clearedAt : null,
         })
         .select('*')
         .single();
@@ -885,20 +895,27 @@ export class SupabaseDb implements Db {
     }
 
     const existing = toPuzzleRecord(existingRow);
-    const better =
-      input.goalsAchieved > existing.bestGoalsAchieved ||
-      (input.goalsAchieved === existing.bestGoalsAchieved &&
-        input.spinCount !== null &&
-        (existing.bestSpinCount === null ||
-          input.spinCount < existing.bestSpinCount));
-    if (!better) return existing;
+    // Only a clear can improve a record. Improvement = first clear, OR fewer
+    // clear spins, OR (tie on spins) a higher puzzle score.
+    if (!input.cleared) return existing;
+    const improves =
+      !existing.cleared ||
+      existing.bestClearSpin === null ||
+      (input.clearSpin !== null &&
+        (input.clearSpin < existing.bestClearSpin ||
+          (input.clearSpin === existing.bestClearSpin &&
+            (input.puzzleScore ?? 0) > (existing.bestPuzzleScore ?? 0))));
+    if (!improves) return existing;
 
     const { data, error } = await this.sb
       .from('puzzle_user_records')
       .update({
-        best_goals_achieved: input.goalsAchieved,
-        best_spin_count: input.spinCount,
+        cleared: true,
+        best_clear_spin: input.clearSpin,
+        best_remaining_spins: input.remainingSpins,
+        best_puzzle_score: input.puzzleScore,
         best_run_id: input.runId,
+        cleared_at: input.clearedAt,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
@@ -924,19 +941,25 @@ export class SupabaseDb implements Db {
   async getPuzzleDistribution(
     seasonId: string,
     puzzleKey: string,
-  ): Promise<Record<number, number>> {
+  ): Promise<PuzzleDistribution> {
     const { data, error } = await this.sb
       .from('puzzle_user_records')
-      .select('best_goals_achieved')
+      .select('cleared, best_clear_spin')
       .eq('season_id', seasonId)
       .eq('puzzle_key', puzzleKey);
     if (error) throw error;
-    const dist: Record<number, number> = {};
+    const bySpin: Record<number, number> = {};
+    let notCleared = 0;
     for (const row of data ?? []) {
-      const value = (row as any).best_goals_achieved as number;
-      dist[value] = (dist[value] ?? 0) + 1;
+      const cleared = !!(row as any).cleared;
+      const spin = (row as any).best_clear_spin as number | null;
+      if (cleared && spin !== null && spin !== undefined) {
+        bySpin[spin] = (bySpin[spin] ?? 0) + 1;
+      } else {
+        notCleared += 1;
+      }
     }
-    return dist;
+    return { bySpin, notCleared };
   }
 
   // ── Season 1 WU9: spire records ────────────────────────────────────────────

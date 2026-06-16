@@ -67,8 +67,14 @@ describe('RunConfig (configurable-run mode)', () => {
     const cfg = puzzleRunConfig('p01');
     expect(cfg.provisioning).toBe('fixed');
     expect(cfg.maxSpins).toBe(5);
-    expect(cfg.initialBoard).toEqual(['zero', 'four', 'seven', 'cherry', 'ruby']);
+    expect(cfg.initialBoard).toEqual(['four', 'four', 'four', 'four', 'four']);
     expect(cfg.rulePoolIds).toContain('seven-fever');
+    // Numbers-only symbol bag: 0/4/7 rollable, everything else weight 0.
+    expect(cfg.baseWeights?.seven).toBe(1);
+    expect(cfg.baseWeights?.zero).toBe(1);
+    expect(cfg.baseWeights?.four).toBe(1);
+    expect(cfg.baseWeights?.cherry).toBe(0);
+    expect(cfg.baseWeights?.ruby).toBe(0);
     expect(() => puzzleRunConfig('nope')).toThrow();
   });
 });

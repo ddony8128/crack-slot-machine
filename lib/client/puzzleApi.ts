@@ -1,5 +1,5 @@
 import type { RecordedAction } from '@/store/gameStore';
-import type { ClientResults } from '@/lib/db/types';
+import type { ClientResults, PuzzleDistribution } from '@/lib/db/types';
 import type { SeasonScoreChange } from '@/lib/season/scoring';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
@@ -12,7 +12,7 @@ export type SubmitPuzzleResponse =
       totalGoals: number;
       cleared: boolean;
       spinCount: number;
-      distribution: Record<number, number>;
+      distribution: PuzzleDistribution;
       scoreChange?: SeasonScoreChange;
     }
   | { status: 'rejected'; reason: string };

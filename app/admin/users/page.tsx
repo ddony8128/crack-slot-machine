@@ -125,8 +125,9 @@ function PlayerDetail({
                   <span className="font-mono text-[11px] text-zinc-500">
                     {p.puzzleKey}
                   </span>{" "}
-                  목표 {p.bestGoalsAchieved}개
-                  {p.bestSpinCount !== null ? ` · ${p.bestSpinCount}스핀` : ""}
+                  {p.cleared
+                    ? `클리어${p.bestClearSpin !== null ? ` · ${p.bestClearSpin}스핀` : ""}${p.bestPuzzleScore !== null ? ` · ${p.bestPuzzleScore}점` : ""}`
+                    : "미클리어"}
                 </li>
               ))}
             </ul>

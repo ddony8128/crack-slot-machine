@@ -15,6 +15,7 @@ function startErrorMessage(code: string): string {
   if (code === "unauthorized") return "로그인이 필요합니다.";
   if (code === "puzzle_not_found") return "없는 퍼즐입니다.";
   if (code === "no_active_season") return "진행 중인 시즌이 없습니다.";
+  if (code === "locked") return "1번 문제를 클리어하면 해금됩니다.";
   return "퍼즐을 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.";
 }
 

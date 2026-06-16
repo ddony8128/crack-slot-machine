@@ -28,6 +28,15 @@ export async function POST(
     return Response.json({ error: 'no_active_season' }, { status: 404 });
   }
 
+  // Unlock gate (spec §5): p02 requires a cleared p01 record for this player.
+  if (key === 'p02') {
+    const records = await db.listPlayerPuzzleRecords(player.id, season.id);
+    const p01 = records.find((r) => r.puzzleKey === 'p01');
+    if (!p01?.cleared) {
+      return Response.json({ error: 'locked' }, { status: 403 });
+    }
+  }
+
   const run = await db.createRun({
     playerId: player.id,
     seasonId: season.id,

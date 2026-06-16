@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { SEASON_TITLE, SEASON_NOTICE, MODE_LABELS } from "@/lib/season/config";
 import { dailyDateKey, dailyAttemptsAllowed } from "@/lib/daily/challenge";
 import { settleDueDailyChallenges } from "@/lib/server/dailySettlement";
-import { PUZZLES, PUZZLES_BY_KEY } from "@/lib/puzzle/config";
+import { PUZZLES } from "@/lib/puzzle/config";
 
 const SEASON_PERIOD = "2026년 6월 16일 낮 12시 ~ 6월 30일 낮 12시 (KST)";
 
@@ -71,10 +71,7 @@ async function buildPlayerStatus(
   else dailyLines.push("광고 충전 완료");
 
   // ── Puzzle ──
-  const clearedCount = puzzleRecords.filter((record) => {
-    const def = PUZZLES_BY_KEY[record.puzzleKey];
-    return def != null && record.bestGoalsAchieved === def.goals.length;
-  }).length;
+  const clearedCount = puzzleRecords.filter((record) => record.cleared).length;
   const puzzleLines = [`${clearedCount} / ${PUZZLES.length}문제 클리어`];
 
   // ── Spire ──

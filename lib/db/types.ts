@@ -366,18 +366,34 @@ export interface Db {
   }): Promise<number>;
 
   // ── Season 1 WU8: puzzle records ───────────────────────────────────────────
-  /** Keep the player's best goals for a puzzle (tiebreak: fewer spins). */
+  /**
+   * Keep the player's best CLEAR for a puzzle. A record only "improves" when the
+   * submit is a clear AND (no prior clear, OR fewer clear spins, OR — on a tie —
+   * a higher puzzle score). A non-clearing submit creates/keeps an un-cleared
+   * row (so the not-cleared distribution bucket counts it) without overwriting an
+   * existing clear.
+   */
   upsertPuzzleRecord(input: {
     playerId: string;
     seasonId: string;
     puzzleKey: string;
-    goalsAchieved: number;
-    spinCount: number | null;
+    cleared: boolean;
+    clearSpin: number | null;
+    remainingSpins: number | null;
+    puzzleScore: number | null;
     runId: string | null;
+    clearedAt: string | null;
   }): Promise<PuzzleRecordRow>;
   listPlayerPuzzleRecords(playerId: string, seasonId: string): Promise<PuzzleRecordRow[]>;
-  /** Distribution: goalsAchieved value → number of players, for one puzzle. */
-  getPuzzleDistribution(seasonId: string, puzzleKey: string): Promise<Record<number, number>>;
+  /**
+   * Clear-spin distribution for one puzzle: how many players' BEST record cleared
+   * on each spin count (1..spinLimit), plus how many have a record but have not
+   * cleared it.
+   */
+  getPuzzleDistribution(
+    seasonId: string,
+    puzzleKey: string,
+  ): Promise<PuzzleDistribution>;
 
   // ── Season 1 WU9: spire records ────────────────────────────────────────────
   /** Keep the player's best spire run (by stage reached, then total score). */
@@ -421,16 +437,34 @@ export interface Db {
   ): Promise<ScoreEventRow[]>;
 }
 
-/** A row in `puzzle_user_records` — best goals achieved per puzzle. */
+/** A row in `puzzle_user_records` — best CLEAR per puzzle (spec §13). */
 export type PuzzleRecordRow = {
   id: string;
   playerId: string;
   seasonId: string;
   puzzleKey: string;
-  bestGoalsAchieved: number;
-  bestSpinCount: number | null;
+  /** True once the player has cleared this puzzle at least once. */
+  cleared: boolean;
+  /** Fewest spins used on a clear, or null when never cleared. */
+  bestClearSpin: number | null;
+  /** Leftover spins (spinLimit − clearSpin) on the best clear, or null. */
+  bestRemainingSpins: number | null;
+  /** Highest puzzle score (100 + leftover×10) on the best clear, or null. */
+  bestPuzzleScore: number | null;
   bestRunId: string | null;
+  /** When the best clear happened (ISO), or null when never cleared. */
+  clearedAt: string | null;
   updatedAt: string;
+};
+
+/**
+ * Clear-spin distribution for one puzzle: `bySpin[n]` = number of players whose
+ * best record cleared on exactly n spins; `notCleared` = players with a record
+ * that has never been cleared.
+ */
+export type PuzzleDistribution = {
+  bySpin: Record<number, number>;
+  notCleared: number;
 };
 
 /** A row in `spire_user_records` — best stage + score per player. */

@@ -12,6 +12,7 @@ import type {
   DailyUserStatusRow,
   BestScoreRow,
   PuzzleRecordRow,
+  PuzzleDistribution,
   SpireRecordRow,
   SeasonScoreRow,
   ScoreEventRow,
@@ -653,9 +654,12 @@ export class MemoryDb implements Db {
     playerId: string;
     seasonId: string;
     puzzleKey: string;
-    goalsAchieved: number;
-    spinCount: number | null;
+    cleared: boolean;
+    clearSpin: number | null;
+    remainingSpins: number | null;
+    puzzleScore: number | null;
     runId: string | null;
+    clearedAt: string | null;
   }): Promise<PuzzleRecordRow> {
     const existing = this.puzzleRecords.find(
       (p) =>
@@ -669,25 +673,36 @@ export class MemoryDb implements Db {
         playerId: input.playerId,
         seasonId: input.seasonId,
         puzzleKey: input.puzzleKey,
-        bestGoalsAchieved: input.goalsAchieved,
-        bestSpinCount: input.spinCount,
-        bestRunId: input.runId,
+        cleared: input.cleared,
+        bestClearSpin: input.cleared ? input.clearSpin : null,
+        bestRemainingSpins: input.cleared ? input.remainingSpins : null,
+        bestPuzzleScore: input.cleared ? input.puzzleScore : null,
+        bestRunId: input.cleared ? input.runId : null,
+        clearedAt: input.cleared ? input.clearedAt : null,
         updatedAt: new Date().toISOString(),
       };
       this.puzzleRecords.push(row);
       return row;
     }
-    const better =
-      input.goalsAchieved > existing.bestGoalsAchieved ||
-      (input.goalsAchieved === existing.bestGoalsAchieved &&
-        input.spinCount !== null &&
-        (existing.bestSpinCount === null ||
-          input.spinCount < existing.bestSpinCount));
-    if (better) {
-      existing.bestGoalsAchieved = input.goalsAchieved;
-      existing.bestSpinCount = input.spinCount;
-      existing.bestRunId = input.runId;
-      existing.updatedAt = new Date().toISOString();
+    // Only a clear can improve a record. Improvement = first clear, OR fewer
+    // clear spins, OR (tie on spins) a higher puzzle score.
+    if (input.cleared) {
+      const improves =
+        !existing.cleared ||
+        existing.bestClearSpin === null ||
+        (input.clearSpin !== null &&
+          (input.clearSpin < existing.bestClearSpin ||
+            (input.clearSpin === existing.bestClearSpin &&
+              (input.puzzleScore ?? 0) > (existing.bestPuzzleScore ?? 0))));
+      if (improves) {
+        existing.cleared = true;
+        existing.bestClearSpin = input.clearSpin;
+        existing.bestRemainingSpins = input.remainingSpins;
+        existing.bestPuzzleScore = input.puzzleScore;
+        existing.bestRunId = input.runId;
+        existing.clearedAt = input.clearedAt;
+        existing.updatedAt = new Date().toISOString();
+      }
     }
     return existing;
   }
@@ -704,13 +719,18 @@ export class MemoryDb implements Db {
   async getPuzzleDistribution(
     seasonId: string,
     puzzleKey: string,
-  ): Promise<Record<number, number>> {
-    const dist: Record<number, number> = {};
+  ): Promise<PuzzleDistribution> {
+    const bySpin: Record<number, number> = {};
+    let notCleared = 0;
     for (const p of this.puzzleRecords) {
       if (p.seasonId !== seasonId || p.puzzleKey !== puzzleKey) continue;
-      dist[p.bestGoalsAchieved] = (dist[p.bestGoalsAchieved] ?? 0) + 1;
+      if (p.cleared && p.bestClearSpin !== null) {
+        bySpin[p.bestClearSpin] = (bySpin[p.bestClearSpin] ?? 0) + 1;
+      } else {
+        notCleared += 1;
+      }
     }
-    return dist;
+    return { bySpin, notCleared };
   }
 
   // ── Season 1 WU9: spire records ────────────────────────────────────────────

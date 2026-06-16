@@ -442,66 +442,131 @@ describe('MemoryDb best scores', () => {
 });
 
 describe('MemoryDb puzzle records', () => {
-  it('upsertPuzzleRecord keeps better: higher goals wins, equal goals fewer spins wins, worse ignored', async () => {
+  it('upsertPuzzleRecord keeps the best CLEAR: only a clear improves; fewer spins, then higher score, wins', async () => {
     const db = new MemoryDb();
     const season = await db.getActiveSeason();
     const scope = { playerId: 'p1', seasonId: season!.id, puzzleKey: 'pz1' };
 
-    const a = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 1, spinCount: 10, runId: 'r1' });
-    expect(a.bestGoalsAchieved).toBe(1);
-    expect(a.bestSpinCount).toBe(10);
-    expect(a.bestRunId).toBe('r1');
+    // A non-clear creates an un-cleared row (counts toward 미클리어).
+    const a = await db.upsertPuzzleRecord({
+      ...scope,
+      cleared: false,
+      clearSpin: null,
+      remainingSpins: null,
+      puzzleScore: null,
+      runId: 'r1',
+      clearedAt: null,
+    });
+    expect(a.cleared).toBe(false);
+    expect(a.bestClearSpin).toBe(null);
 
-    // higher goals wins (even with more spins)
-    const b = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 2, spinCount: 99, runId: 'r2' });
-    expect(b.bestGoalsAchieved).toBe(2);
-    expect(b.bestSpinCount).toBe(99);
+    // First clear on 4 spins (leftover 1 → score 110).
+    const b = await db.upsertPuzzleRecord({
+      ...scope,
+      cleared: true,
+      clearSpin: 4,
+      remainingSpins: 1,
+      puzzleScore: 110,
+      runId: 'r2',
+      clearedAt: 't2',
+    });
+    expect(b.cleared).toBe(true);
+    expect(b.bestClearSpin).toBe(4);
+    expect(b.bestPuzzleScore).toBe(110);
     expect(b.bestRunId).toBe('r2');
+    expect(b.clearedAt).toBe('t2');
 
-    // equal goals, fewer spins wins
-    const c = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 2, spinCount: 30, runId: 'r3' });
-    expect(c.bestGoalsAchieved).toBe(2);
-    expect(c.bestSpinCount).toBe(30);
+    // Fewer clear spins wins (2 spins → score 130).
+    const c = await db.upsertPuzzleRecord({
+      ...scope,
+      cleared: true,
+      clearSpin: 2,
+      remainingSpins: 3,
+      puzzleScore: 130,
+      runId: 'r3',
+      clearedAt: 't3',
+    });
+    expect(c.bestClearSpin).toBe(2);
+    expect(c.bestPuzzleScore).toBe(130);
     expect(c.bestRunId).toBe('r3');
 
-    // worse: fewer goals -> ignored
-    const d = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 1, spinCount: 1, runId: 'r4' });
-    expect(d.bestGoalsAchieved).toBe(2);
-    expect(d.bestSpinCount).toBe(30);
+    // More spins -> ignored.
+    const d = await db.upsertPuzzleRecord({
+      ...scope,
+      cleared: true,
+      clearSpin: 5,
+      remainingSpins: 0,
+      puzzleScore: 100,
+      runId: 'r4',
+      clearedAt: 't4',
+    });
+    expect(d.bestClearSpin).toBe(2);
     expect(d.bestRunId).toBe('r3');
 
-    // worse: equal goals, more spins -> ignored
-    const e = await db.upsertPuzzleRecord({ ...scope, goalsAchieved: 2, spinCount: 50, runId: 'r5' });
-    expect(e.bestSpinCount).toBe(30);
-    expect(e.bestRunId).toBe('r3');
+    // A later non-clear never wipes an existing clear.
+    const e = await db.upsertPuzzleRecord({
+      ...scope,
+      cleared: false,
+      clearSpin: null,
+      remainingSpins: null,
+      puzzleScore: null,
+      runId: 'r5',
+      clearedAt: null,
+    });
+    expect(e.cleared).toBe(true);
+    expect(e.bestClearSpin).toBe(2);
 
     // one row only
     expect((await db.listPlayerPuzzleRecords('p1', season!.id)).length).toBe(1);
   });
 
-  it('getPuzzleDistribution buckets bestGoalsAchieved across players', async () => {
+  it('getPuzzleDistribution buckets clear spins + counts 미클리어', async () => {
     const db = new MemoryDb();
     const season = await db.getActiveSeason();
-    const mk = (playerId: string, goalsAchieved: number) =>
+    const clear = (playerId: string, clearSpin: number) =>
       db.upsertPuzzleRecord({
         playerId,
         seasonId: season!.id,
         puzzleKey: 'pz1',
-        goalsAchieved,
-        spinCount: 5,
+        cleared: true,
+        clearSpin,
+        remainingSpins: 5 - clearSpin,
+        puzzleScore: 100 + (5 - clearSpin) * 10,
         runId: null,
+        clearedAt: 't',
       });
-    await mk('p1', 0);
-    await mk('p2', 1);
-    await mk('p3', 1);
-    await mk('p4', 2);
-    // different puzzle -> excluded
-    await db.upsertPuzzleRecord({ playerId: 'p5', seasonId: season!.id, puzzleKey: 'pz2', goalsAchieved: 3, spinCount: 1, runId: null });
-    // p1 improves to 1 -> moves bucket
-    await mk('p1', 1);
+    const miss = (playerId: string) =>
+      db.upsertPuzzleRecord({
+        playerId,
+        seasonId: season!.id,
+        puzzleKey: 'pz1',
+        cleared: false,
+        clearSpin: null,
+        remainingSpins: null,
+        puzzleScore: null,
+        runId: null,
+        clearedAt: null,
+      });
+
+    await clear('p1', 3);
+    await clear('p2', 3);
+    await clear('p3', 1);
+    await miss('p4');
+    // different puzzle -> excluded from pz1's distribution
+    await db.upsertPuzzleRecord({
+      playerId: 'p5',
+      seasonId: season!.id,
+      puzzleKey: 'pz2',
+      cleared: true,
+      clearSpin: 1,
+      remainingSpins: 4,
+      puzzleScore: 140,
+      runId: null,
+      clearedAt: 't',
+    });
 
     const dist = await db.getPuzzleDistribution(season!.id, 'pz1');
-    expect(dist).toEqual({ 1: 3, 2: 1 });
+    expect(dist).toEqual({ bySpin: { 1: 1, 3: 2 }, notCleared: 1 });
   });
 });
 
