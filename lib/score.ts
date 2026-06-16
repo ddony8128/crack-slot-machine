@@ -22,6 +22,7 @@ import {
   CLEAN_BONUS,
   GEM_BEAUTY,
   SHAKEDOWN_PER,
+  EXORCIST_PER,
 } from '@/data/scoreTable';
 
 /** 첨탑 per-hand upgrades, keyed by computeHand's hand name. */
@@ -50,6 +51,15 @@ function shakedownGems(events?: EngineEvent[]): number {
   if (!events) return 0;
   return events.filter(
     (e) => e.type === 'symbol_rerolled' && e.byRuleId === 'shakedown',
+  ).length;
+}
+
+/** +EXORCIST_PER per haunted dracula cell un-haunted by 흡혈귀 퇴마사, counted from
+ *  the event log (one cell_status_removed per cleared cell, at the rule's moment). */
+function exorcistCells(events?: EngineEvent[]): number {
+  if (!events) return 0;
+  return events.filter(
+    (e) => e.type === 'cell_status_removed' && e.byRuleId === 'vampire-exorcist',
   ).length;
 }
 
@@ -469,6 +479,9 @@ export function scoreItems(
   const shaken = shakedownGems(events);
   if (shaken > 0) items.push({ label: `금품 갈취 (${shaken})`, points: SHAKEDOWN_PER * shaken });
 
+  const exorcised = exorcistCells(events);
+  if (exorcised > 0) items.push({ label: `흡혈귀 퇴마사 (${exorcised})`, points: EXORCIST_PER * exorcised });
+
   items.push(...pairBonus(expanded, result).items);
 
   const clean = cleanSweepCount(expanded, result, scoreBoards);
@@ -553,6 +566,7 @@ export function scoreResult(
   if (boardHasGem(result)) bonusScore += GEM_BEAUTY * countRule(expanded, 'gem-beauty');
   bonusScore += VITAMIN_PER * vitaminFruits(events);
   bonusScore += SHAKEDOWN_PER * shakedownGems(events);
+  bonusScore += EXORCIST_PER * exorcistCells(events);
   bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 

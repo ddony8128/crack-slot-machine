@@ -45,6 +45,10 @@ export const VITAMIN_PER = 5;
 // symbol_rerolled event log tagged 'shakedown', so it reflects gems AT the moment).
 export const SHAKEDOWN_PER = 70;
 
+// 흡혈귀 퇴마사 (vampire-exorcist): +this per haunted dracula cell un-haunted by
+// the rule (counted via the cell_status_removed event log tagged 'vampire-exorcist').
+export const EXORCIST_PER = 200;
+
 // 첨탑 hand upgrade: +this per flat upgrade. Final hand = (base + this×flat) × 2^double.
 export const HAND_FLAT_UPGRADE = 50;
 

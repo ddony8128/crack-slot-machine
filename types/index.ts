@@ -8,8 +8,9 @@ export type SymbolType =
   | 'plane' | 'ship' | 'car'                       // vehicles
   | 'dracula' | 'zombie' | 'ghost'                 // monsters
   // hybrids: score as members of MULTIPLE sets via SYMBOL_TAGS (lib/symbols/tags.ts).
-  // zombie_cat (좀비고양이) counts as BOTH a cat and a monster for set bonuses.
-  | 'zombie_cat';                                  // hybrids
+  // zombie_cat (좀비고양이) / ghost_cat (유령고양이) count as BOTH a cat and a
+  // monster for set bonuses.
+  | 'zombie_cat' | 'ghost_cat';                    // hybrids
 
 export type RuleType = 'weight' | 'reroll' | 'transform' | 'lock' | 'score' | 'meta' | 'select';
 
@@ -56,7 +57,12 @@ export type EngineEvent =
   | { type: 'symbol_locked'; symbolId: SymbolType; index: number; byRuleId: string }
   // A cell flagged to HOLD into the next spin (유료 주차 / vehicle-parking). The
   // points loss is scored EVENT-based: one symbol_held per chosen vehicle cell.
-  | { type: 'symbol_held'; symbolId: SymbolType; index: number; byRuleId: string };
+  | { type: 'symbol_held'; symbolId: SymbolType; index: number; byRuleId: string }
+  // A cell's "haunted" status was ADDED or REMOVED by a rule this spin. Read-only
+  // data: the authoritative haunted state lives on the cascade frame; these events
+  // let later EVENT-based scoring (e.g. 흡혈귀 퇴마사) count haunt removals.
+  | { type: 'cell_status_added'; status: 'haunted'; index: number; byRuleId: string }
+  | { type: 'cell_status_removed'; status: 'haunted'; index: number; byRuleId: string };
 
 export type SpinLog = {
   spinIndex: number;        // 0-based

@@ -10,10 +10,12 @@ import type { SymbolType } from '@/types';
  * (computeHand still counts a hybrid as its own id) or cat/monster RULE targeting
  * (those still use the base CATS/MONSTERS lists in lib/cascade.ts).
  *
- * zombie_cat (좀비고양이) scores as BOTH a cat and a monster.
+ * zombie_cat (좀비고양이) and ghost_cat (유령고양이) each score as BOTH a cat and
+ * a monster.
  */
 export const SYMBOL_TAGS: Partial<Record<SymbolType, string[]>> = {
   zombie_cat: ['cat', 'monster'],
+  ghost_cat: ['cat', 'monster'],
 };
 
 /**

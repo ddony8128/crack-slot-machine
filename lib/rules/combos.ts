@@ -18,6 +18,9 @@ export const COMBO_RULE_SETS: Record<string, [string, string]> = {
   vandalism: ['cat', 'vehicle'],
   'why-here': ['cat', 'vehicle'],
   shakedown: ['monster', 'gem'],
+  'gem-obsession': ['monster', 'gem'],
+  'combo-zombie-cat': ['monster', 'cat'],
+  'combo-ghost-cat': ['monster', 'cat'],
 };
 
 /**

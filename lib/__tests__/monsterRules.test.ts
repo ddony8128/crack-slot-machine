@@ -31,9 +31,12 @@ describe('monster-haunt — leftmost monster cell becomes haunted (no board chan
     const frame = beginCascade(base, [RULES_BY_ID['monster-haunt']], ctxFor());
 
     expect(frame.haunted).toEqual([false, false, true, false, false]);
-    // No board change, no rng consumed, no events emitted.
+    // No board change, no rng consumed. Emits a single cell_status_added for the
+    // haunted cell (additive bookkeeping; no symbol-change events).
     expect(frame.working).toEqual(base);
-    expect(frame.events).toHaveLength(0);
+    expect(frame.events).toEqual([
+      { type: 'cell_status_added', status: 'haunted', index: 2, byRuleId: 'monster-haunt' },
+    ]);
   });
 
   it('no monster on the board -> all haunted flags stay false', () => {

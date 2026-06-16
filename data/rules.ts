@@ -345,6 +345,14 @@ export const RULES: Rule[] = [
     build: 'monster',
     description: '괴물이 있으면 가장 왼쪽 고양이가 좀비고양이로 변한다. (좀비고양이는 고양이이자 괴물로 계산된다)',
   },
+  {
+    id: 'vampire-exorcist',
+    name: '흡혈귀 퇴마사',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'monster',
+    description: '드라큘라가 있는 유령들린 칸의 유령들림을 풀고, 칸마다 200점을 얻는다.',
+  },
 
   // ---- safe ----
   {
@@ -454,6 +462,30 @@ export const RULES: Rule[] = [
     phase: 'sequential',
     build: 'combo',
     description: '교통수단과 이웃한 고양이 중 가장 왼쪽 고양이를 직접 고른 칸과 자리를 바꾼다.',
+  },
+  {
+    id: 'gem-obsession',
+    name: '망령의 집착',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'combo',
+    description: '가장 왼쪽 보석이 있는 칸이 유령들린다.',
+  },
+  {
+    id: 'combo-zombie-cat',
+    name: '좀비 고양이',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'combo',
+    description: '첫 번째 칸이 좀비고양이가 된다.',
+  },
+  {
+    id: 'combo-ghost-cat',
+    name: '유령 고양이',
+    type: 'transform',
+    phase: 'sequential',
+    build: 'combo',
+    description: '유령들린 칸의 고양이는 유령고양이가 되고, 그 칸의 유령들림이 풀린다.',
   },
 
   // ---- pair (A–B conditional bonus; DATA in lib/pairRules.ts) ----

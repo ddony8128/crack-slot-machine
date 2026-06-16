@@ -20,8 +20,9 @@ export const SYMBOL_EMOJI: Record<SymbolType, string> = {
   dracula: '🧛',
   zombie: '🧟',
   ghost: '👻',
-  // hybrid: scores as both a cat and a monster (see lib/symbols/tags.ts).
+  // hybrids: score as both a cat and a monster (see lib/symbols/tags.ts).
   zombie_cat: '😼',
+  ghost_cat: '😽',
 };
 
 export const FRUITS: SymbolType[] = ['cherry', 'lemon', 'grape'];
@@ -63,6 +64,8 @@ export const BASE_WEIGHTS: Record<SymbolType, number> = {
   dracula: 0,
   zombie: 0,
   ghost: 0,
-  // hybrid: weight 0, never rolled. Only created by the monster-infect rule.
+  // hybrids: weight 0, never rolled. Only created by rules (monster-infect →
+  // zombie_cat; 유령 고양이 / combo-ghost-cat → ghost_cat).
   zombie_cat: 0,
+  ghost_cat: 0,
 };

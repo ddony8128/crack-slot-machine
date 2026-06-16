@@ -24,12 +24,12 @@ tests, replay-fuzz green, commit.
 - [ ] (유령들림/전염병은 set에서 제거; rule은 deprecated 유지 또는 재사용)
 
 ## Wave 3 — cell-status 모델 + ghost_cat + 잔여 괴물/조합
-- [ ] ghost_cat 심볼 + SYMBOL_TAGS(['cat','monster']) + emoji
-- [ ] cell-status 모델 확장 (haunted clear 이벤트; 흡혈귀퇴마사/유령고양이가 해제)
-- [ ] 흡혈귀 퇴마사 (monster): 흡혈귀 있는 유령들린 칸 해제 + 200점
-- [ ] 망령의 집착 (monster+gem): 가장 왼쪽 보석 칸 유령들림
-- [ ] 좀비 고양이 (monster+cat): 첫 칸 → zombie_cat
-- [ ] 유령 고양이 (monster+cat): 유령들린 칸의 고양이 → ghost_cat + 해제
+- [x] ghost_cat 심볼 + SYMBOL_TAGS(['cat','monster']) + emoji
+- [x] cell-status 모델 확장 (cell_status_added/removed 이벤트; 흡혈귀퇴마사/유령고양이가 해제)
+- [x] 흡혈귀 퇴마사 (monster): 흡혈귀 있는 유령들린 칸 해제 + 200점
+- [x] 망령의 집착 (monster+gem): 가장 왼쪽 보석 칸 유령들림
+- [x] 좀비 고양이 (monster+cat): 첫 칸 → zombie_cat
+- [x] 유령 고양이 (monster+cat): 유령들린 칸의 고양이 → ghost_cat + 해제
 
 ## Wave 4 — 위치/이전상태 조건부 확률
 - [ ] 고양이 확률 증가 (cat): 홀수 칸에서 고양이 확률 ×4

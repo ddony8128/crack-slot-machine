@@ -41,7 +41,7 @@ describe('initialBoardFor', () => {
       cheese_cat: 0, tuxedo_cat: 0, calico_cat: 0,
       plane: 0, ship: 0, car: 0,
       dracula: 0, zombie: 0, ghost: 0,
-      zombie_cat: 0,
+      zombie_cat: 0, ghost_cat: 0,
     };
     expect(initialBoardFor('x', onlySeven)).toEqual([
       'seven', 'seven', 'seven', 'seven', 'seven',

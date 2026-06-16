@@ -45,6 +45,12 @@ describe('symbolInSet — hybrids belong to multiple sets, base symbols to one',
     expect(symbolInSet('dracula', MONSTER)).toBe(true);
     expect(symbolInSet('dracula', CAT)).toBe(false);
   });
+
+  it('ghost_cat is a member of BOTH the cat and the monster sets', () => {
+    expect(symbolInSet('ghost_cat', CAT)).toBe(true);
+    expect(symbolInSet('ghost_cat', MONSTER)).toBe(true);
+    expect(symbolInSet('ghost_cat', FRUIT)).toBe(false);
+  });
 });
 
 describe('scoring — a hybrid counts toward multiple sets', () => {
@@ -56,6 +62,24 @@ describe('scoring — a hybrid counts toward multiple sets', () => {
     const baseline = scoreResult(without, []).bonusScore;
     // The only difference is the zombie_cat -> +30 cat per-symbol.
     expect(withCat - baseline).toBe(30);
+  });
+
+  it('one ghost_cat gives the cat per-symbol +30', () => {
+    const board: SymbolType[] = ['ghost_cat', 'zero', 'seven', 'four', 'zero'];
+    const without: SymbolType[] = ['lemon', 'zero', 'seven', 'four', 'zero'];
+    const withCat = scoreResult(board, []).bonusScore;
+    const baseline = scoreResult(without, []).bonusScore;
+    expect(withCat - baseline).toBe(30);
+  });
+
+  it('a symbol_copied event of ghost_cat gives the monster copied +40 (per-event)', () => {
+    const board: SymbolType[] = ['ghost_cat', 'zero', 'seven', 'four', 'zero'];
+    const events = [
+      { type: 'symbol_copied', symbolId: 'ghost_cat', fromIndex: 0, toIndex: 1, byRuleId: 'x' } as const,
+    ];
+    const without = scoreResult(board, [], []).bonusScore;
+    const withCopy = scoreResult(board, [], events).bonusScore;
+    expect(withCopy - without).toBe(40);
   });
 
   it('a symbol_copied event of zombie_cat gives the monster copied +40 (per-event)', () => {

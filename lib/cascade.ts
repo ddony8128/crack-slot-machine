@@ -128,6 +128,15 @@ function applyOne(
   const emitMove = (symbolId: SymbolType, fromIndex: number, toIndex: number) => {
     events.push({ type: 'symbol_moved', symbolId, fromIndex, toIndex, byRuleId: rule.id });
   };
+  // Haunt status events: ADDITIVE bookkeeping alongside the haunted[] writes. The
+  // authoritative haunted state is the array; these only PUSH to `events` so later
+  // EVENT-based scoring (흡혈귀 퇴마사) can count haunt removals.
+  const emitHauntAdd = (index: number) => {
+    events.push({ type: 'cell_status_added', status: 'haunted', index, byRuleId: rule.id });
+  };
+  const emitHauntRemove = (index: number) => {
+    events.push({ type: 'cell_status_removed', status: 'haunted', index, byRuleId: rule.id });
+  };
   switch (rule.id) {
     // ---- reroll ----
     case 'four-shield': {
@@ -456,7 +465,10 @@ function applyOne(
       // Leftmost monster cell becomes "haunted": at scoring it contributes one
       // extra phantom 'ghost' to the n-of-a-kind counts. No board change, no rng.
       const i = working.findIndex((s) => MONSTER_SET.has(s));
-      if (i !== -1) haunted[i] = true;
+      if (i !== -1) {
+        haunted[i] = true;
+        emitHauntAdd(i);
+      }
       return [];
     }
     case 'jibakryeong': {
@@ -466,6 +478,7 @@ function applyOne(
       const i = working.findIndex((s) => s === 'ghost');
       if (i === -1) return [];
       haunted[i] = true;
+      emitHauntAdd(i);
       const old = working[i];
       write(working, locked, i, rollSymbol(weights, rng));
       emitReroll(old, i);
@@ -510,6 +523,50 @@ function applyOne(
         }
       }
       return [];
+    }
+    case 'vampire-exorcist': {
+      // 흡혈귀 퇴마사: every haunted cell that currently holds a dracula is
+      // un-haunted (emit cell_status_removed). No board change, no rng. Each
+      // removal is EVENT-scored +EXORCIST_PER in score.ts.
+      for (let i = 0; i < working.length; i++) {
+        if (haunted[i] && working[i] === 'dracula') {
+          haunted[i] = false;
+          emitHauntRemove(i);
+        }
+      }
+      return [];
+    }
+    case 'gem-obsession': {
+      // 망령의 집착 (combo monster×gem): the leftmost gem cell becomes haunted.
+      const i = working.findIndex((s) => GEM_SET.has(s));
+      if (i !== -1) {
+        haunted[i] = true;
+        emitHauntAdd(i);
+      }
+      return [];
+    }
+    case 'combo-zombie-cat': {
+      // 좀비 고양이 (combo monster×cat): the first cell becomes a zombie_cat hybrid.
+      const old = working[0];
+      write(working, locked, 0, 'zombie_cat');
+      emitTransform(old, 'zombie_cat', 0);
+      return [0];
+    }
+    case 'combo-ghost-cat': {
+      // 유령 고양이 (combo monster×cat): every haunted cat cell becomes a ghost_cat
+      // hybrid and is un-haunted. Non-cat haunted cells are untouched.
+      const changed: number[] = [];
+      for (let i = 0; i < working.length; i++) {
+        if (haunted[i] && CAT_SET.has(working[i])) {
+          const old = working[i];
+          write(working, locked, i, 'ghost_cat');
+          emitTransform(old, 'ghost_cat', i);
+          haunted[i] = false;
+          emitHauntRemove(i);
+          changed.push(i);
+        }
+      }
+      return changed;
     }
 
     // ---- lock rules are handled in the PRE-ROLL HOLD pass, not here. ----
