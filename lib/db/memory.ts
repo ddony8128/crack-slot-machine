@@ -19,7 +19,7 @@ import type {
   RunMode,
   RunStatus,
 } from '@/lib/db/types';
-import { TOTAL_SLUG } from '@/lib/db/types';
+import { TOTAL_SLUG, normalizePhone } from '@/lib/db/types';
 import {
   SEASON_TITLE,
   SEASON_SLUG,
@@ -295,13 +295,19 @@ export class MemoryDb implements Db {
     phone?: string | null;
     passwordHash: string;
   }): Promise<PlayerRow> {
+    // Canonicalize contacts at the storage boundary so every caller stores the
+    // same form: email lower-cased, phone reduced to digits-only. This is what
+    // makes the lower(email) / digits-only-phone unique indexes meaningful.
+    const email = input.email != null ? input.email.trim().toLowerCase() : null;
+    const phone =
+      input.phone != null ? normalizePhone(input.phone) || null : null;
     const row: PlayerRow = {
       id: this.id('player'),
       nickname: input.nickname,
       contactType: input.contactType,
       contactValue: input.contactValue,
-      email: input.email ?? null,
-      phone: input.phone ?? null,
+      email,
+      phone,
       passwordHash: input.passwordHash,
       createdAt: new Date().toISOString(),
       deletedAt: null,
@@ -327,7 +333,7 @@ export class MemoryDb implements Db {
   }
 
   async getPlayerByEmail(email: string): Promise<PlayerRow | null> {
-    const lower = email.toLowerCase();
+    const lower = email.trim().toLowerCase();
     return (
       this.players.find(
         (p) =>
@@ -339,9 +345,13 @@ export class MemoryDb implements Db {
   }
 
   async getPlayerByPhone(phone: string): Promise<PlayerRow | null> {
+    // Compare on the digits-only form so a query in either "000-0000-0000" or
+    // "00000000000" format matches the stored (also digits-only) phone.
+    const digits = normalizePhone(phone);
+    if (digits.length === 0) return null;
     return (
       this.players.find(
-        (p) => p.deletedAt === null && p.phone !== null && p.phone === phone,
+        (p) => p.deletedAt === null && p.phone !== null && p.phone === digits,
       ) ?? null
     );
   }
@@ -621,15 +631,19 @@ export class MemoryDb implements Db {
         r.rulesetVersion === input.rulesetVersion,
     );
 
-    // Dedupe by IDENTITY, not display name: members collapse to one best per
-    // playerId; guests (playerId null) have no persisted id, so each guest run
-    // is its own entry (keyed by runId) — two guests sharing a display name, or
-    // a guest colliding with a member nickname, never merge/mask each other.
-    // Within a key, keep the best: score desc, then bestSpinScore desc, then
-    // submittedAt asc. The nickname is still carried for display.
+    // Dedupe by IDENTITY: members collapse to one best per playerId; guests
+    // (playerId null) collapse to one best per guest nickname (`guest:{name}`),
+    // so a single guest's many runs no longer flood the board. The distinct
+    // `guest:`/`player:` prefixes keep a guest from colliding with a member who
+    // shares the nickname; two DIFFERENT guests sharing a nickname merge to the
+    // better entry (acceptable + rare). Within a key, keep the best: score desc,
+    // then bestSpinScore desc, then submittedAt asc. Nickname carried for display.
     const best = new Map<string, QuickEntry>();
     for (const r of rows) {
-      const key = r.playerId !== null ? `player:${r.playerId}` : `run:${r.id}`;
+      const key =
+        r.playerId !== null
+          ? `player:${r.playerId}`
+          : `guest:${r.nickname ?? 'Anonymous'}`;
       const candidate: QuickEntry = {
         nickname: r.nickname ?? 'Anonymous',
         score: r.score ?? 0,

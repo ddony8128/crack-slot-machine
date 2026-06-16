@@ -297,6 +297,13 @@ export default function DailyClient() {
         오늘의 랭킹 보기
       </Link>
 
+      <Link
+        href="/season"
+        className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+      >
+        시즌 허브로
+      </Link>
+
       <DummyAdModal
         open={adOpen}
         onConfirm={handleRefillConfirm}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import SeasonNav from "@/components/SeasonNav";
 import { currentPlayer } from "@/lib/server/playerAuth";
@@ -25,12 +24,6 @@ export default async function MePage() {
           <h1 className="mt-2 max-w-full truncate text-3xl font-black tracking-tight sm:text-4xl">
             {player.nickname}
           </h1>
-          <Link
-            href="/me/settings"
-            className="mt-3 inline-block rounded-full border border-zinc-700 bg-zinc-900/60 px-4 py-1.5 text-sm font-semibold text-zinc-300 transition hover:border-emerald-400 hover:text-emerald-300"
-          >
-            설정
-          </Link>
         </header>
 
         {!season ? (

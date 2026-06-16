@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/gameStore";
 import { submitDaily, type SubmitDailyResponse } from "@/lib/client/dailyApi";
 import { buildClientResults } from "@/lib/clientResults";
@@ -34,6 +35,7 @@ export default function DailyResultScreen({
   const runId = useGameStore((s) => s.runId);
   const getActions = useGameStore((s) => s.getActions);
   const reset = useGameStore((s) => s.reset);
+  const router = useRouter();
 
   const [state, setState] = useState<SubmitState>({ phase: "submitting" });
   const submittedRef = useRef(false);
@@ -50,7 +52,12 @@ export default function DailyResultScreen({
 
     const clientResults = buildClientResults(spinLogs, totalScore);
     submitDaily(runId, { actions: getActions(), clientResults })
-      .then((result) => setState({ phase: "done", result }))
+      .then((result) => {
+        setState({ phase: "done", result });
+        // Bust the cached server render of the daily ranking/leaderboard so the
+        // just-submitted best score is reflected without a manual refresh.
+        if (result.status === "submitted") router.refresh();
+      })
       .catch(() => setState({ phase: "error" }));
     // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,6 +117,12 @@ export default function DailyResultScreen({
         >
           오늘의 랭킹 보기
         </Link>
+        <Link
+          href="/season"
+          className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+        >
+          시즌 허브로
+        </Link>
       </main>
     );
   }
@@ -162,12 +175,18 @@ export default function DailyResultScreen({
 
       {submitted && change && <SeasonScoreRise change={change} />}
 
-      <section className="w-full">
+      <section className="w-full space-y-3">
         <Link
           href="/season/daily/leaderboard"
           className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
         >
           오늘의 랭킹 보기
+        </Link>
+        <Link
+          href="/season"
+          className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+        >
+          시즌 허브로
         </Link>
       </section>
 
