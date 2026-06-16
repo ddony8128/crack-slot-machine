@@ -36,6 +36,7 @@ import {
   goldBarMoney,
 } from '@/lib/spire/stage';
 import { SPIRE_STAGE_COUNT } from '@/lib/spire/config';
+import { ARTIFACTS_BY_ID } from '@/lib/spire/artifacts';
 
 export type SpireAction =
   | { type: 'choose_set'; chosenSetId: string }
@@ -222,13 +223,22 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
         break;
       }
       case 'choose_artifact': {
-        // v0: artifact catalog is temp; record the pick (skip = null). Offer-set
-        // validation lands with the seeded shop generator (SP-H).
-        if (action.artifactId && !state.artifacts.includes(action.artifactId)) {
-          state = { ...state, artifacts: [...state.artifacts, action.artifactId] };
-          // Apply the onAcquire effect right after the id is added — same point as
-          // the live client (components/SpireClient.tsx `choose`).
-          state = applyArtifactAcquire(state, action.artifactId);
+        // v0 reward pick (skip = null). At minimum reject an UNKNOWN artifact id
+        // (catalog membership) as a tampering signal, and silently skip an
+        // already-owned one. FULL offer-set validation — that this id was one of
+        // the ≤2 seeded-offered artifacts at THIS reward step, including its
+        // requiredSet — is deferred to the seeded shop generator (SP-H); it can't
+        // be enforced here without recomputing that offer.
+        if (action.artifactId) {
+          if (!ARTIFACTS_BY_ID[action.artifactId]) {
+            return fail(`unknown artifact: ${action.artifactId}`);
+          }
+          if (!state.artifacts.includes(action.artifactId)) {
+            state = { ...state, artifacts: [...state.artifacts, action.artifactId] };
+            // Apply onAcquire right after the id is added — same point as the live
+            // client (components/SpireClient.tsx `choose`).
+            state = applyArtifactAcquire(state, action.artifactId);
+          }
         }
         break;
       }

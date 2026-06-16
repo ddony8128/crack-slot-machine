@@ -60,6 +60,29 @@ export async function POST(req: Request) {
   const clientResults = body.clientResults ?? null;
   const now = new Date().toISOString();
 
+  // Attempt-cap re-check (spec §13): /start enforces the per-day cap at run
+  // creation, but re-assert it here so a raced or extra pending run can never
+  // register a score beyond the day's 5 (or 10 with ad refill) attempts. This
+  // pending run is not yet RESOLVED, so 0 attempts left means it is over the cap.
+  const attemptsBefore = await dailyAttemptsLeft(db, player.id, run.seasonId!, run.dailyDateKey!);
+  if (attemptsBefore <= 0) {
+    await db.finalizeRun(runId, {
+      nickname: player.nickname,
+      actions,
+      clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
+      score: null,
+      bestSpinScore: null,
+      status: 'rejected',
+      verified: false,
+      rejectReason: 'daily_attempts_exhausted',
+      submittedAt: now,
+    });
+    return Response.json(
+      { status: 'rejected', reason: 'daily_attempts_exhausted', attemptsLeft: 0 },
+      { status: 409 },
+    );
+  }
+
   // Version gate: only current-version runs may register, keeping the daily
   // leaderboard comparable. A mismatch resolves the run as rejected.
   const versionOk =
