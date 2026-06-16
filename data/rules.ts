@@ -139,18 +139,18 @@ export const RULES: Rule[] = [
   },
   {
     id: 'red-dye',
-    name: 'RED DYE',
+    name: '붉은 물들이기',
     type: 'transform',
     phase: 'sequential',
-    build: 'color',
+    build: 'combo',
     description: '레몬과 다이아몬드가 체리로 바뀐다.',
   },
   {
     id: 'blue-dye',
-    name: 'BLUE DYE',
+    name: '푸른 물들이기',
     type: 'transform',
     phase: 'sequential',
-    build: 'color',
+    build: 'combo',
     description: '레몬과 다이아몬드가 사파이어로 바뀐다.',
   },
 

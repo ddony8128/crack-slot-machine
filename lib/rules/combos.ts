@@ -13,6 +13,8 @@
  */
 
 export const COMBO_RULE_SETS: Record<string, [string, string]> = {
+  'red-dye': ['fruit', 'gem'],
+  'blue-dye': ['fruit', 'gem'],
   'ruby-convert': ['number', 'gem'],
   'diamond-convert': ['number', 'gem'],
   vandalism: ['cat', 'vehicle'],

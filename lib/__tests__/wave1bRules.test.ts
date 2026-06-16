@@ -38,6 +38,17 @@ describe('comboRulesForSets', () => {
     expect(comboRulesForSets(['monster', 'gem'])).toContain('shakedown');
   });
 
+  it('fruit+gem -> 붉은/푸른 물들이기 (red-dye, blue-dye)', () => {
+    const ids = comboRulesForSets(['fruit', 'gem']);
+    expect(ids).toContain('red-dye');
+    expect(ids).toContain('blue-dye');
+    expect(ids).not.toContain('ruby-convert'); // needs number, not fruit
+  });
+
+  it('COMBO_RULE_SETS has all 10 combos (5 set-pairs × 2)', () => {
+    expect(Object.keys(COMBO_RULE_SETS)).toHaveLength(10);
+  });
+
   it('a single set of a combo present -> none', () => {
     expect(comboRulesForSets(['gem'])).toEqual([]);
     expect(comboRulesForSets(['cat'])).toEqual([]);
@@ -87,6 +98,37 @@ describe('rulePlayable — combo rule needs BOTH sets rollable', () => {
       calico_cat: 1,
     };
     expect(rulePlayable(rubyConvert, catOnly)).toBe(false);
+  });
+});
+
+describe('붉은/푸른 물들이기 (red-dye/blue-dye) — fruit+gem combo, lemon&diamond convert', () => {
+  it('red-dye: lemon & diamond -> cherry; only offered when fruit+gem roll', () => {
+    const base: SymbolType[] = ['lemon', 'diamond', 'four', 'cherry', 'ruby'];
+    const frame = beginCascade(base, [RULES_BY_ID['red-dye']], {
+      previousResult: PREV_ZEROS,
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([0]),
+    });
+    expect(frame.working).toEqual(['cherry', 'cherry', 'four', 'cherry', 'ruby']);
+    // combo gating: playable under BASE_WEIGHTS (fruit+gem roll), not in a number-only bag
+    expect(rulePlayable(RULES_BY_ID['red-dye'], BASE_WEIGHTS)).toBe(true);
+    const noFruit: Record<SymbolType, number> = {
+      ...BASE_WEIGHTS,
+      cherry: 0,
+      lemon: 0,
+      grape: 0,
+    };
+    expect(rulePlayable(RULES_BY_ID['red-dye'], noFruit)).toBe(false);
+  });
+
+  it('blue-dye: lemon & diamond -> sapphire', () => {
+    const base: SymbolType[] = ['lemon', 'diamond', 'four', 'grape', 'ruby'];
+    const frame = beginCascade(base, [RULES_BY_ID['blue-dye']], {
+      previousResult: PREV_ZEROS,
+      weights: BASE_WEIGHTS,
+      rng: queuedRng([0]),
+    });
+    expect(frame.working).toEqual(['sapphire', 'sapphire', 'four', 'grape', 'ruby']);
   });
 });
 
