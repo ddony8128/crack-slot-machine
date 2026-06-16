@@ -45,6 +45,39 @@ export async function POST() {
   });
   const allowed = dailyAttemptsAllowed(status?.adRefillUsed ?? false);
 
+  // Close out any of this player's still-PENDING daily runs for today before
+  // opening a new one. Without this, /start only counts RESOLVED runs, so a
+  // player could open many pending runs and submit only the best ("fishing").
+  // Auto-rejecting a prior pending run resolves it (counting it toward the
+  // per-day cap), so each /start commits the previous attempt — one active run
+  // at a time, and abandoned runs consume an attempt.
+  const now = new Date().toISOString();
+  const pending = await db.listRecentRuns({
+    mode: 'daily',
+    seasonId: season.id,
+    status: 'pending',
+    limit: 500,
+  });
+  for (const stale of pending) {
+    if (stale.playerId !== player.id || stale.dailyDateKey !== dateKey) continue;
+    await db.finalizeRun(stale.id, {
+      nickname: player.nickname,
+      actions: stale.actions ?? [],
+      clientResults: stale.clientResults ?? {
+        spins: [],
+        finalScore: 0,
+        bestSpinScore: 0,
+      },
+      score: null,
+      bestSpinScore: null,
+      status: 'rejected',
+      verified: false,
+      rejectReason: 'daily_run_superseded',
+      submittedAt: now,
+    });
+  }
+
+  // Count AFTER closing stale pendings so abandoned runs count toward the cap.
   const attemptsUsed = await db.countResolvedDailyRuns({
     playerId: player.id,
     seasonId: season.id,
