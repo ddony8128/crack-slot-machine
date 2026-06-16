@@ -169,7 +169,7 @@ export default async function SeasonHubPage() {
                 </dt>
                 <dd className="mt-1 font-mono text-3xl font-black text-emerald-300">
                   {seasonSummary?.seasonPoints ?? 0}
-                  <span className="ml-1 text-base text-zinc-500">/ 3000</span>
+                  <span className="ml-1 text-base text-zinc-500">점</span>
                 </dd>
               </div>
               <div>
@@ -226,7 +226,7 @@ export default async function SeasonHubPage() {
             <span className="font-semibold text-zinc-300">빠른 게임</span>은
             로그인 없이 즐길 수 있지만 시즌 랭킹에는 반영되지 않습니다.{" "}
             <span className="font-semibold text-zinc-300">첨탑 오르기·퍼즐 모드·일일 도전</span>은
-            로그인이 필요하며, 기록이 시즌 점수로 합산됩니다 (최대 3000점).
+            로그인이 필요하며, 기록이 시즌 점수로 합산됩니다.
           </p>
         </section>
 
