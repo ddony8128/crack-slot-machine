@@ -70,3 +70,26 @@ export async function fetchMe(): Promise<MePlayer> {
   const body = (await res.json()) as { player: MePlayer };
   return body.player;
 }
+
+/** POST /api/auth/password. Resolves on success, throws AuthApiError. */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await fetch('/api/auth/password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) throw new AuthApiError(await errorCode(res));
+}
+
+/** POST /api/auth/delete (탈퇴). Resolves on success, throws AuthApiError. */
+export async function deleteAccount(password: string): Promise<void> {
+  const res = await fetch('/api/auth/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) throw new AuthApiError(await errorCode(res));
+}

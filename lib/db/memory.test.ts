@@ -205,6 +205,46 @@ describe('MemoryDb players', () => {
     expect(await db.getPlayerByNickname('bob')).toBeNull();
     expect((await db.getPlayerById(p.id))?.deletedAt).not.toBeNull();
   });
+
+  it('updatePlayerPassword replaces the stored hash', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Pat',
+      contactType: 'email',
+      contactValue: 'p@e.com',
+      passwordHash: 'old-hash',
+    });
+    await db.updatePlayerPassword(p.id, 'new-hash');
+    expect((await db.getPlayerById(p.id))?.passwordHash).toBe('new-hash');
+  });
+
+  it('deactivatePlayer soft-deletes, clears contact, anonymizes nickname, frees the nickname', async () => {
+    const db = new MemoryDb();
+    const p = await db.createPlayer({
+      nickname: 'Quitter',
+      contactType: 'email',
+      contactValue: 'q@e.com',
+      passwordHash: 'h',
+    });
+
+    await db.deactivatePlayer(p.id);
+
+    const fetched = await db.getPlayerById(p.id);
+    expect(fetched?.deletedAt).not.toBeNull();
+    expect(fetched?.contactValue).toBe('');
+    expect(fetched?.nickname).toBe(`탈퇴회원${p.id.slice(0, 6)}`);
+
+    // No longer resolvable by the (old) nickname → can't log in, and the
+    // nickname is free for reuse.
+    expect(await db.getPlayerByNickname('Quitter')).toBeNull();
+    const reuse = await db.createPlayer({
+      nickname: 'Quitter',
+      contactType: 'email',
+      contactValue: 'q2@e.com',
+      passwordHash: 'h2',
+    });
+    expect((await db.getPlayerByNickname('Quitter'))?.id).toBe(reuse.id);
+  });
 });
 
 describe('MemoryDb seasons', () => {

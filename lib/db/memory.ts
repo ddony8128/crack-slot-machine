@@ -313,6 +313,25 @@ export class MemoryDb implements Db {
     return row;
   }
 
+  async updatePlayerPassword(
+    playerId: string,
+    passwordHash: string,
+  ): Promise<void> {
+    const row = this.players.find((p) => p.id === playerId);
+    if (row) row.passwordHash = passwordHash;
+  }
+
+  async deactivatePlayer(playerId: string): Promise<void> {
+    const row = this.players.find((p) => p.id === playerId);
+    if (!row) return;
+    // MemoryDb has no clock; use a fixed sentinel so deletedAt is non-null and
+    // tests stay deterministic.
+    row.deletedAt = new Date(0).toISOString();
+    row.contactValue = '';
+    // Anonymize so leaderboards (which resolve via getPlayerById) show no PII.
+    row.nickname = `탈퇴회원${playerId.slice(0, 6)}`;
+  }
+
   // ── Season 1: seasons ──────────────────────────────────────────────────────
   async getSeasonBySlug(slug: string): Promise<SeasonRow | null> {
     return this.seasons.find((s) => s.slug === slug) ?? null;

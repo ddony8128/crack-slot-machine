@@ -236,6 +236,15 @@ export interface Db {
   getPlayerById(id: string): Promise<PlayerRow | null>;
   /** Active (not soft-deleted) player by nickname, case-insensitive. */
   getPlayerByNickname(nickname: string): Promise<PlayerRow | null>;
+  /** Replace a player's password hash. */
+  updatePlayerPassword(playerId: string, passwordHash: string): Promise<void>;
+  /**
+   * Soft-delete + anonymize a player (탈퇴): set deletedAt, clear contactValue,
+   * and rename to an anonymized stable value so leaderboards carry no PII. The
+   * row is kept (best_scores reference playerId). Frees the nickname + contact
+   * for reuse (the active-nickname index only constrains non-deleted rows).
+   */
+  deactivatePlayer(playerId: string): Promise<void>;
   /** Grant or revoke the 후원자(supporter) badge for a player. */
   grantSupporterBadge(
     playerId: string,

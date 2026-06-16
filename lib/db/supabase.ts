@@ -425,6 +425,32 @@ export class SupabaseDb implements Db {
     return data ? toPlayer(data) : null;
   }
 
+  async updatePlayerPassword(
+    playerId: string,
+    passwordHash: string,
+  ): Promise<void> {
+    const { error } = await this.sb
+      .from('players')
+      .update({ password_hash: passwordHash })
+      .eq('id', playerId);
+    if (error) throw error;
+  }
+
+  async deactivatePlayer(playerId: string): Promise<void> {
+    // Soft-delete + anonymize: stamp deleted_at, clear the contact, and rename
+    // to a stable anonymized nickname so leaderboards carry no PII. Freeing the
+    // nickname relies on players_active_nickname_uidx (WHERE deleted_at IS NULL).
+    const { error } = await this.sb
+      .from('players')
+      .update({
+        deleted_at: new Date().toISOString(),
+        contact_value: '',
+        nickname: `탈퇴회원${playerId.slice(0, 6)}`,
+      })
+      .eq('id', playerId);
+    if (error) throw error;
+  }
+
   // ── Season 1: seasons ──────────────────────────────────────────────────────
   async getSeasonBySlug(slug: string): Promise<SeasonRow | null> {
     const { data, error } = await this.sb
