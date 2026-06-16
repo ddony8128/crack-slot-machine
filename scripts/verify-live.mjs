@@ -36,12 +36,16 @@ if (seasonId) {
   error ? fail('daily_challenges: ' + error.message) : count === 14 ? pass('14 daily_challenges') : fail(`daily_challenges count=${count}`);
 }
 
-// 3) Migration 0011 — puzzle_user_records has the clear-spin columns (selecting a
-//    non-existent column errors, so a clean select proves they exist).
+// 3) Migration column presence — a select on a missing column errors, so a clean
+//    select proves the migration landed. Covers the ones that were applied late.
 {
-  const { error } = await sb.from('puzzle_user_records')
+  const c0910 = await sb.from('players').select('email,phone,supporter_note,supporter_badge').limit(1);
+  c0910.error ? fail('0009/0010 players email/phone/supporter_note: ' + c0910.error.message)
+              : pass('0009/0010 players.email,phone,supporter_note present');
+  const c0011 = await sb.from('puzzle_user_records')
     .select('cleared,best_clear_spin,best_remaining_spins,best_puzzle_score,cleared_at').limit(1);
-  error ? fail('0011 puzzle_user_records columns: ' + error.message) : pass('0011 puzzle clear-spin columns present');
+  c0011.error ? fail('0011 puzzle_user_records columns: ' + c0011.error.message)
+              : pass('0011 puzzle clear-spin columns present');
 }
 
 // 4) score_events / season_scores readable (0008)
