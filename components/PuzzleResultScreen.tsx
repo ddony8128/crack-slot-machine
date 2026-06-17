@@ -159,14 +159,18 @@ export default function PuzzleResultScreen({
               {done.cleared ? "클리어!" : "미클리어"}
             </p>
 
-            <div>
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
-                달성 목표
-              </p>
-              <p className="font-mono text-4xl font-black text-amber-300">
-                {done.goalsAchieved} / {done.totalGoals}
-              </p>
-            </div>
+            {/* 달성 목표 N/M is only meaningful for multi-goal puzzles; for a
+                single-goal puzzle "클리어!/미클리어" above already says it. */}
+            {done.totalGoals > 1 && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-zinc-500">
+                  달성한 목표
+                </p>
+                <p className="font-mono text-4xl font-black text-amber-300">
+                  {done.goalsAchieved} / {done.totalGoals}개
+                </p>
+              </div>
+            )}
 
             {done.cleared ? (
               <div className="space-y-1 text-sm text-zinc-400">
@@ -184,10 +188,14 @@ export default function PuzzleResultScreen({
                   </span>
                 </p>
                 <p>
-                  획득 점수:{" "}
+                  시즌 점수 획득:{" "}
                   <span className="font-bold text-amber-300">
-                    {puzzleScore(spinLimit, done.clearSpin ?? spinLimit)}
+                    +{puzzleScore(spinLimit, done.clearSpin ?? spinLimit)}점
                   </span>
+                </p>
+                <p className="text-xs text-zinc-500">
+                  퍼즐 클리어 점수는 시즌 랭킹에 합산됩니다 — 더 적은 스핀으로
+                  클리어할수록 높습니다.
                 </p>
               </div>
             ) : (
