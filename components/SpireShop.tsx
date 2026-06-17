@@ -215,31 +215,46 @@ export default function SpireShop({
         <div className="flex flex-col gap-2">
           {SPIRE_UPGRADEABLE_HANDS.map((hand) => {
             const up = runState.handUpgrades[hand];
+            // +50 / ×2 are each buyable ONCE per hand (기획).
+            const flatDone = (up?.flatBonusCount ?? 0) >= 1;
+            const doubleDone = (up?.doubleCount ?? 0) >= 1;
             return (
               <div key={hand} className="flex items-center justify-between gap-2 text-sm">
                 <span className="flex-1 truncate">
                   {hand}
                   {up && (up.flatBonusCount > 0 || up.doubleCount > 0) ? (
                     <span className="ml-1 text-xs text-emerald-300">
-                      +{up.flatBonusCount} ×{Math.pow(2, up.doubleCount)}
+                      +{up.flatBonusCount * 50} ×{Math.pow(2, up.doubleCount)}
                     </span>
                   ) : null}
                 </span>
                 <button
                   type="button"
-                  disabled={offers.handFlatPrice > money}
+                  disabled={flatDone || offers.handFlatPrice > money}
                   onClick={() => onBuyHandFlat(hand)}
                   className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1 transition enabled:hover:border-emerald-400 disabled:opacity-40"
                 >
-                  +50점 <span className="text-amber-200">({offers.handFlatPrice}원)</span>
+                  {flatDone ? (
+                    "+50점 완료"
+                  ) : (
+                    <>
+                      +50점 <span className="text-amber-200">({offers.handFlatPrice}원)</span>
+                    </>
+                  )}
                 </button>
                 <button
                   type="button"
-                  disabled={offers.handDoublePrice > money}
+                  disabled={doubleDone || offers.handDoublePrice > money}
                   onClick={() => onBuyHandDouble(hand)}
                   className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1 transition enabled:hover:border-emerald-400 disabled:opacity-40"
                 >
-                  ×2 <span className="text-amber-200">({offers.handDoublePrice}원)</span>
+                  {doubleDone ? (
+                    "×2 완료"
+                  ) : (
+                    <>
+                      ×2 <span className="text-amber-200">({offers.handDoublePrice}원)</span>
+                    </>
+                  )}
                 </button>
               </div>
             );

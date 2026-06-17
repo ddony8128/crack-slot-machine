@@ -642,13 +642,17 @@ export function buyHandFlat(state: SpireRunState, handType: string): Result {
   if (!SPIRE_UPGRADEABLE_HANDS.includes(handType)) {
     return { ok: false, error: `hand not upgradeable: ${handType}` };
   }
+  const cur = state.handUpgrades[handType] ?? { flatBonusCount: 0, doubleCount: 0 };
+  // +50 is buyable ONCE per hand (기획).
+  if (cur.flatBonusCount >= 1) {
+    return { ok: false, error: `hand flat already upgraded: ${handType}` };
+  }
   const cost = SPIRE_HAND_FLAT_PRICE;
   if (state.money < cost) {
     return { ok: false, error: `not enough money (need ${cost})` };
   }
 
   const next = cloneState(state);
-  const cur = next.handUpgrades[handType] ?? { flatBonusCount: 0, doubleCount: 0 };
   next.handUpgrades[handType] = {
     flatBonusCount: cur.flatBonusCount + 1,
     doubleCount: cur.doubleCount,
@@ -662,13 +666,17 @@ export function buyHandDouble(state: SpireRunState, handType: string): Result {
   if (!SPIRE_UPGRADEABLE_HANDS.includes(handType)) {
     return { ok: false, error: `hand not upgradeable: ${handType}` };
   }
+  const cur = state.handUpgrades[handType] ?? { flatBonusCount: 0, doubleCount: 0 };
+  // ×2 is buyable ONCE per hand (기획).
+  if (cur.doubleCount >= 1) {
+    return { ok: false, error: `hand double already upgraded: ${handType}` };
+  }
   const cost = SPIRE_HAND_DOUBLE_PRICE;
   if (state.money < cost) {
     return { ok: false, error: `not enough money (need ${cost})` };
   }
 
   const next = cloneState(state);
-  const cur = next.handUpgrades[handType] ?? { flatBonusCount: 0, doubleCount: 0 };
   next.handUpgrades[handType] = {
     flatBonusCount: cur.flatBonusCount,
     doubleCount: cur.doubleCount + 1,

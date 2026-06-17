@@ -279,7 +279,7 @@ describe('buyRule', () => {
 });
 
 describe('hand upgrades', () => {
-  it('buyHandFlat increments flatBonusCount and deducts money', () => {
+  it('buyHandFlat sets flatBonusCount to 1 and deducts money; only once per hand', () => {
     const s = { ...initialSpireState(SEED), money: 5 };
     const before = snapshot(s);
     const r = buyHandFlat(s, 'Pair');
@@ -288,18 +288,20 @@ describe('hand upgrades', () => {
     expect(r.state.handUpgrades.Pair).toEqual({ flatBonusCount: 1, doubleCount: 0 });
     expect(r.state.money).toBe(4);
     expect(snapshot(s)).toBe(before);
-    // second purchase stacks
+    // +50 is buyable ONCE per hand (기획) — a second purchase is rejected.
     const r2 = buyHandFlat(r.state, 'Pair');
-    expect(r2.ok && r2.state.handUpgrades.Pair.flatBonusCount).toBe(2);
+    expect(r2.ok).toBe(false);
   });
 
-  it('buyHandDouble increments doubleCount and deducts money', () => {
+  it('buyHandDouble sets doubleCount to 1 and deducts money; only once per hand', () => {
     const s = { ...initialSpireState(SEED), money: 5 };
     const r = buyHandDouble(s, 'Triple');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.state.handUpgrades.Triple).toEqual({ flatBonusCount: 0, doubleCount: 1 });
     expect(r.state.money).toBe(2); // SPIRE_HAND_DOUBLE_PRICE = 3
+    // ×2 is buyable ONCE per hand (기획) — a second purchase is rejected.
+    expect(buyHandDouble(r.state, 'Triple').ok).toBe(false);
   });
 
   it('rejects unknown hand and insufficient money', () => {

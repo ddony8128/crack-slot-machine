@@ -22,6 +22,9 @@ These intentionally differ from the checklist below (explicit user decisions):
    ("너무 사기다") to **keep up to 2 vehicle cells of choice** — `min(2, #vehicles)`,
    `−30` per held cell. The checklist text is left as-is for the record; the **2칸 cap is
    the shipping rule**.
+2. **첨탑 족보 강화 = 각 한 번씩.** The shop's hand upgrades (+50점, ×2) can each be
+   purchased **once per hand** (not stacked). Enforced in `buyHandFlat`/`buyHandDouble`;
+   the shop shows "+50점 완료" / "×2 완료" once bought.
 
 ## Code↔spec mismatches (tracking)
 
