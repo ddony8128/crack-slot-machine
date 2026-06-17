@@ -94,8 +94,11 @@ export function baseSpin(
  * set is rollable), they are no-ops there. With no such rules present this is
  * equivalent to `baseSpin`.
  *
- * Matches `number-spin`'s convention of reading the raw slot array (no
- * copy-above expansion), so each modifier applies once regardless of stacking.
+ * COPY ABOVE stacks these weight transforms (like it does for board-global weight
+ * rules in computeWeights): the transforms are collected from `expandRules`, so a
+ * copy-above below 백귀야행 multiplies the monster weight TWICE (e.g. 5 prev
+ * monsters → ×8, copied → ×64). `number-spin` is a POOL restriction (idempotent),
+ * so it still reads the raw slots and applies once.
  */
 export function rollBoard(
   rules: (Rule | null)[],
@@ -106,9 +109,10 @@ export function rollBoard(
 ): SymbolType[] {
   const numberSpin = rules.some((r) => r?.id === 'number-spin');
 
-  // Collect active positional/prev-state weight transforms, in slot order.
+  // Collect active positional/prev-state weight transforms, in slot order, with
+  // copy-above expanded so a copied weight rule stacks (matches computeWeights).
   const transforms: PositionalWeightRule[] = [];
-  for (const r of rules) {
+  for (const r of expandRules(rules)) {
     const t = r && POSITIONAL_WEIGHT_RULES[r.id];
     if (t) transforms.push(t);
   }
