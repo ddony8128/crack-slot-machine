@@ -8,14 +8,12 @@ import { startSpire, submitSpire } from "@/lib/client/spireApi";
 import { fetchMe } from "@/lib/client/authApi";
 import { saveSpire, loadSpire, clearSpire, type SpireSave } from "@/lib/client/spireResume";
 import { SYMBOL_SETS_BY_ID, type SetBonus } from "@/lib/symbols/sets";
-import { SYMBOL_EMOJI } from "@/data/symbols";
 import { RULES_BY_ID } from "@/data/rules";
 import {
   SPIRE_STAGE_COUNT,
   SPIRE_ARTIFACT_STAGES,
   SPIRE_ARTIFACTS,
   SPIRE_MAX_FAILURES,
-  SPIRE_RULE_POOL_MAX,
 } from "@/lib/spire/config";
 import {
   initialSpireState,
@@ -47,7 +45,6 @@ import SpireResultScreen from "@/components/SpireResultScreen";
 import DonationModal from "@/components/DonationModal";
 import { useDonationPrompt } from "@/components/useDonationPrompt";
 import ModeIntro from "@/components/ModeIntro";
-import type { SymbolType } from "@/types";
 import type { SeasonScoreChange } from "@/lib/season/scoring";
 
 type Phase =
@@ -68,11 +65,6 @@ type SubmitState = "submitting" | "submitted" | "rejected" | "error" | "version_
 
 const ARTIFACT_BY_ID = Object.fromEntries(SPIRE_ARTIFACTS.map((a) => [a.id, a]));
 
-/** Emoji for a symbol id, falling back to the id itself. */
-function emojiFor(id: string): string {
-  return SYMBOL_EMOJI[id as SymbolType] ?? id;
-}
-
 /** Rule display name, falling back to the id. */
 function ruleNameOf(id: string): string {
   return RULES_BY_ID[id]?.name ?? id;
@@ -83,21 +75,6 @@ const PER_EVENT_LABEL: Record<"moved" | "rerolled" | "copied", string> = {
   rerolled: "재굴림",
   copied: "복사",
 };
-
-/** Short active-effect note for the playing-HUD artifact strip (기획 §6 P3:
- *  chime free-reroll count, swiss-knife 4-candidates, engine). */
-function activeArtifactNote(id: string): string {
-  switch (id) {
-    case "chime":
-      return "(상점 무료 리롤 2회)";
-    case "swiss-knife":
-      return "(규칙 후보 4개)";
-    case "engine":
-      return "(스테이지 첫 스핀 전 규칙 +1)";
-    default:
-      return "";
-  }
-}
 
 /** Human-readable 족보 보너스 line for the set-choice card (기획 §17). */
 function setBonusLabel(b: SetBonus): string {
@@ -848,10 +825,6 @@ export default function SpireClient() {
     const stage = runState.currentStage;
     const target = spireStageTarget(stage);
     const cumulative = spinLogs.reduce((a, l) => a + l.roundScore, 0);
-    const bag = Object.entries(runState.symbolBag)
-      .filter(([, c]) => c > 0)
-      .map(([id, c]) => `${emojiFor(id)}×${c}`)
-      .join("  ");
     return (
       <>
         <div className="mx-auto w-full max-w-2xl px-4 pt-4">
@@ -864,40 +837,10 @@ export default function SpireClient() {
             <span className="text-amber-200">돈 {runState.money}원</span>
             <span className="text-zinc-400">클리어 {stage - 1}</span>
           </div>
-          <p className="mt-1 text-center text-xs text-zinc-500">심볼 주머니: {bag}</p>
-          <details className="text-center">
-            <summary className="cursor-pointer text-[11px] text-zinc-600">
-              심볼 주머니란?
-            </summary>
-            <p className="mx-auto mt-0.5 max-w-md text-[11px] text-zinc-500">
-              각 칸은 매 스핀 이 주머니에서 뽑습니다. 숫자는 최대 등장 횟수가 아니라
-              등장 확률(가중치)입니다.
-            </p>
-          </details>
-          {runState.artifacts.length > 0 && (
-            <div className="mt-1 flex flex-wrap justify-center gap-1.5">
-              {runState.artifacts.map((id) => (
-                <span
-                  key={id}
-                  title={ARTIFACT_BY_ID[id]?.description}
-                  className="rounded-full border border-emerald-500/40 bg-emerald-950/20 px-2 py-0.5 text-[11px] text-emerald-200"
-                >
-                  {ARTIFACT_BY_ID[id]?.name ?? id}
-                  {activeArtifactNote(id) && (
-                    <span className="ml-1 text-emerald-300/70">{activeArtifactNote(id)}</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
-          <details className="mt-1 text-center">
-            <summary className="cursor-pointer text-xs text-zinc-500">
-              규칙 풀 {runState.rulePool.length}/{SPIRE_RULE_POOL_MAX}
-            </summary>
-            <p className="mt-1 text-xs text-amber-200/80">
-              {runState.rulePool.map(ruleNameOf).join(" · ")}
-            </p>
-          </details>
+          {/* 심볼 주머니 · 규칙 풀 · 아티팩트(설명 포함)는 아래 '보유 현황' 버튼에서 확인. */}
+          <p className="mt-1 text-center text-[11px] text-zinc-600">
+            주머니 · 규칙 · 아티팩트는 아래 “보유 현황”에서 확인하세요.
+          </p>
           <div className="mt-2 flex flex-col items-center gap-1">
             <button
               type="button"

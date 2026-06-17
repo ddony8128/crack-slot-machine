@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useGameStore } from "@/store/gameStore";
 import ReferenceModal from "@/components/ReferenceModal";
+import HoldingsModal from "@/components/HoldingsModal";
 import { BASE_WEIGHTS } from "@/data/symbols";
 
 export default function StatusBar({
@@ -16,11 +17,17 @@ export default function StatusBar({
   const maxSpins = useGameStore((s) => s.maxSpins);
   const totalScore = useGameStore((s) => s.totalScore);
   const nextMultiplier = useGameStore((s) => s.nextMultiplier);
+  const eventSlug = useGameStore((s) => s.eventSlug);
+  const runConfig = useGameStore((s) => s.runConfig);
   // The active run's symbol bag drives the pool-aware ReferenceModal. Legacy
   // (빠른 게임/이벤트) runs have no config → BASE_WEIGHTS (combo/pair hidden).
-  const baseWeights = useGameStore((s) => s.runConfig?.baseWeights) ?? BASE_WEIGHTS;
+  const baseWeights = runConfig?.baseWeights ?? BASE_WEIGHTS;
+
+  // 첨탑 swaps the 규칙/점수표 buttons for a single 보유 현황 panel (주머니+규칙+아티팩트).
+  const isSpire = eventSlug === "spire";
 
   const [refView, setRefView] = useState<"rules" | "scores" | null>(null);
+  const [holdingsOpen, setHoldingsOpen] = useState(false);
 
   const currentSpin = Math.min(spinIndex + 1, maxSpins);
 
@@ -58,32 +65,51 @@ export default function StatusBar({
           </span>
         </div>
 
-        {!hideReference && (
-          <div className="flex items-center gap-2">
+        {!hideReference &&
+          (isSpire ? (
             <button
               type="button"
-              onClick={() => setRefView("rules")}
+              onClick={() => setHoldingsOpen(true)}
               className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
             >
-              규칙
+              보유 현황
             </button>
-            <button
-              type="button"
-              onClick={() => setRefView("scores")}
-              className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
-            >
-              점수표
-            </button>
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setRefView("rules")}
+                className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+              >
+                규칙
+              </button>
+              <button
+                type="button"
+                onClick={() => setRefView("scores")}
+                className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+              >
+                점수표
+              </button>
+            </div>
+          ))}
       </div>
 
-      <ReferenceModal
-        open={refView !== null}
-        view={refView ?? "rules"}
-        weights={baseWeights}
-        onClose={() => setRefView(null)}
-      />
+      {isSpire ? (
+        <HoldingsModal
+          open={holdingsOpen}
+          onClose={() => setHoldingsOpen(false)}
+          weights={baseWeights}
+          ruleIds={runConfig?.rulePoolIds ?? []}
+          artifactIds={runConfig?.artifacts ?? []}
+        />
+      ) : (
+        <ReferenceModal
+          open={refView !== null}
+          view={refView ?? "rules"}
+          weights={baseWeights}
+          onClose={() => setRefView(null)}
+        />
+      )}
     </>
   );
 }
