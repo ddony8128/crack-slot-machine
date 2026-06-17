@@ -66,6 +66,7 @@ export default function DailyClient() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [adOpen, setAdOpen] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
   const [refilling, setRefilling] = useState(false);
   const [refillError, setRefillError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -321,9 +322,20 @@ export default function DailyClient() {
           setAdOpen(false);
         }}
         pending={refilling}
+        onDonate={() => {
+          if (refilling) return;
+          setAdOpen(false);
+          setDonateOpen(true);
+        }}
       />
 
-      <DonationModal open={donation.open} onClose={donation.close} />
+      <DonationModal
+        open={donation.open || donateOpen}
+        onClose={() => {
+          donation.close();
+          setDonateOpen(false);
+        }}
+      />
     </main>
   );
 }
