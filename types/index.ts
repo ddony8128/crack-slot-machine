@@ -160,4 +160,9 @@ export type GameState = {
   // a later rule that spin (held = first-roll only). REPLACED each spin: a spin
   // with no parking rule yields frame.nextHold [] → this clears.
   nextHoldCells: number[];
+  // Puzzle runs ONLY: true once every puzzle goal is met across the resolved
+  // spins. The cleared spin still ends in 'spin-result' (so its reveal plays and
+  // the board settles); the puzzle UI then shows 클리어 + a 결과 보기 action that
+  // advances to 'finished'. Always false in quick/daily/spire.
+  puzzleCleared: boolean;
 };

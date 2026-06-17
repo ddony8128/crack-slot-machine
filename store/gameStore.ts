@@ -242,6 +242,7 @@ function freshState(nickname: string): GameState {
     pendingSelection: null,
     revealStream: null,
     nextHoldCells: [],
+    puzzleCleared: false,
   };
 }
 
@@ -396,12 +397,14 @@ function buildInitializer(initialRng: Rng): Initializer {
 
       const nextSpinLogs = [...state.spinLogs, log];
 
-      // Puzzle immediate-clear: when this run carries puzzleGoals, end the run the
-      // INSTANT every goal is satisfied across the resolved spins (incl. this one),
-      // instead of forcing the player through every spin. Driven purely by the
-      // deterministic spin logs + config, so the server replay (same puzzleGoals)
-      // ends at the identical spin. No-op for quick/daily/spire (no puzzleGoals).
-      let resolvedStatus: GameState['status'] = 'spin-result';
+      // Puzzle clear: when this run carries puzzleGoals, mark the run cleared the
+      // INSTANT every goal is satisfied across the resolved spins (incl. this one).
+      // The spin still ENDS in 'spin-result' so its reveal plays + board settles;
+      // the puzzle UI shows 클리어 and a 결과 보기 action that calls next() → finished
+      // (so the player isn't forced through the remaining spins). Driven purely by
+      // the deterministic spin logs + config; the server replay (same puzzleGoals)
+      // detects the same clearing spin. No-op for quick/daily/spire (no puzzleGoals).
+      let puzzleCleared = false;
       const goals = runConfig?.puzzleGoals;
       if (goals && goals.length > 0) {
         const ctxs: GoalContext[] = nextSpinLogs.map((l) => ({
@@ -409,9 +412,7 @@ function buildInitializer(initialRng: Rng): Initializer {
           hand: computeHand(l.finalResult).hand,
           spinScore: l.roundScore,
         }));
-        if (checkPuzzleRun(goals, ctxs).count === goals.length) {
-          resolvedStatus = 'finished';
-        }
+        puzzleCleared = checkPuzzleRun(goals, ctxs).count === goals.length;
       }
 
       set({
@@ -421,7 +422,8 @@ function buildInitializer(initialRng: Rng): Initializer {
         previousResult: finalResult,
         nextMultiplier: specials.nextMultiplier,
         extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
-        status: resolvedStatus,
+        status: 'spin-result',
+        puzzleCleared,
         pendingSelection: null,
         revealStream,
         // Carry this spin's parking holds to the NEXT spin's preHeld pass. This
@@ -764,6 +766,13 @@ function buildInitializer(initialRng: Rng): Initializer {
       const state = get();
       if (state.status !== 'spin-result') return;
       record({ type: 'next' });
+
+      // Puzzle: once cleared, 결과 보기 ends the run immediately (don't force the
+      // player through the remaining spins).
+      if (state.puzzleCleared) {
+        set({ status: 'finished' });
+        return;
+      }
 
       const nextSpinIndex = state.spinIndex + 1;
       if (nextSpinIndex >= state.maxSpins) {
