@@ -445,7 +445,72 @@ export interface Db {
     seasonId: string,
     limit?: number,
   ): Promise<ScoreEventRow[]>;
+
+  // ── announcements (공지) ────────────────────────────────────────────────────
+  /** Create an announcement (admin). `published`/`pinned` default false. */
+  createAnnouncement(input: {
+    seasonId?: string | null;
+    title: string;
+    body: string;
+    published?: boolean;
+    pinned?: boolean;
+  }): Promise<AnnouncementRow>;
+  /** Patch an announcement (admin); only provided fields change. null if missing. */
+  updateAnnouncement(
+    id: string,
+    patch: { title?: string; body?: string; published?: boolean; pinned?: boolean },
+  ): Promise<AnnouncementRow | null>;
+  deleteAnnouncement(id: string): Promise<void>;
+  /** Every announcement (admin), pinned first then newest. */
+  listAnnouncements(): Promise<AnnouncementRow[]>;
+  /** Published announcements visible to a player: global (season null) + the
+   *  given season, pinned first then newest. */
+  listPublishedAnnouncements(seasonId: string | null): Promise<AnnouncementRow[]>;
+
+  // ── feedback (후기/피드백) ──────────────────────────────────────────────────
+  /** Store one feedback submission (login-required at the API layer). */
+  createFeedback(input: {
+    playerId: string;
+    seasonId?: string | null;
+    rating?: number | null;
+    body: string;
+  }): Promise<FeedbackRow>;
+  /** All feedback (admin), newest first. Capped at `limit ?? 200`. */
+  listFeedback(input?: { limit?: number }): Promise<FeedbackRow[]>;
+  /** Change a feedback row's triage status (admin). null if missing. */
+  updateFeedbackStatus(
+    id: string,
+    status: FeedbackStatus,
+  ): Promise<FeedbackRow | null>;
 }
+
+/** A row in `announcements` — admin-authored notice shown to logged-in players. */
+export type AnnouncementRow = {
+  id: string;
+  /** null = 전역(모든 시즌). */
+  seasonId: string | null;
+  title: string;
+  body: string;
+  published: boolean;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FeedbackStatus = 'new' | 'read' | 'archived';
+
+/** A row in `feedback` — player-submitted review/feedback. */
+export type FeedbackRow = {
+  id: string;
+  /** null only if the player was later hard-deleted (on delete set null). */
+  playerId: string | null;
+  seasonId: string | null;
+  /** 1~5, or null when no star rating was given. */
+  rating: number | null;
+  body: string;
+  status: FeedbackStatus;
+  createdAt: string;
+};
 
 /** A row in `puzzle_user_records` — best CLEAR per puzzle (spec §13). */
 export type PuzzleRecordRow = {

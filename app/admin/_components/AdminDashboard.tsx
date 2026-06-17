@@ -303,6 +303,18 @@ export default function AdminDashboard() {
           >
             런 로그
           </Link>
+          <Link
+            href="/admin/announcements"
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            공지 관리
+          </Link>
+          <Link
+            href="/admin/feedback"
+            className="rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
+          >
+            피드백
+          </Link>
           <button
             type="button"
             onClick={onLogout}

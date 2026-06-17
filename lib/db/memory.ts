@@ -16,6 +16,9 @@ import type {
   SpireRecordRow,
   SeasonScoreRow,
   ScoreEventRow,
+  AnnouncementRow,
+  FeedbackRow,
+  FeedbackStatus,
   RunMode,
   RunStatus,
   PersistedActions,
@@ -89,6 +92,8 @@ export class MemoryDb implements Db {
   private spireRecords: SpireRecordRow[] = [];
   private seasonScores: SeasonScoreRow[] = [];
   private scoreEvents: ScoreEventRow[] = [];
+  private announcements: AnnouncementRow[] = [];
+  private feedbackRows: FeedbackRow[] = [];
   private counter = 0;
 
   constructor(events?: EventRow[]) {
@@ -905,5 +910,107 @@ export class MemoryDb implements Db {
       .slice()
       .reverse()
       .slice(0, limit);
+  }
+
+  // ── announcements ──────────────────────────────────────────────────────────
+  // pinned first, then insertion order reversed (newest first) — createdAt has
+  // no clock in MemoryDb, so insertion order stands in for recency.
+  private sortAnnouncements(rows: AnnouncementRow[]): AnnouncementRow[] {
+    return rows
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => Number(b.r.pinned) - Number(a.r.pinned) || b.i - a.i)
+      .map((x) => x.r);
+  }
+
+  async createAnnouncement(input: {
+    seasonId?: string | null;
+    title: string;
+    body: string;
+    published?: boolean;
+    pinned?: boolean;
+  }): Promise<AnnouncementRow> {
+    const now = new Date().toISOString();
+    const row: AnnouncementRow = {
+      id: this.id('ann'),
+      seasonId: input.seasonId ?? null,
+      title: input.title,
+      body: input.body,
+      published: input.published ?? false,
+      pinned: input.pinned ?? false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.announcements.push(row);
+    return row;
+  }
+
+  async updateAnnouncement(
+    id: string,
+    patch: { title?: string; body?: string; published?: boolean; pinned?: boolean },
+  ): Promise<AnnouncementRow | null> {
+    const row = this.announcements.find((a) => a.id === id);
+    if (!row) return null;
+    if (patch.title !== undefined) row.title = patch.title;
+    if (patch.body !== undefined) row.body = patch.body;
+    if (patch.published !== undefined) row.published = patch.published;
+    if (patch.pinned !== undefined) row.pinned = patch.pinned;
+    row.updatedAt = new Date().toISOString();
+    return row;
+  }
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    this.announcements = this.announcements.filter((a) => a.id !== id);
+  }
+
+  async listAnnouncements(): Promise<AnnouncementRow[]> {
+    return this.sortAnnouncements(this.announcements.slice());
+  }
+
+  async listPublishedAnnouncements(
+    seasonId: string | null,
+  ): Promise<AnnouncementRow[]> {
+    return this.sortAnnouncements(
+      this.announcements.filter(
+        (a) => a.published && (a.seasonId == null || a.seasonId === seasonId),
+      ),
+    );
+  }
+
+  // ── feedback ───────────────────────────────────────────────────────────────
+  async createFeedback(input: {
+    playerId: string;
+    seasonId?: string | null;
+    rating?: number | null;
+    body: string;
+  }): Promise<FeedbackRow> {
+    const row: FeedbackRow = {
+      id: this.id('fb'),
+      playerId: input.playerId,
+      seasonId: input.seasonId ?? null,
+      rating: input.rating ?? null,
+      body: input.body,
+      status: 'new',
+      createdAt: new Date().toISOString(),
+    };
+    this.feedbackRows.push(row);
+    return row;
+  }
+
+  async listFeedback(input?: { limit?: number }): Promise<FeedbackRow[]> {
+    // Newest first (insertion order reversed — MemoryDb has no clock).
+    return this.feedbackRows
+      .slice()
+      .reverse()
+      .slice(0, input?.limit ?? 200);
+  }
+
+  async updateFeedbackStatus(
+    id: string,
+    status: FeedbackStatus,
+  ): Promise<FeedbackRow | null> {
+    const row = this.feedbackRows.find((f) => f.id === id);
+    if (!row) return null;
+    row.status = status;
+    return row;
   }
 }

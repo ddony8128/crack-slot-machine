@@ -22,6 +22,9 @@ import type {
   ScoreEventRow,
   RunMode,
   PersistedActions,
+  AnnouncementRow,
+  FeedbackRow,
+  FeedbackStatus,
 } from '@/lib/db/types';
 import { TOTAL_SLUG, normalizePhone } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
@@ -100,6 +103,31 @@ function toRun(row: any): RunRow {
     rejectReason: row.reject_reason ?? null,
     createdAt: row.created_at,
     submittedAt: row.submitted_at ?? null,
+  };
+}
+
+function toAnnouncement(row: any): AnnouncementRow {
+  return {
+    id: row.id,
+    seasonId: row.season_id ?? null,
+    title: row.title,
+    body: row.body,
+    published: row.published ?? false,
+    pinned: row.pinned ?? false,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toFeedback(row: any): FeedbackRow {
+  return {
+    id: row.id,
+    playerId: row.player_id ?? null,
+    seasonId: row.season_id ?? null,
+    rating: row.rating ?? null,
+    body: row.body,
+    status: row.status as FeedbackStatus,
+    createdAt: row.created_at,
   };
 }
 
@@ -1222,5 +1250,122 @@ export class SupabaseDb implements Db {
       .limit(limit);
     if (error) throw error;
     return (data ?? []).map(toScoreEvent);
+  }
+
+  // ── announcements ──────────────────────────────────────────────────────────
+  async createAnnouncement(input: {
+    seasonId?: string | null;
+    title: string;
+    body: string;
+    published?: boolean;
+    pinned?: boolean;
+  }): Promise<AnnouncementRow> {
+    const { data, error } = await this.sb
+      .from('announcements')
+      .insert({
+        season_id: input.seasonId ?? null,
+        title: input.title,
+        body: input.body,
+        published: input.published ?? false,
+        pinned: input.pinned ?? false,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toAnnouncement(data);
+  }
+
+  async updateAnnouncement(
+    id: string,
+    patch: { title?: string; body?: string; published?: boolean; pinned?: boolean },
+  ): Promise<AnnouncementRow | null> {
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (patch.title !== undefined) update.title = patch.title;
+    if (patch.body !== undefined) update.body = patch.body;
+    if (patch.published !== undefined) update.published = patch.published;
+    if (patch.pinned !== undefined) update.pinned = patch.pinned;
+    const { data, error } = await this.sb
+      .from('announcements')
+      .update(update)
+      .eq('id', id)
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toAnnouncement(data) : null;
+  }
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    const { error } = await this.sb.from('announcements').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async listAnnouncements(): Promise<AnnouncementRow[]> {
+    const { data, error } = await this.sb
+      .from('announcements')
+      .select('*')
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(toAnnouncement);
+  }
+
+  async listPublishedAnnouncements(
+    seasonId: string | null,
+  ): Promise<AnnouncementRow[]> {
+    // Global (season_id null) OR matching season, published only.
+    let query = this.sb.from('announcements').select('*').eq('published', true);
+    query = seasonId
+      ? query.or(`season_id.is.null,season_id.eq.${seasonId}`)
+      : query.is('season_id', null);
+    const { data, error } = await query
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(toAnnouncement);
+  }
+
+  // ── feedback ───────────────────────────────────────────────────────────────
+  async createFeedback(input: {
+    playerId: string;
+    seasonId?: string | null;
+    rating?: number | null;
+    body: string;
+  }): Promise<FeedbackRow> {
+    const { data, error } = await this.sb
+      .from('feedback')
+      .insert({
+        player_id: input.playerId,
+        season_id: input.seasonId ?? null,
+        rating: input.rating ?? null,
+        body: input.body,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return toFeedback(data);
+  }
+
+  async listFeedback(input?: { limit?: number }): Promise<FeedbackRow[]> {
+    const { data, error } = await this.sb
+      .from('feedback')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(input?.limit ?? 200);
+    if (error) throw error;
+    return (data ?? []).map(toFeedback);
+  }
+
+  async updateFeedbackStatus(
+    id: string,
+    status: FeedbackStatus,
+  ): Promise<FeedbackRow | null> {
+    const { data, error } = await this.sb
+      .from('feedback')
+      .update({ status })
+      .eq('id', id)
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toFeedback(data) : null;
   }
 }

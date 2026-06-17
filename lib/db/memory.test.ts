@@ -862,3 +862,69 @@ describe('MemoryDb spire records', () => {
     expect((await db.listSpireRecords(season!.id)).length).toBe(2);
   });
 });
+
+describe('MemoryDb announcements', () => {
+  it('create defaults to unpublished; listPublished shows only published, pinned first', async () => {
+    const db = new MemoryDb();
+    const season = await db.getActiveSeason();
+
+    const draft = await db.createAnnouncement({ title: '초안', body: 'b' });
+    expect(draft.published).toBe(false);
+    expect(draft.pinned).toBe(false);
+
+    await db.createAnnouncement({ title: '일반', body: 'b', published: true });
+    await db.createAnnouncement({ title: '고정', body: 'b', published: true, pinned: true });
+
+    // Admin list = all 3, pinned first.
+    const all = await db.listAnnouncements();
+    expect(all.length).toBe(3);
+    expect(all[0].title).toBe('고정');
+
+    // Published view excludes the draft, pinned first.
+    const pub = await db.listPublishedAnnouncements(season!.id);
+    expect(pub.map((a) => a.title)).toEqual(['고정', '일반']);
+  });
+
+  it('global (season null) announcements show for any season; season-scoped ones only match', async () => {
+    const db = new MemoryDb();
+    await db.createAnnouncement({ title: '전역', body: 'b', published: true, seasonId: null });
+    await db.createAnnouncement({ title: '시즌A', body: 'b', published: true, seasonId: 'season-A' });
+
+    const forA = await db.listPublishedAnnouncements('season-A');
+    expect(forA.map((a) => a.title).sort()).toEqual(['시즌A', '전역']);
+
+    const forB = await db.listPublishedAnnouncements('season-B');
+    expect(forB.map((a) => a.title)).toEqual(['전역']);
+  });
+
+  it('update patches only given fields; delete removes', async () => {
+    const db = new MemoryDb();
+    const a = await db.createAnnouncement({ title: 't', body: 'b' });
+    const up = await db.updateAnnouncement(a.id, { published: true });
+    expect(up?.published).toBe(true);
+    expect(up?.title).toBe('t'); // unchanged
+
+    await db.deleteAnnouncement(a.id);
+    expect((await db.listAnnouncements()).length).toBe(0);
+    expect(await db.updateAnnouncement(a.id, { title: 'x' })).toBeNull();
+  });
+});
+
+describe('MemoryDb feedback', () => {
+  it('createFeedback stores with status new; listFeedback is newest first; status toggles', async () => {
+    const db = new MemoryDb();
+    const f1 = await db.createFeedback({ playerId: 'p1', rating: 5, body: '재밌어요' });
+    expect(f1.status).toBe('new');
+    expect(f1.rating).toBe(5);
+    await db.createFeedback({ playerId: 'p2', body: '별점 없음' });
+
+    const list = await db.listFeedback();
+    expect(list.length).toBe(2);
+    expect(list[0].body).toBe('별점 없음'); // newest first
+    expect(list[1].rating).toBe(5);
+
+    const updated = await db.updateFeedbackStatus(f1.id, 'read');
+    expect(updated?.status).toBe('read');
+    expect(await db.updateFeedbackStatus('nope', 'read')).toBeNull();
+  });
+});
