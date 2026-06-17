@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import SoundToggle from "@/components/SoundToggle";
+// SoundToggle is hidden for now — there's no BGM/SFX yet, so the mute button has
+// nothing to toggle. Re-mount <SoundToggle /> below once audio assets exist
+// (public/sounds/*.mp3). The component itself is kept intact.
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,7 +48,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
-        <SoundToggle />
+        {/* <SoundToggle /> — hidden until BGM/SFX exist (see import note above). */}
         {children}
       </body>
     </html>
