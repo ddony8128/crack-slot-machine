@@ -68,6 +68,12 @@ export default function DailyClient() {
   const [adOpen, setAdOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
   const [refilling, setRefilling] = useState(false);
+  // attemptsLeft reported by the most recent ad refill (authoritative, unlike the
+  // mount-time `current`). Drives the result screen's 다시 도전 after a refill; cleared
+  // when a new run starts so the next result uses that run's own submit value.
+  const [refilledAttempts, setRefilledAttempts] = useState<number | undefined>(
+    undefined,
+  );
   const [refillError, setRefillError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -91,10 +97,23 @@ export default function DailyClient() {
       );
   }, [reset]);
 
+  // Re-fetch the day's attempts/refill state. Called after a run is submitted so
+  // attemptsLeft/canRefill/adRefillUsed are fresh (the mount fetch goes stale once
+  // the player spends attempts) — this drives both the result-screen refill/retry
+  // buttons and the 후원 prompt's fullyExhausted gate.
+  const refreshCurrent = () => {
+    fetchDailyCurrent()
+      .then(setCurrent)
+      .catch(() => {
+        /* keep the stale value; the next action can retry */
+      });
+  };
+
   async function handleStart() {
     if (starting) return;
     setStarting(true);
     setStartError(null);
+    setRefilledAttempts(undefined); // this run reports its own attemptsLeft on submit
     try {
       // The store gates startGame() on a non-empty nickname; the daily score is
       // recorded under the server-side player nickname regardless, but we set it
@@ -126,8 +145,11 @@ export default function DailyClient() {
     setRefilling(true);
     setRefillError(null);
     try {
-      await refillDaily();
-      // Re-fetch so attemptsLeft/allowed/adRefillUsed (and canRefill) update.
+      const resp = await refillDaily();
+      // The refill response's attemptsLeft is authoritative — feed it to the
+      // result screen so 다시 도전 appears immediately after refilling.
+      setRefilledAttempts(resp.attemptsLeft);
+      // Re-fetch so canRefill/adRefillUsed (and the 후원 gate) also update.
       const next = await fetchDailyCurrent();
       setCurrent(next);
       setAdOpen(false);
@@ -154,14 +176,49 @@ export default function DailyClient() {
     storageKey: "daily-exhausted",
   });
 
+  // Whether the one-time ad refill is still available for the result-screen CTA.
+  // `current` is re-fetched on submit (onSubmitted) so this reflects the finished run.
+  const refillAvailable =
+    !!current && current.loggedIn && current.canRefill === true;
+
   // §1: the result screen is the natural "session over" moment, but DailyClient
-  // owns the donation hook/modal — render the modal alongside the result screen
-  // too (it opens only when fullyExhausted, i.e. no attempts left and no refill).
+  // owns the attempts/refill state + donation + ad modals. After the run submits,
+  // refreshCurrent() makes fullyExhausted (→ 후원) and the refill/retry buttons accurate.
   if (status === "finished")
     return (
       <>
-        <DailyResultScreen />
-        <DonationModal open={donation.open} onClose={donation.close} />
+        <DailyResultScreen
+          onSubmitted={refreshCurrent}
+          attemptsLeftOverride={refilledAttempts}
+          refillAvailable={refillAvailable}
+          refillPending={refilling}
+          onRefill={() => {
+            setRefillError(null);
+            setAdOpen(true);
+          }}
+          onPlayAgain={reset}
+        />
+        <DummyAdModal
+          open={adOpen}
+          onConfirm={handleRefillConfirm}
+          onClose={() => {
+            if (refilling) return;
+            setAdOpen(false);
+          }}
+          pending={refilling}
+          onDonate={() => {
+            if (refilling) return;
+            setAdOpen(false);
+            setDonateOpen(true);
+          }}
+        />
+        <DonationModal
+          open={donation.open || donateOpen}
+          onClose={() => {
+            donation.close();
+            setDonateOpen(false);
+          }}
+        />
       </>
     );
 
@@ -169,7 +226,13 @@ export default function DailyClient() {
     return (
       <>
         <GameScreen />
-        <DonationModal open={donation.open} onClose={donation.close} />
+        <DonationModal
+          open={donation.open || donateOpen}
+          onClose={() => {
+            donation.close();
+            setDonateOpen(false);
+          }}
+        />
       </>
     );
 
