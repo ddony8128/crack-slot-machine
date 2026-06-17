@@ -95,14 +95,17 @@ are present, offered only when both sets can roll.
   - "마지막 칸이 이전 스핀의 값을 유지한다" style over-explanation when "다음 스핀 첫 굴림에서 유지된다" already says it.
 - Describe what the rule does, once, concretely.
 
-Example (유료 주차): `교통수단을 최대 2개까지 직접 골라 칸마다 30점을 잃는다. 고른 칸은 다음 스핀 첫 굴림에서 유지된다.`
+Example (유료 주차): `교통수단 칸 중 원하는 2칸을 직접 골라 칸마다 30점을 잃는다. 고른 칸은 다음 스핀 첫 굴림에서 유지된다.`
 
 ---
 
 ## Select rules (`lib/cascade.ts` `selectCount`)
 
 - `swap` → exactly 2.
-- `park` (유료 주차) → up to 2 (`Math.min(2, #vehicles)`).
+- `park` (유료 주차) → **원하는 2칸**: the player keeps up to 2 vehicle cells of their
+  choice — `min(2, #vehicles)`. (Capped at 2 by design: keeping every vehicle was too
+  strong/사기. Reverted from an earlier "원하는 만큼" variable-count attempt.) Uses the
+  standard fixed-count auto-complete select.
 - default → 1.
 
 ---
@@ -119,16 +122,9 @@ Example (유료 주차): `교통수단을 최대 2개까지 직접 골라 칸마
 
 ## Known deviations / deferred
 
-1. **유료 주차 = "원하는 만큼" (spec) vs. capped at 2 (code).** The spec wants the player
-   to pick *any* number of vehicles. The current select model is fixed-count auto-complete
-   (`selectCount` returns N, selection auto-completes at exactly N picks). True "원하는 만큼"
-   needs a **CONFIRM-based variable-count select** (pick 0..N, then confirm) — a store + UI
-   change. Capped at 2 for now (`lib/cascade.ts`); description says "최대 2개까지" to match code.
-   When implemented, restore `selectCount('park') = #vehicles` and description to "원하는 만큼".
+1. **fruit/gem set 확률** use ×3 (matching FRUIT/GEM SURGE); spec calls for ×4 (`lib/symbols/sets.ts` header note). Unreconciled.
 
-2. **fruit/gem set 확률** use ×3 (matching FRUIT/GEM SURGE); spec calls for ×4 (`lib/symbols/sets.ts` header note). Unreconciled.
-
-3. **`SYMBOL_SETS` not fully engine-wired.** The legacy engine uses fruit/gem `SymbolType`;
+2. **`SYMBOL_SETS` not fully engine-wired.** The legacy engine uses fruit/gem `SymbolType`;
    cat/vehicle/monster set bonuses score from set membership + events, but those sets'
    own rules aren't all authored.
 

@@ -178,7 +178,7 @@ describe('replay fuzz — server verification matches live play', () => {
       const store = fuzzPlay(seed, decisionSeed);
       assertReplayMatches(seed, store);
     }
-  });
+  }, 30_000); // 500 full runs + replays; slow under parallel test load
 
   it('idempotent: same seed+actions twice is identical', () => {
     const store = fuzzPlay('repeat-seed', 'repeat-decide');

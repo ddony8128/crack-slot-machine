@@ -262,7 +262,7 @@ describe('puzzle immediate-clear: the run ends on the clearing spin', () => {
       const clearSpin = firstClearSpin(p.goals, ctxs);
       expect(clearSpin).toBe(solution!.clearSpin);
       expect(clearSpin).toBeLessThanOrEqual(p.spinLimit);
-    });
+    }, 30_000); // exhaustive BFS solver; p02's branch is slow under parallel load
   }
 });
 

@@ -276,7 +276,7 @@ export const RULES: Rule[] = [
     type: 'select',
     phase: 'next-spin',
     build: 'vehicle',
-    description: '교통수단을 최대 2개까지 직접 골라 칸마다 30점을 잃는다. 고른 칸은 다음 스핀 첫 굴림에서 유지된다.',
+    description: '교통수단 칸 중 원하는 2칸을 직접 골라 칸마다 30점을 잃는다. 고른 칸은 다음 스핀 첫 굴림에서 유지된다.',
   },
   {
     id: 'vehicle-surge',

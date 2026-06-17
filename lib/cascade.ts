@@ -647,11 +647,8 @@ function isApplicable(kind: SelectKind, selectable: boolean[], working: SymbolTy
 
 /**
  * How many cells the player picks for a select rule. copy/reroll/family pick 1,
- * swap picks 2, park picks up to 2 (capped by the number of selectable vehicles).
- * NOTE: spec says 유료 주차 = "교통수단을 원하는 만큼" (variable count). Implementing
- * that needs a CONFIRM-based variable-count select (pick 0..N then confirm), not the
- * current fixed-count auto-complete model — see docs/SPEC.md "deferred". Capped at 2
- * for now so the existing exact-count select flow keeps working.
+ * swap picks exactly 2; park (유료 주차) lets the player keep up to 2 vehicle cells
+ * of their choice (spec: 원하는 칸 2개 — capped at 2 for balance), i.e. min(2, #vehicles).
  */
 function selectCount(kind: SelectKind, selectable: boolean[]): number {
   if (kind === 'swap') return 2;
