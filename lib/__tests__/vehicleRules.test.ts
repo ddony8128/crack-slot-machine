@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SymbolType } from '@/types';
-import { beginCascade } from '@/lib/cascade';
+import { beginCascade, resolveSelection } from '@/lib/cascade';
 import { computeWeights } from '@/lib/spin';
 import { RULES_BY_ID } from '@/data/rules';
 import { BASE_WEIGHTS, VEHICLES } from '@/data/symbols';
@@ -57,54 +57,57 @@ describe('vehicle-surge — VEHICLES weight ×(slot rule count + 1)', () => {
   });
 });
 
-describe('vehicle-logistics — swap two random cells per plane', () => {
-  it('2 planes -> two swaps with known index picks + symbol_moved events', () => {
-    // floor(x*5): 0.05->0, 0.45->2, 0.65->3, 0.85->4
+describe('vehicle-logistics (물류 사업) — PLAYER swap repeated once per plane', () => {
+  const rules = [RULES_BY_ID['vehicle-logistics']];
+  // logiswap is deterministic (no rng); a fresh empty-queue ctx is fine each call.
+  const ctx = () => ({ previousResult: PREV_ZEROS, weights: BASE_WEIGHTS, rng: queuedRng([]) });
+
+  it('2 planes -> pauses for TWO player swaps (remaining counts down 2 → 1)', () => {
     const base: SymbolType[] = ['plane', 'cherry', 'plane', 'lemon', 'grape'];
-    const frame = beginCascade(base, [RULES_BY_ID['vehicle-logistics']], {
-      previousResult: PREV_ZEROS,
-      weights: BASE_WEIGHTS,
-      rng: queuedRng([0.05, 0.45, 0.65, 0.85]),
-    });
-    // swap1: idx0<->idx2 -> [plane(from2), cherry, plane(from0), lemon, grape]
-    // swap2: idx3<->idx4 -> [plane, cherry, plane, grape, lemon]
+    let frame = beginCascade(base, rules, ctx());
+    expect(frame.pending?.kind).toBe('logiswap');
+    expect(frame.pending?.count).toBe(2);
+    expect(frame.pending?.remaining).toBe(2);
+    expect(frame.done).toBe(false);
+
+    // 1st swap: player picks idx3 <-> idx4 (lemon <-> grape).
+    frame = resolveSelection(frame, rules, ctx(), [3, 4]);
     expect(frame.working).toEqual(['plane', 'cherry', 'plane', 'grape', 'lemon']);
+    // still paused for the 2nd swap.
+    expect(frame.pending?.kind).toBe('logiswap');
+    expect(frame.pending?.remaining).toBe(1);
+    expect(frame.done).toBe(false);
+
+    // 2nd swap: player picks idx0 <-> idx1 (plane <-> cherry). Rule completes.
+    frame = resolveSelection(frame, rules, ctx(), [0, 1]);
+    expect(frame.working).toEqual(['cherry', 'plane', 'plane', 'grape', 'lemon']);
+    expect(frame.pending).toBeNull();
+    expect(frame.done).toBe(true);
 
     const moves = frame.events.filter((e) => e.type === 'symbol_moved');
     expect(moves).toEqual([
-      // swap1 (idx0 <-> idx2): both cells held 'plane'
-      { type: 'symbol_moved', symbolId: 'plane', fromIndex: 0, toIndex: 2, byRuleId: 'vehicle-logistics' },
-      { type: 'symbol_moved', symbolId: 'plane', fromIndex: 2, toIndex: 0, byRuleId: 'vehicle-logistics' },
-      // swap2 (idx3 <-> idx4): lemon <-> grape
       { type: 'symbol_moved', symbolId: 'lemon', fromIndex: 3, toIndex: 4, byRuleId: 'vehicle-logistics' },
       { type: 'symbol_moved', symbolId: 'grape', fromIndex: 4, toIndex: 3, byRuleId: 'vehicle-logistics' },
+      { type: 'symbol_moved', symbolId: 'plane', fromIndex: 0, toIndex: 1, byRuleId: 'vehicle-logistics' },
+      { type: 'symbol_moved', symbolId: 'cherry', fromIndex: 1, toIndex: 0, byRuleId: 'vehicle-logistics' },
     ]);
   });
 
-  it('rerolls the second pick until it is distinct from the first', () => {
-    // 1 plane -> one swap. a=0 (0.05), b first draws 0 again (0.05) then 4 (0.85).
+  it('1 plane -> a single swap, then the rule resolves', () => {
     const base: SymbolType[] = ['plane', 'cherry', 'lemon', 'grape', 'diamond'];
-    const frame = beginCascade(base, [RULES_BY_ID['vehicle-logistics']], {
-      previousResult: PREV_ZEROS,
-      weights: BASE_WEIGHTS,
-      rng: queuedRng([0.05, 0.05, 0.85]),
-    });
-    // swap idx0 <-> idx4: plane <-> diamond
+    let frame = beginCascade(base, rules, ctx());
+    expect(frame.pending?.remaining).toBe(1);
+    frame = resolveSelection(frame, rules, ctx(), [0, 4]); // plane <-> diamond
     expect(frame.working).toEqual(['diamond', 'cherry', 'lemon', 'grape', 'plane']);
-    const moves = frame.events.filter((e) => e.type === 'symbol_moved');
-    expect(moves).toEqual([
-      { type: 'symbol_moved', symbolId: 'plane', fromIndex: 0, toIndex: 4, byRuleId: 'vehicle-logistics' },
-      { type: 'symbol_moved', symbolId: 'diamond', fromIndex: 4, toIndex: 0, byRuleId: 'vehicle-logistics' },
-    ]);
+    expect(frame.pending).toBeNull();
+    expect(frame.done).toBe(true);
   });
 
-  it('0 planes -> no-op (board unchanged, no events)', () => {
+  it('0 planes -> AUTO-SKIPS (no pause, board unchanged, no events)', () => {
     const base: SymbolType[] = ['ship', 'car', 'lemon', 'grape', 'diamond'];
-    const frame = beginCascade(base, [RULES_BY_ID['vehicle-logistics']], {
-      previousResult: PREV_ZEROS,
-      weights: BASE_WEIGHTS,
-      rng: queuedRng([0.5, 0.5]),
-    });
+    const frame = beginCascade(base, rules, ctx());
+    expect(frame.pending).toBeNull();
+    expect(frame.done).toBe(true);
     expect(frame.working).toEqual(base);
     expect(frame.events.filter((e) => e.type === 'symbol_moved')).toHaveLength(0);
   });

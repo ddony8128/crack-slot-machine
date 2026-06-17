@@ -92,15 +92,25 @@ export type SpinLog = {
   haunted: boolean[];
 };
 
-export type SelectKind = 'copy' | 'swap' | 'reroll' | 'family' | 'park' | 'catswap';
+export type SelectKind =
+  | 'copy'
+  | 'swap'
+  | 'reroll'
+  | 'family'
+  | 'park'
+  | 'catswap'
+  | 'logiswap'; // 물류 사업: a swap repeated once per plane on the board
 
 // A `select` rule that paused the cascade for player input.
 export type PendingSelection = {
   kind: SelectKind;
   ruleName: string;
-  // Cells the player must pick: copy/reroll/family=1, swap=2, park=min(2, #vehicles).
+  // Cells the player must pick: copy/reroll/family=1, swap/logiswap=2, park=min(2, #vehicles).
   count: number;
   selectable: boolean[];   // which cells the player may pick (length 5)
+  // logiswap (물류 사업): swaps still to perform INCLUDING this one. >1 means the
+  // select re-pauses after this swap resolves. Undefined for single-shot selects.
+  remaining?: number;
 };
 
 export type GameStatus =

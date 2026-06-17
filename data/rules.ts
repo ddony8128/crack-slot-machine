@@ -289,10 +289,10 @@ export const RULES: Rule[] = [
   {
     id: 'vehicle-logistics',
     name: '물류 사업',
-    type: 'transform',
+    type: 'select',
     phase: 'sequential',
     build: 'vehicle',
-    description: '비행기 수만큼 무작위로 두 칸을 교체한다.',
+    description: '비행기 수만큼 반복하여, 직접 고른 두 칸을 교체한다.',
   },
   {
     id: 'vehicle-bigboat',

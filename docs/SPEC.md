@@ -30,7 +30,7 @@ These intentionally differ from the checklist below (explicit user decisions):
 
 Discovered by auditing the code against the checklist (2026-06-17). ✅=fixed, ⬜=open.
 
-- ⬜ **물류 사업**: should be a SELECT repeated per plane (직접 고른 두 칸 교체 × 비행기 수), NOT random swaps.
+- ✅ **물류 사업**: SELECT repeated per plane (직접 고른 두 칸 교체 × 비행기 수) — kind `logiswap`, no longer random.
 - ✅ **우다다다 / 점프의 달인**: each awards **+40 per cat** on top of the move (the "사라진 고양이 점수").
 - ✅ **0 상승 (zero-to-seven)**: converts the **가장 왼쪽 2개의 0** (was 모든 0). Patched in 빠른 게임 too.
 - ✅ **보석 셔플 (gem-shuffle)**: rerolls the **가장 왼쪽 보석 2개** (was 1개). Patched in 빠른 게임 too.

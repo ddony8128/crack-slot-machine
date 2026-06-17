@@ -700,6 +700,7 @@ function buildInitializer(initialRng: Rng): Initializer {
             ruleName: p.ruleName,
             count: p.count,
             selectable: [...p.selectable],
+            remaining: p.remaining,
           },
           status: 'awaiting-selection',
         });
@@ -766,6 +767,7 @@ function buildInitializer(initialRng: Rng): Initializer {
             ruleName: p.ruleName,
             count: p.count,
             selectable: [...p.selectable],
+            remaining: p.remaining,
           },
           status: 'awaiting-selection',
         });

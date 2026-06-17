@@ -29,8 +29,12 @@ export type Pending = {
   kind: SelectKind;
   ruleName: string;
   selectable: boolean[];
-  // Cells the player must pick: copy/reroll/family=1, swap=2, park=min(2, #vehicles).
+  // Cells the player must pick: copy/reroll/family=1, swap/logiswap=2, park=min(2,#vehicles).
   count: number;
+  // logiswap (물류 사업): swaps still to perform INCLUDING this one (= plane count at
+  // the rule's start). After a swap resolves with remaining>1, the select re-pauses
+  // with remaining-1. Undefined for single-shot selects.
+  remaining?: number;
 };
 
 /**
@@ -425,31 +429,10 @@ function applyOne(
       return [];
     }
 
-    // ---- transform (vehicle) ----
-    case 'vehicle-logistics': {
-      // Swap two distinct random cells, once per plane on the board. N===0 -> no-op.
-      const planes = working.reduce((n, s) => (s === PLANE ? n + 1 : n), 0);
-      const n = working.length;
-      for (let p = 0; p < planes; p++) {
-        const a = Math.floor(rng() * n);
-        let b = Math.floor(rng() * n);
-        // Reroll the second pick until it differs from the first (cap attempts).
-        let iter = 0;
-        while (b === a && iter < REROLL_CAP) {
-          b = Math.floor(rng() * n);
-          iter += 1;
-        }
-        if (b === a) continue; // could not find a distinct index; skip this swap
-        const va = working[a];
-        const vb = working[b];
-        // SWAP: each cell's prior value leaves it and arrives at the other.
-        write(working, locked, a, vb);
-        write(working, locked, b, va);
-        emitMove(va, a, b);
-        emitMove(vb, b, a);
-      }
-      return [];
-    }
+    // ---- vehicle ----
+    // NOTE: 물류 사업 (vehicle-logistics) is now a SELECT rule (kind 'logiswap',
+    // a player swap repeated once per plane) handled via resolveSelection — it no
+    // longer has a transform case here.
     case 'vehicle-bigboat': {
       // Leftmost ship copies itself into its immediate neighbours (in range).
       const s = working.findIndex((sym) => sym === SHIP);
@@ -592,6 +575,8 @@ const SELECT_KIND: Record<string, SelectKind> = {
   'vehicle-parking': 'park',
   // cat×vehicle combo: swap the leftmost vehicle-adjacent cat into the chosen cell.
   'why-here': 'catswap',
+  // 물류 사업: a player swap repeated once per plane on the board.
+  'vehicle-logistics': 'logiswap',
 };
 
 // Inverse of SELECT_KIND: the select rule id for a given kind. Used to tag the
@@ -603,7 +588,13 @@ const SELECT_RULE_ID: Record<SelectKind, string> = {
   family: 'monster-family',
   park: 'vehicle-parking',
   catswap: 'why-here',
+  logiswap: 'vehicle-logistics',
 };
+
+/** Planes on the board — drives 물류 사업's swap repeat count. */
+function planeCount(working: SymbolType[]): number {
+  return working.reduce((n, s) => (s === PLANE ? n + 1 : n), 0);
+}
 
 /**
  * 왜 여기 타 있어 (cat×vehicle combo) source: the smallest index of a CAT cell
@@ -643,6 +634,8 @@ function selectableFor(kind: SelectKind, locked: boolean[], working: SymbolType[
 function isApplicable(kind: SelectKind, selectable: boolean[], working: SymbolType[]): boolean {
   const free = selectable.filter(Boolean).length;
   if (kind === 'swap') return free >= 2;
+  // logiswap (물류 사업) needs 2 cells to swap AND ≥1 plane (the repeat driver).
+  if (kind === 'logiswap') return free >= 2 && planeCount(working) >= 1;
   // family ALSO requires a dracula on the board (the copy source).
   if (kind === 'family') return free >= 1 && working.includes('dracula');
   // catswap ALSO requires a cat adjacent to a vehicle (the swap source).
@@ -657,9 +650,22 @@ function isApplicable(kind: SelectKind, selectable: boolean[], working: SymbolTy
  * of their choice (spec: 원하는 칸 2개 — capped at 2 for balance), i.e. min(2, #vehicles).
  */
 function selectCount(kind: SelectKind, selectable: boolean[]): number {
-  if (kind === 'swap') return 2;
+  if (kind === 'swap' || kind === 'logiswap') return 2; // each (logiswap) swap picks 2
   if (kind === 'park') return Math.min(2, selectable.filter(Boolean).length);
   return 1;
+}
+
+/** Build a Pending for a paused select rule (logiswap also carries `remaining`). */
+function makePending(
+  kind: SelectKind,
+  ruleName: string,
+  selectable: boolean[],
+  working: SymbolType[],
+): Pending {
+  const pending: Pending = { kind, ruleName, selectable, count: selectCount(kind, selectable) };
+  // 물류 사업 repeats the swap once per plane present at the rule's start.
+  if (kind === 'logiswap') pending.remaining = planeCount(working);
+  return pending;
 }
 
 /**
@@ -811,7 +817,7 @@ export function advanceCascade(
         continue;
       }
       // Needs player input: pause here. slotIndex stays on this rule.
-      frame.pending = { kind, ruleName: rule.name, selectable, count: selectCount(kind, selectable) };
+      frame.pending = makePending(kind, rule.name, selectable, working);
       return frame;
     }
 
@@ -836,7 +842,7 @@ export function advanceCascade(
           continue;
         }
         // Pause here (slotIndex stays on the copy-above slot) for the player.
-        frame.pending = { kind, ruleName: `COPY ABOVE → ${above.name}`, selectable, count: selectCount(kind, selectable) };
+        frame.pending = makePending(kind, `COPY ABOVE → ${above.name}`, selectable, working);
         return frame;
       }
       // weight/score rules are not board-changing here; only reroll/transform
@@ -918,6 +924,18 @@ export function resolveSelection(
       frame.events.push({ type: 'symbol_moved', symbolId: working[a], fromIndex: b, toIndex: a, byRuleId: selectRuleId });
       break;
     }
+    case 'logiswap': {
+      // 물류 사업: one of this rule's per-plane swaps — swap the two chosen cells.
+      const [a, b] = indices;
+      const tmp = working[a];
+      working[a] = working[b];
+      working[b] = tmp;
+      if (locked[a]) locked[a] = false;
+      if (locked[b]) locked[b] = false;
+      frame.events.push({ type: 'symbol_moved', symbolId: tmp, fromIndex: a, toIndex: b, byRuleId: selectRuleId });
+      frame.events.push({ type: 'symbol_moved', symbolId: working[a], fromIndex: b, toIndex: a, byRuleId: selectRuleId });
+      break;
+    }
     case 'reroll': {
       const i = indices[0];
       const old = working[i];
@@ -962,6 +980,22 @@ export function resolveSelection(
       }
       break;
     }
+  }
+
+  // 물류 사업: more swaps remain → push this swap's step and RE-PAUSE on the SAME
+  // slot for the next swap (don't advance). Plane count was fixed at the rule start.
+  const remaining = pending.remaining ?? 1;
+  if (pending.kind === 'logiswap' && remaining > 1) {
+    steps.push({ label: ruleName, result: [...working], locked: [...locked] });
+    frame.interactive = true;
+    frame.pending = {
+      kind: 'logiswap',
+      ruleName,
+      selectable: selectableFor('logiswap', locked, working),
+      count: 2,
+      remaining: remaining - 1,
+    };
+    return frame;
   }
 
   const selStep: SpinLogStep = { label: ruleName, result: [...working], locked: [...locked] };

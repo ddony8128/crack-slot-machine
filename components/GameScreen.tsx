@@ -121,7 +121,9 @@ export default function GameScreen() {
             ? "복사할 칸을 선택하세요 (가장 왼쪽 드라큘라가 복사됩니다)"
             : pendingSelection.kind === "catswap"
               ? "옮길 칸을 선택하세요 (교통수단 옆 고양이가 이 칸으로 이동합니다)"
-              : `주차할 교통수단 칸을 선택하세요 (최대 ${pendingSelection.count}칸, ${chosen.length}칸 선택됨)`
+              : pendingSelection.kind === "logiswap"
+                ? `물류 사업 — 교체할 두 칸을 선택하세요 (남은 교환 ${pendingSelection.remaining ?? 1}회 · ${chosen.length}/2)`
+                : `주차할 교통수단 칸을 선택하세요 (최대 ${pendingSelection.count}칸, ${chosen.length}칸 선택됨)`
     : "";
 
   // Celebrations fire once the reveal completes for the latest log.
