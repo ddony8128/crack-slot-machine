@@ -187,7 +187,7 @@ export default function DailyClient() {
         title="일일 도전"
         lines={[
           "오늘 정해진 심볼 세트와 규칙으로 점수를 겨룹니다.",
-          "공식 도전은 하루 5회이며, 광고를 보면 5회 추가 도전할 수 있습니다.",
+          "도전 횟수는 하루 5회이며, 광고를 보면 5회 추가 도전할 수 있습니다.",
           "오늘의 최고 점수만 랭킹에 반영됩니다.",
         ]}
       />
@@ -238,7 +238,7 @@ export default function DailyClient() {
                   남은 도전
                 </p>
                 <p className="font-mono text-lg font-bold text-amber-300">
-                  공식 도전: {current.attemptsLeft} /{" "}
+                  도전 횟수: {current.attemptsLeft} /{" "}
                   {current.allowed ??
                     (current.adRefillUsed
                       ? DAILY_MAX_ATTEMPTS
@@ -269,7 +269,7 @@ export default function DailyClient() {
                   </>
                 ) : refillAvailableButHeld ? (
                   <p className="text-sm text-zinc-500">
-                    공식 도전을 모두 사용하면 광고로 5회 추가 충전할 수 있습니다.
+                    도전 횟수를 모두 사용하면 광고로 5회 추가 충전할 수 있습니다.
                   </p>
                 ) : current.adRefillUsed ? (
                   <p className="text-sm text-zinc-400">
@@ -310,7 +310,7 @@ export default function DailyClient() {
         href="/season"
         className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
       >
-        시즌 허브로
+        메인 화면으로
       </Link>
 
       <DummyAdModal

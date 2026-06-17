@@ -20,11 +20,9 @@ import {
 } from "@/data/scoreTable";
 import {
   SYMBOL_SETS,
-  SYMBOL_SETS_BY_ID,
   type SetBonus,
   type SymbolSet,
 } from "@/lib/symbols/sets";
-import { PAIR_RULES } from "@/lib/pairRules";
 
 /** Does this set have ≥1 symbol that can roll in `weights`? */
 function setRollable(set: SymbolSet, weights: Record<SymbolType, number>): boolean {
@@ -51,20 +49,20 @@ export function bonusRowLabel(
 ): { label: string; value: string; negative: boolean } {
   switch (bonus.type) {
     case "all-types":
-      return { label: `${set.name} 3종`, value: `+${bonus.points}`, negative: false };
+      return { label: `${set.name} 3종 모두 등장`, value: `+${bonus.points}`, negative: false };
     case "all-symbols":
-      return { label: `올 ${set.name}`, value: `+${bonus.points}`, negative: false };
+      return { label: `다섯 칸 모두 ${set.name}`, value: `+${bonus.points}`, negative: false };
     case "per-symbol":
       return { label: `${set.name} 1개당`, value: `+${bonus.points}`, negative: false };
     case "adjacent-penalty":
       return {
-        label: `이웃 ${set.name} 1개당`,
+        label: `서로 이웃(바로 옆 칸)한 ${set.name} 1개당`,
         value: `${bonus.points}`,
         negative: true,
       };
     case "per-event":
       return {
-        label: `${set.name} ${PER_EVENT_LABEL[bonus.event]} 1개당`,
+        label: `${set.name} ${PER_EVENT_LABEL[bonus.event]} 1회당`,
         value: `+${bonus.points}`,
         negative: false,
       };
@@ -144,6 +142,34 @@ function ScoreRow({
   );
 }
 
+/** A small sub-heading inside a ScoreCard (e.g. "7 점수", "4 페널티"). */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="pt-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-500 first:pt-0">
+      {children}
+    </li>
+  );
+}
+
+/** The emoji + name list for a symbol set, shown atop its score card. */
+function SetSymbols({ set }: { set: SymbolSet }) {
+  return (
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5 text-xs text-zinc-500">
+      {set.symbols.map((s) => (
+        <span
+          key={s.id}
+          className="inline-flex items-center gap-0.5"
+          title={s.name}
+          aria-label={s.name}
+        >
+          <span aria-hidden="true">{s.emoji}</span>
+          <span>{s.name}</span>
+        </span>
+      ))}
+    </li>
+  );
+}
+
 function ScoreCard({
   title,
   note,
@@ -219,16 +245,12 @@ export default function ReferenceModal({
   );
   const groups = groupByBuild(visibleRules);
 
-  // 세트 보너스 / 페어 보너스 are shown only for sets/pairs that can roll in this
-  // run's bag, so the 점수표 reflects only achievable bonuses.
+  // Per-set score cards are shown only for non-number sets that can roll in this
+  // run's bag, so the 점수표 reflects only achievable bonuses. Order follows
+  // SYMBOL_SETS (과일 → 보석 → 고양이 → 교통수단 → 괴물).
   const visibleSets = SYMBOL_SETS.filter(
     (set) => !set.isNumberSet && set.bonuses.length > 0 && setRollable(set, weights),
   );
-  const visiblePairs = PAIR_RULES.filter((pair) => {
-    const a = SYMBOL_SETS_BY_ID[pair.setA];
-    const b = SYMBOL_SETS_BY_ID[pair.setB];
-    return !!a && !!b && setRollable(a, weights) && setRollable(b, weights);
-  });
 
   const isRules = view === "rules";
 
@@ -311,106 +333,51 @@ export default function ReferenceModal({
             </h3>
 
             <ScoreCard
-              title="7 점수"
-              note="보드에 나온 7의 개수만큼 점수를 얻는다. 많을수록 폭발적으로 커지며, 5개(잭팟)면 777점이다."
+              title="기본 족보"
+              note="같은 심볼 N개로 성립합니다. 숫자(0·4·7)는 기본 족보에서 제외됩니다."
             >
+              <ScoreRow label="페어" value={`+${HAND_PAIR}`} />
+              <ScoreRow label="투페어" value={`+${HAND_TWO_PAIR}`} />
+              <ScoreRow label="트리플" value={`+${HAND_TRIPLE}`} />
+              <ScoreRow label="풀하우스" value={`+${HAND_FULL_HOUSE}`} />
+              <ScoreRow label="포카드" value={`+${HAND_FOUR_KIND}`} />
+              <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
+            </ScoreCard>
+
+            <ScoreCard
+              title="숫자 세트"
+              note="숫자는 기본 족보 대신 아래 전용 점수를 사용합니다."
+            >
+              <SectionLabel>7 점수</SectionLabel>
               <ScoreRow label="7이 1개" value={`+${SEVEN_SCORE[1]}`} />
               <ScoreRow label="7이 2개" value={`+${SEVEN_SCORE[2]}`} />
               <ScoreRow label="7이 3개" value={`+${SEVEN_SCORE[3]}`} />
               <ScoreRow label="7이 4개" value={`+${SEVEN_SCORE[4]}`} />
               <ScoreRow label="7이 5개 (잭팟)" value={`+${SEVEN_SCORE[5]}`} />
+              <SectionLabel>4 페널티</SectionLabel>
+              <ScoreRow label="4 1개당" value={`-${FOUR_PENALTY_PER}`} negative />
+              <SectionLabel>특수 족보 (다음 스핀)</SectionLabel>
+              <ScoreRow label="0이 3개 이상" value="규칙 1장 추가" />
+              <ScoreRow label="4가 4개" value={`다음 스핀 ×${FOURS_4_MULT}`} />
+              <ScoreRow label="4가 5개" value={`다음 스핀 ×${FOURS_5_MULT}`} />
             </ScoreCard>
 
-            <ScoreCard
-              title="족보"
-              note="숫자(0·4·7)를 제외한 같은 심볼이 N개 모이면 성립한다. 과일·보석·고양이 등 세트 심볼이 대상이며, 가장 높은 족보 하나만 점수로 계산된다."
-            >
-              <ScoreRow label="페어 — 같은 심볼 2개" value={`+${HAND_PAIR}`} />
-              <ScoreRow label="투페어 — 2개짜리 페어 2쌍" value={`+${HAND_TWO_PAIR}`} />
-              <ScoreRow label="트리플 — 같은 심볼 3개" value={`+${HAND_TRIPLE}`} />
-              <ScoreRow label="풀하우스 — 트리플 + 페어" value={`+${HAND_FULL_HOUSE}`} />
-              <ScoreRow label="포카드 — 같은 심볼 4개" value={`+${HAND_FOUR_KIND}`} />
-              <ScoreRow label="파이브카드 — 같은 심볼 5개" value={`+${HAND_FIVE_KIND}`} />
-            </ScoreCard>
-
-            {visibleSets.length > 0 && (
-            <ScoreCard
-              title="세트 보너스"
-              note="같은 세트(과일/보석/고양이/교통수단/괴물) 심볼이 모이면 추가 점수. 세트별 효과는 아래와 같다."
-            >
-              {visibleSets.map((set) => (
-                  <li key={set.id} className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1 text-xs font-bold text-zinc-400">
-                      <span>{set.name}</span>
-                      <span className="flex flex-wrap items-center gap-2 font-normal text-zinc-500">
-                        {set.symbols.map((s) => (
-                          <span
-                            key={s.id}
-                            className="inline-flex items-center gap-0.5"
-                            title={s.name}
-                            aria-label={s.name}
-                          >
-                            <span aria-hidden="true">{s.emoji}</span>
-                            <span>{s.name}</span>
-                          </span>
-                        ))}
-                      </span>
-                    </div>
-                    <ul className="space-y-1 pl-2">
-                      {set.bonuses.map((bonus, i) => {
-                        const row = bonusRowLabel(set, bonus);
-                        return (
-                          <ScoreRow
-                            key={i}
-                            label={row.label}
-                            value={row.value}
-                            negative={row.negative}
-                          />
-                        );
-                      })}
-                    </ul>
-                  </li>
-                ),
-              )}
-            </ScoreCard>
-            )}
-
-            {visiblePairs.length > 0 && (
-            <ScoreCard
-              title="페어 보너스"
-              note="서로 다른 두 세트가 보드에 각각 하나 이상 있으면 주어지는 보너스."
-            >
-              {visiblePairs.map((pair) => (
-                <li key={pair.id} className="space-y-0.5">
-                  <ScoreRow label={pair.name} value={`+${pair.points}`} />
-                  <p className="text-xs text-zinc-500">
-                    {SYMBOL_SETS_BY_ID[pair.setA].name}+
-                    {SYMBOL_SETS_BY_ID[pair.setB].name} 모두 있으면
-                  </p>
-                </li>
-              ))}
-            </ScoreCard>
-            )}
-
-            <ScoreCard
-              title="4 페널티"
-              note="보드의 4는 불운의 숫자다. 4 하나당 점수가 깎인다. (일부 규칙은 이 페널티를 보너스로 뒤집기도 한다.)"
-            >
-              <ScoreRow
-                label="4 1개당"
-                value={`-${FOUR_PENALTY_PER}`}
-                negative
-              />
-            </ScoreCard>
-
-            <ScoreCard
-              title="특수 족보"
-              note="특정 숫자가 일정 개수 이상 나오면 발동하는 특수 효과. ※ 효과는 모두 다음 스핀에만 적용됩니다."
-            >
-              <ScoreRow label="0이 3개 이상 → 규칙 추첨 1장 더" value="규칙 1장 추가" />
-              <ScoreRow label="4가 4개 → 다음 스핀 점수 배수" value={`점수 ×${FOURS_4_MULT}`} />
-              <ScoreRow label="4가 5개 → 다음 스핀 점수 배수" value={`점수 ×${FOURS_5_MULT}`} />
-            </ScoreCard>
+            {visibleSets.map((set) => (
+              <ScoreCard key={set.id} title={`${set.name} 세트`}>
+                <SetSymbols set={set} />
+                {set.bonuses.map((bonus, i) => {
+                  const row = bonusRowLabel(set, bonus);
+                  return (
+                    <ScoreRow
+                      key={i}
+                      label={row.label}
+                      value={row.value}
+                      negative={row.negative}
+                    />
+                  );
+                })}
+              </ScoreCard>
+            ))}
           </section>
           )}
         </div>

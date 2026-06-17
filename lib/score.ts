@@ -2,7 +2,6 @@ import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
 import { NUMBERS } from '@/data/symbols';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { symbolInSet } from '@/lib/symbols/tags';
-import { PAIR_RULES } from '@/lib/pairRules';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
   SEVEN_SCORE,
@@ -288,34 +287,6 @@ function cleanSweepCount(
   return countFours(result) === 0 ? countRule(expanded, 'clean-bonus') : 0;
 }
 
-/** Does the board contain ≥1 member of the given symbol set? */
-function boardHasSet(result: SymbolType[], setId: string): boolean {
-  const set = SYMBOL_SETS_BY_ID[setId];
-  if (!set) return false;
-  const members = new Set<SymbolType>(set.symbols.map((s) => s.id as SymbolType));
-  return result.some((s) => members.has(s));
-}
-
-/**
- * Generic A–B pair bonus. For each PairRule active in `expanded` (n = count,
- * so copy-above stacks), pay points*n iff the board has ≥1 member of BOTH sets.
- * Returns the running sum + labeled line items so scoreResult/scoreItems agree.
- */
-function pairBonus(
-  expanded: (Rule | null)[],
-  result: SymbolType[],
-): { sum: number; items: ScoreItem[] } {
-  const items: ScoreItem[] = [];
-  for (const pair of PAIR_RULES) {
-    const n = countRule(expanded, pair.id);
-    if (n <= 0) continue;
-    if (!boardHasSet(result, pair.setA) || !boardHasSet(result, pair.setB)) continue;
-    items.push({ label: n > 1 ? `${pair.name} ×${n}` : pair.name, points: pair.points * n });
-  }
-  const sum = items.reduce((a, it) => a + it.points, 0);
-  return { sum, items };
-}
-
 // Per-event types carrying a single acted-on symbol (moved/rerolled/copied).
 type SymbolEventType = 'symbol_moved' | 'symbol_rerolled' | 'symbol_copied';
 
@@ -482,8 +453,6 @@ export function scoreItems(
   const exorcised = exorcistCells(events);
   if (exorcised > 0) items.push({ label: `흡혈귀 퇴마사 (${exorcised})`, points: EXORCIST_PER * exorcised });
 
-  items.push(...pairBonus(expanded, result).items);
-
   const clean = cleanSweepCount(expanded, result, scoreBoards);
   if (clean > 0)
     items.push({ label: clean > 1 ? `CLEAN SWEEP ×${clean}` : 'CLEAN SWEEP', points: CLEAN_BONUS * clean });
@@ -567,7 +536,6 @@ export function scoreResult(
   bonusScore += VITAMIN_PER * vitaminFruits(events);
   bonusScore += SHAKEDOWN_PER * shakedownGems(events);
   bonusScore += EXORCIST_PER * exorcistCells(events);
-  bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 
   // 가족 만들기 (monster-family): +DRACULA_FAMILY_PER per dracula on the final

@@ -5,7 +5,6 @@
 
 import { RULE_SETS_BY_ID } from '@/lib/rules/sets';
 import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
-import { pairRulesForSets } from '@/lib/pairRules';
 import { comboRulesForSets } from '@/lib/rules/combos';
 
 export type DailyChallengeConfig = {
@@ -71,12 +70,7 @@ export function buildRulePool(symbolSetIds: string[], ruleSetId: string): string
     }
   }
 
-  // A–B pair rules apply only when BOTH joined sets are present (deduped here).
-  for (const id of pairRulesForSets(symbolSetIds)) {
-    add(id);
-  }
-
-  // A–B combo rules (board effects) likewise join only when BOTH sets are present.
+  // A–B combo rules (board effects) join only when BOTH sets are present.
   for (const id of comboRulesForSets(symbolSetIds)) {
     add(id);
   }

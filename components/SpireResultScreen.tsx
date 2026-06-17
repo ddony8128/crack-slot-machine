@@ -152,7 +152,7 @@ export default function SpireResultScreen({
         href="/season"
         className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
       >
-        시즌으로
+        메인 화면으로
       </Link>
       <button
         type="button"

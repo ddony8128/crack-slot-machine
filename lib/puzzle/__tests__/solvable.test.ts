@@ -199,7 +199,7 @@ describe('Season 1 puzzles are intentionally solvable (deterministic, not luck)'
         `[solver] ${key} seed=${PUZZLES_BY_KEY[key].seed} clearSpin=${solution!.clearSpin} ` +
           `slots=${JSON.stringify(solution!.slotRuleIds)}`,
       );
-    });
+    }, 30_000); // exhaustive BFS solver; p02's branch is slow on cold CI/Win
   }
 });
 

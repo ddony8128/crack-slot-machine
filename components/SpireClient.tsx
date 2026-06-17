@@ -537,7 +537,7 @@ export default function SpireClient() {
           </button>
         </div>
         <Link href="/season" className="text-sm text-zinc-400 underline">
-          ← 시즌으로
+          ← 나가기
         </Link>
       </Centered>
     );
@@ -606,7 +606,7 @@ export default function SpireClient() {
           })}
         </div>
         <Link href="/season" className="text-sm text-zinc-400 underline">
-          ← 시즌으로
+          ← 나가기
         </Link>
       </main>
     );

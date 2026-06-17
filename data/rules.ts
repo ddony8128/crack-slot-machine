@@ -1,5 +1,4 @@
 import type { Rule, RulePhase } from '@/types';
-import { PAIR_RULES } from '@/lib/pairRules';
 
 // Player-facing labels for each trigger-timing phase (the "발동 시점" badge).
 export const RULE_PHASE_LABELS: Record<RulePhase, string> = {
@@ -57,7 +56,7 @@ export const RULES: Rule[] = [
     type: 'weight',
     phase: 'pre-spin',
     build: '7',
-    description: '직전 결과가 숫자였던 칸은 첫 굴림에서 다시 숫자가 나온다.',
+    description: '첫 굴림에서 직전 결과가 숫자였던 칸은 다시 숫자가 나옵니다.',
   },
 
   // ---- fruit ----
@@ -109,7 +108,7 @@ export const RULES: Rule[] = [
     type: 'lock',
     phase: 'pre-spin',
     build: 'order',
-    description: '이전 결과에서 가장 왼쪽 과일 두 개가 유지된다. (첫 굴림에서만 — 이후 규칙으로 바뀔 수 있다)',
+    description: '첫 굴림에서 이전 결과의 가장 왼쪽 과일 두 개가 유지된다.',
   },
   {
     id: 'gem-fish',
@@ -161,7 +160,7 @@ export const RULES: Rule[] = [
     type: 'lock',
     phase: 'pre-spin',
     build: 'order',
-    description: '세 번째 칸이 이전 스핀의 값을 유지한다. (첫 굴림에서만 — 이후 규칙으로 바뀔 수 있다)',
+    description: '첫 굴림에서 세 번째 칸이 이전 스핀의 값으로 유지된다.',
   },
   {
     id: 'last-lock',
@@ -169,7 +168,7 @@ export const RULES: Rule[] = [
     type: 'lock',
     phase: 'pre-spin',
     build: 'order',
-    description: '마지막 칸이 이전 스핀의 값을 유지한다. (첫 굴림에서만 — 이후 규칙으로 바뀔 수 있다)',
+    description: '첫 굴림에서 마지막 칸이 이전 스핀의 값으로 유지된다.',
   },
   {
     id: 'left-pair',
@@ -235,7 +234,7 @@ export const RULES: Rule[] = [
     type: 'lock',
     phase: 'pre-spin',
     build: 'cat',
-    description: '이전 결과가 고양이였던 칸은 첫 굴림에서 유지된다. (이후 규칙으로 바뀔 수 있다)',
+    description: '첫 굴림에서 이전 결과가 고양이였던 칸이 유지된다.',
   },
   {
     id: 'cat-zoomies',
@@ -251,7 +250,7 @@ export const RULES: Rule[] = [
     type: 'transform',
     phase: 'sequential',
     build: 'cat',
-    description: '가장 왼쪽의 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽 칸과 자리를 바꾼다. (가능한 방향 중 무작위)',
+    description: '가장 왼쪽 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽 칸과 자리를 바꿉니다. 방향은 가능한 쪽 중 무작위로 정해집니다.',
   },
   {
     id: 'cat-turf',
@@ -277,7 +276,7 @@ export const RULES: Rule[] = [
     type: 'select',
     phase: 'next-spin',
     build: 'vehicle',
-    description: '교통수단을 최대 2개까지 직접 골라 칸마다 30점을 잃고, 그 칸들은 다음 스핀 첫 굴림에 유지된다. (유지된 칸은 이후 규칙으로 바뀔 수 있다)',
+    description: '교통수단을 최대 2개까지 직접 골라 칸마다 30점을 잃는다. 고른 칸은 다음 스핀 첫 굴림에서 유지된다.',
   },
   {
     id: 'vehicle-surge',
@@ -319,7 +318,7 @@ export const RULES: Rule[] = [
     type: 'transform',
     phase: 'sequential',
     build: 'monster',
-    description: '가장 왼쪽 괴물 칸이 유령 들린다. (이번 스핀의 족보 계산에서 유령 1개로 추가 계산)',
+    description: '가장 왼쪽 괴물 칸이 유령에 들립니다. 이번 스핀의 족보 계산에서 유령 1개로 추가 계산됩니다.',
   },
   {
     id: 'jibakryeong',
@@ -351,7 +350,7 @@ export const RULES: Rule[] = [
     type: 'transform',
     phase: 'sequential',
     build: 'monster',
-    description: '괴물이 있으면 가장 왼쪽 고양이가 좀비고양이로 변한다. (좀비고양이는 고양이이자 괴물로 계산된다)',
+    description: '괴물이 있으면 가장 왼쪽 고양이가 좀비고양이로 변합니다. 좀비고양이는 고양이이자 괴물로 계산됩니다.',
   },
   {
     id: 'vampire-exorcist',
@@ -504,15 +503,9 @@ export const RULES: Rule[] = [
     description: '유령들린 칸의 고양이는 유령고양이가 되고, 그 칸의 유령들림이 풀린다.',
   },
 
-  // ---- pair (A–B conditional bonus; DATA in lib/pairRules.ts) ----
-  ...PAIR_RULES.map((p) => ({
-    id: p.id,
-    name: p.name,
-    type: 'score' as const,
-    phase: 'scoring' as const,
-    build: 'pair',
-    description: p.description,
-  })),
+  // ---- pair (A–B conditional bonus) ----
+  // The non-spec 페어 보너스 rules (과수원 보석상 / 고양이 택시) were removed.
+  // PAIR_RULES is now empty, so no 'pair'-build rules are registered.
 ];
 
 export const RULES_BY_ID: Record<string, Rule> = Object.fromEntries(

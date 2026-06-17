@@ -1,14 +1,14 @@
 /**
  * Config-driven A–B pair rules for RULE SLOT.
  *
- * A pair rule belongs to TWO symbol sets (setA, setB). It is included in a run's
- * rule pool only when BOTH sets are present (see buildRulePool), and it pays a
- * conditional bonus at scoring time when the board has ≥1 member of each set
- * (see lib/score.ts).
+ * A pair rule belongs to TWO symbol sets (setA, setB). When present it is
+ * included in a run's rule pool only when BOTH sets are present (see
+ * buildRulePool).
  *
- * These are DATA: buildRulePool and the scorer consume them generically — there
- * is NO per-pair hardcoding in the engine/score logic. Adding a pair rule here
- * (and registering it in data/rules.ts) is all that's required.
+ * The non-spec 페어 보너스 rules (과수원 보석상 / 고양이 택시) have been removed —
+ * the array is intentionally empty. The type + generic plumbing
+ * (pairRulesForSets, PAIR_RULES_BY_ID) are kept so importers compile and a future
+ * spec-correct pair rule can be re-introduced as pure data.
  */
 
 export type PairRule = {
@@ -20,24 +20,7 @@ export type PairRule = {
   description: string;
 };
 
-export const PAIR_RULES: PairRule[] = [
-  {
-    id: 'pair-fruit-gem',
-    name: '과수원 보석상',
-    setA: 'fruit',
-    setB: 'gem',
-    points: 100,
-    description: '과일과 보석이 각각 하나 이상 있으면 100점을 더 얻는다.',
-  },
-  {
-    id: 'pair-cat-vehicle',
-    name: '고양이 택시',
-    setA: 'cat',
-    setB: 'vehicle',
-    points: 80,
-    description: '고양이와 교통수단이 각각 하나 이상 있으면 80점을 더 얻는다.',
-  },
-];
+export const PAIR_RULES: PairRule[] = [];
 
 export const PAIR_RULES_BY_ID: Record<string, PairRule> = Object.fromEntries(
   PAIR_RULES.map((p) => [p.id, p]),
