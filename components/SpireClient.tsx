@@ -825,6 +825,7 @@ export default function SpireClient() {
             setRerollCount(0);
             startStage();
           }}
+          rerollFree={runState.artifacts.includes("chime") && rerollCount < 2}
         />
         <div className="mx-auto -mt-2 mb-4 flex w-full max-w-md flex-col items-center gap-1 px-4">
           <button

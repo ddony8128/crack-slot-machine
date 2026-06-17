@@ -40,6 +40,8 @@ export type SpireShopProps = {
   onBuyHandDouble: (handType: string) => void;
   onReroll: () => void;
   onLeave: () => void;
+  /** True when the next reroll is free (차임벨: first 2 rerolls per shop visit). */
+  rerollFree?: boolean;
 };
 
 type ModalState =
@@ -59,6 +61,7 @@ export default function SpireShop({
   onBuyHandDouble,
   onReroll,
   onLeave,
+  rerollFree = false,
 }: SpireShopProps) {
   const money = runState.money;
   const [modal, setModal] = useState<ModalState>(null);
@@ -228,7 +231,7 @@ export default function SpireShop({
                   onClick={() => onBuyHandFlat(hand)}
                   className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1 transition enabled:hover:border-emerald-400 disabled:opacity-40"
                 >
-                  +50 ({offers.handFlatPrice})
+                  +50점 <span className="text-amber-200">({offers.handFlatPrice}원)</span>
                 </button>
                 <button
                   type="button"
@@ -236,7 +239,7 @@ export default function SpireShop({
                   onClick={() => onBuyHandDouble(hand)}
                   className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1 transition enabled:hover:border-emerald-400 disabled:opacity-40"
                 >
-                  ×2 ({offers.handDoublePrice})
+                  ×2 <span className="text-amber-200">({offers.handDoublePrice}원)</span>
                 </button>
               </div>
             );
@@ -247,11 +250,13 @@ export default function SpireShop({
       <div className="flex flex-col gap-3">
         <button
           type="button"
-          disabled={offers.rerollPrice > money}
+          disabled={!rerollFree && offers.rerollPrice > money}
           onClick={onReroll}
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900/60 px-4 py-3 text-sm font-bold text-zinc-200 transition enabled:hover:border-amber-400 disabled:opacity-40"
         >
-          상점 리롤 ({offers.rerollPrice}원)
+          {rerollFree
+            ? "상점 리롤 (무료 · 차임벨)"
+            : `상점 리롤 (${offers.rerollPrice}원)`}
         </button>
         <button
           type="button"
