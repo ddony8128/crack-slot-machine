@@ -15,13 +15,36 @@ export default async function SeasonLeaderboardPage() {
       <SeasonNav />
 
       <main className="fade-rise mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-10">
-        <header className="text-center">
+        <header className="space-y-3 text-center">
           <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
             시즌 랭킹
           </h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            시즌 점수는 첨탑·퍼즐·일일 도전을 합산하며 최대 3000점입니다.
+          <p className="text-sm text-zinc-400">
+            시즌 점수는 첨탑·퍼즐·일일 도전을 합산합니다. (빠른 게임은 시즌 점수에 반영되지 않습니다.)
           </p>
+
+          <details className="mx-auto max-w-md rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-left">
+            <summary className="cursor-pointer text-center text-xs font-bold text-amber-200/90">
+              점수 계산 방법 보기
+            </summary>
+            <div className="mt-2 space-y-2 text-xs leading-relaxed text-zinc-400">
+              <p>
+                <span className="font-bold text-emerald-300">첨탑 오르기</span> — 최고 런 기준:
+                도달 스테이지 ×100 + 보유 금액 ×10 + 클리어한 스테이지의 남은 스핀 ×10
+              </p>
+              <p>
+                <span className="font-bold text-emerald-300">퍼즐</span> — 각 퍼즐의 최고 기록 합산.
+                퍼즐 1개 클리어 = 100점 + 남긴 스핀 ×10 (적은 스핀으로 클리어할수록 높습니다)
+              </p>
+              <p>
+                <span className="font-bold text-emerald-300">일일 도전</span> — 플레이한 날마다
+                첫 플레이 +20점, 그날 순위 보상(상위 10% +50점 · 상위 50% +30점)을 합산
+              </p>
+              <p className="text-zinc-500">
+                후원은 점수·순위에 전혀 영향을 주지 않습니다.
+              </p>
+            </div>
+          </details>
         </header>
 
         {!season ? (
