@@ -459,6 +459,29 @@ export default function SpireClient() {
     ? spireShopOffers(runState, shopVisitIndex, rerollCount)
     : null;
 
+  // 품절 처리: the discrete (artifact/set/rule) offer slots are SNAPSHOT when a shop
+  // visit opens or is rerolled, so buying one shows it 품절 in place instead of the
+  // next seeded candidate sliding in (which made reroll pointless). Symbols + prices
+  // stay live (from `offers`). Keyed on (shopVisitIndex, rerollCount) only.
+  const [shopSnapshot, setShopSnapshot] = useState<SpireShopOffers | null>(null);
+  useEffect(() => {
+    if (phase !== "shop") return;
+    const st = runStateRef.current;
+    if (!st) return;
+    // Snapshot ONLY on visit/reroll change — NOT on every runState (buy) change.
+    setShopSnapshot(spireShopOffers(st, shopVisitIndex, rerollCount));
+  }, [phase, shopVisitIndex, rerollCount]);
+  // Merge: frozen discrete lists from the snapshot, live symbols/prices from offers.
+  const shopOffers: SpireShopOffers | null =
+    offers && shopSnapshot
+      ? {
+          ...offers,
+          artifacts: shopSnapshot.artifacts,
+          sets: shopSnapshot.sets,
+          rules: shopSnapshot.rules,
+        }
+      : offers;
+
   // 후원 안내 (spec §9): on the result screen the SeasonScoreRise animation
   // shows FIRST; only open the donation modal a short delay after the result
   // mounts so it never fights the count-up.
@@ -734,12 +757,12 @@ export default function SpireClient() {
     );
   }
 
-  if (phase === "shop" && runState && offers) {
+  if (phase === "shop" && runState && shopOffers) {
     return (
       <>
         <SpireShop
           runState={runState}
-          offers={offers}
+          offers={shopOffers}
           onBuySymbol={(target, replaced) =>
             applyReducer(buySymbolIncrement(runState, target, replaced), {
               type: "buy_symbol",

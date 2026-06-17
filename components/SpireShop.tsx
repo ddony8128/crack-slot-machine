@@ -106,17 +106,20 @@ export default function SpireShop({
           <div className="flex flex-col gap-2">
             {offers.artifacts.map((a) => {
               const def = ARTIFACTS_BY_ID[a.id];
+              const soldOut = runState.artifacts.includes(a.id);
               return (
                 <button
                   key={a.id}
                   type="button"
-                  disabled={a.price > money}
+                  disabled={soldOut || a.price > money}
                   onClick={() => onBuyArtifact(a.id, a.price)}
                   className="flex flex-col gap-1 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-left text-sm transition enabled:hover:border-emerald-400 disabled:opacity-40"
                 >
                   <span className="flex items-center justify-between">
                     <span className="font-bold text-emerald-300">{def?.name ?? a.id}</span>
-                    <span className="font-bold text-amber-200">{a.price}원</span>
+                    <span className="font-bold text-amber-200">
+                      {soldOut ? "품절" : `${a.price}원`}
+                    </span>
                   </span>
                   {def?.description && (
                     <span className="text-xs text-zinc-400">{def.description}</span>
@@ -155,11 +158,12 @@ export default function SpireShop({
           <div className="flex flex-col gap-2">
             {offers.sets.map((set) => {
               const def = SYMBOL_SETS_BY_ID[set.id];
+              const soldOut = runState.ownedSetIds.includes(set.id);
               return (
                 <button
                   key={set.id}
                   type="button"
-                  disabled={set.price > money}
+                  disabled={soldOut || set.price > money}
                   onClick={() => setModal({ kind: "set", setId: set.id })}
                   className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm transition enabled:hover:border-emerald-400 disabled:opacity-40"
                 >
@@ -169,7 +173,9 @@ export default function SpireShop({
                       {def?.symbols.map((sy) => sy.emoji).join(" ")}
                     </span>
                   </span>
-                  <span className="font-bold text-amber-200">{set.price}원</span>
+                  <span className="font-bold text-amber-200">
+                    {soldOut ? "품절" : `${set.price}원`}
+                  </span>
                 </button>
               );
             })}
@@ -181,31 +187,36 @@ export default function SpireShop({
       {offers.rules.length > 0 && (
         <Section title="규칙 구매">
           <div className="flex flex-col gap-2">
-            {offers.rules.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                disabled={r.price > money}
-                onClick={() => {
-                  if (runState.rulePool.length >= SPIRE_RULE_POOL_MAX) {
-                    setModal({ kind: "rule", ruleId: r.id });
-                  } else {
-                    onBuyRule(r.id);
-                  }
-                }}
-                className="flex flex-col gap-1 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-left text-sm transition enabled:hover:border-emerald-400 disabled:opacity-40"
-              >
-                <span className="flex items-center justify-between">
-                  <span className="font-bold text-zinc-100">{ruleName(r.id)}</span>
-                  <span className="font-bold text-amber-200">{r.price}원</span>
-                </span>
-                {RULES_BY_ID[r.id]?.description && (
-                  <span className="text-xs text-zinc-400">
-                    {RULES_BY_ID[r.id]?.description}
+            {offers.rules.map((r) => {
+              const soldOut = runState.rulePool.includes(r.id);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  disabled={soldOut || r.price > money}
+                  onClick={() => {
+                    if (runState.rulePool.length >= SPIRE_RULE_POOL_MAX) {
+                      setModal({ kind: "rule", ruleId: r.id });
+                    } else {
+                      onBuyRule(r.id);
+                    }
+                  }}
+                  className="flex flex-col gap-1 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-left text-sm transition enabled:hover:border-emerald-400 disabled:opacity-40"
+                >
+                  <span className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-100">{ruleName(r.id)}</span>
+                    <span className="font-bold text-amber-200">
+                      {soldOut ? "품절" : `${r.price}원`}
+                    </span>
                   </span>
-                )}
-              </button>
-            ))}
+                  {RULES_BY_ID[r.id]?.description && (
+                    <span className="text-xs text-zinc-400">
+                      {RULES_BY_ID[r.id]?.description}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </Section>
       )}
