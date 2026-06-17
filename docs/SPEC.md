@@ -1,138 +1,310 @@
 # RULE SLOT — 기획 (Single Source of Truth)
 
-This document is the **canonical spec** for game content and scoring. When code and
-this doc disagree, this doc wins — fix the code, or if the spec genuinely changed,
-update this doc in the same change. Cross-check any content/scoring edit against this
-file before shipping. See [Known deviations](#known-deviations--deferred) for accepted gaps.
+This is the **canonical spec** for game content and scoring. When code and this doc
+disagree, this doc wins — fix the code (or, if the spec genuinely changed, update this
+doc in the same change). Cross-check any content/scoring/rule edit against this file
+before shipping.
 
-> Why this exists: features were built piecemeal across waves without a single
-> reference, so implementations drifted (non-spec pair bonuses leaked into scoring,
-> rule descriptions accreted 사족, parking caps diverged). This file is the conformance baseline.
-
----
-
-## Modes
-
-| Mode | Config | Score record | Notes |
-|---|---|---|---|
-| **빠른 게임 (quick)** | none — legacy preset (pre-`season-1`) | local only | Must stay **identical to pre-`season-1`**. Fruit/gem only, base 족보 + 색/종류 보너스 + 규칙 보너스. No daily/season config. |
-| **일일 도전 (daily)** | `RunConfig` from DB challenge (seed + 2 sets + basic rule set) | server replay → ranking | 5 base attempts/day, +5 via one ad refill (`DAILY_MAX_ATTEMPTS`). Only the day's best score ranks. First play of day: **+20 시즌 점수** (once/day). |
-| **퍼즐 (puzzle)** | fixed seed + fixed rule bag per puzzle | clear / no-clear | Deterministic, solvable by skill not luck. p01, p02 (Season 1). Solver test asserts a clearing sequence exists. |
-| **스파이어 (spire)** | `RunConfig`, escalating | run total | Target score, artifacts, rule buy/remove, 정산, 주머니 (symbol pouch). |
-
-All non-quick modes are **replay-deterministic** (anti-cheat): `replayRun` / `replaySpireRun`,
-guarded by `replayFuzz` (500 runs). Never introduce nondeterminism (`Math.random`, wall-clock)
-into the scoring/cascade path.
+> **Why this exists.** The season set-rules (cat / vehicle / monster / combos) were
+> originally built from interpretation-level plan docs, not a user-authored spec, so
+> they drifted from intent (random 물류 사업, non-spec pair bonuses, missing cat-rule
+> scores, ×3 vs ×4 surges). §2–§15 below are the authoritative checklist; treat every
+> row as a conformance test. See [Known deviations](#known-deviations) and
+> [Code↔spec mismatches](#codespec-mismatches-tracking) for current status.
 
 ---
 
-## Symbol sets (`lib/symbols/sets.ts`)
+## Known deviations
 
-Six sets, three symbols each. `number` is the odd one out (no base 족보 — see scoring).
+These intentionally differ from the checklist below (explicit user decisions):
 
-| Set | id | symbols | per-set bonuses |
-|---|---|---|---|
-| 숫자 | `number` | 0, 4, 7 | none (number-specific rules instead) |
-| 과일 | `fruit` | 🍒 체리, 🍋 레몬, 🍇 포도 | 3종 모두 +50, 다섯 칸 모두 +100 |
-| 보석 | `gem` | 💎 다이아, 🔴 루비, 🔵 사파이어 | 3종 모두 +80, 다섯 칸 모두 +150 |
-| 고양이 | `cat` | 🐱 치즈냥, 🐈‍⬛ 턱시도냥, 🐈 삼색냥 | 1개당 +30, 이웃한 1개당 −60, 3종 모두 +200 |
-| 교통수단 | `vehicle` | ✈️ 비행기, 🚢 배, 🚗 자동차 | 이동 1회당 +20, 재굴림 1회당 +20 |
-| 괴물 | `monster` | 🧛 드라큘라, 🧟 좀비, 👻 유령 | 복사 1회당 +40 |
+1. **유료 주차 = 원하는 2칸 (NOT 원하는 만큼).** §8 lists "원하는 만큼"; the user overrode this
+   ("너무 사기다") to **keep up to 2 vehicle cells of choice** — `min(2, #vehicles)`,
+   `−30` per held cell. The checklist text is left as-is for the record; the **2칸 cap is
+   the shipping rule**.
 
-**There are NO pair-bonus rules.** Cat is 고양이 3종, vehicle is 교통수단 3종 — independently.
-"과수원 보석상" (fruit+gem pair) and "고양이 택시" (cat+vehicle pair) were **non-spec**
-inventions (`lib/pairRules.ts`); removed. `PAIR_RULES = []` and must stay empty.
+## Code↔spec mismatches (tracking)
 
-Score-table bonus labels (`bonusRowLabel` in `ReferenceModal.tsx`) must be self-explanatory:
-- `all-types` → "{set} 3종 모두 등장"
-- `all-symbols` → "다섯 칸 모두 {set}"
-- `per-symbol` → "{set} 1개당"
-- `adjacent-penalty` → "서로 이웃(바로 옆 칸)한 {set} 1개당" (negative)
-- `per-event` → "{set} {이동|재굴림|복사} 1회당"
+Discovered by auditing the code against the checklist (2026-06-17). ✅=fixed, ⬜=open.
 
-The 점수표 shows **only the sets in the current pool** — base 족보 + 숫자 세트 설명 + a card per present set.
+- ⬜ **물류 사업**: should be a SELECT repeated per plane (직접 고른 두 칸 교체 × 비행기 수), NOT random swaps.
+- ⬜ **우다다다 / 점프의 달인**: each should award **+40 per cat** on top of the move (currently no score → the "사라진 고양이 점수").
+- ⬜ **0 상승 (zero-to-seven)**: should convert the **가장 왼쪽 2개의 0** (currently 모든 0).
+- ⬜ **보석 셔플 (gem-shuffle)**: should reroll the **가장 왼쪽 보석 2개** (currently 1개).
+- ⬜ **과일/보석/고양이 확률 증가**: ×4 per spec (verify fruit/gem currently ×3).
+- ⬜ **7 scores / 4 penalty**: verify 7=10/77/150/500/777, 4 penalty=−30 (§4).
+- ⬜ **특수 족보 multipliers**: 4가 4개 → ×3, 4가 5개 → ×4, 0≥3 → 규칙 1장 추가 (verify constants).
+- ✅ Non-spec 페어 보너스 (과수원 보석상 / 고양이 택시) removed; `PAIR_RULES = []`.
+- ✅ 점수표 hides 특수 족보 outside 빠른 게임; uniform 한다체; calico cat emoji distinct.
 
 ---
 
-## Base 족보 scoring (`data/scoreTable.ts`)
+> The remainder of this document is the authoritative rule-set checklist.
 
-Computed on the **color/value** of symbols (not set membership). `number` set does not form 족보.
+# RULE SLOT 규칙 세트 구현 체크리스트
 
-| 족보 | 점수 |
-|---|---|
-| 페어 (Pair) | 10 |
-| 트리플 (Triple) | 30 |
-| 투페어 (Two Pair) | 90 |
-| 풀하우스 (Full House) | 180 |
-| 포카드 (Four of a Kind) | 300 |
-| 파이브카드 (Five of a Kind) | 700 |
+## 0. 구현 원칙
 
-족보 강화(`HAND_FLAT_UPGRADE`) = +50 flat; double upgrades multiply by `2 ** doubleCount`.
+RULE SLOT에는 여러 종류의 규칙 세트가 있다. 개발 시 아래 항목을 빠뜨리지 말고 각각 분리해서 구현한다.
 
----
+## 반드시 구분해야 하는 규칙 묶음
 
-## Combo rules — A–B board effects (`lib/rules/combos.ts`)
-
-Ten combo rules, `build: 'combo'`. A combo belongs to **two** sets, has a board EFFECT
-(transform/reroll) during cascade (NOT a score bonus), joins the pool only when BOTH sets
-are present, offered only when both sets can roll.
-
-| id | sets |
-|---|---|
-| `red-dye` / `blue-dye` | fruit + gem |
-| `ruby-convert` / `diamond-convert` | number + gem |
-| `vandalism` / `why-here` | cat + vehicle |
-| `shakedown` / `gem-obsession` | monster + gem |
-| `combo-zombie-cat` / `combo-ghost-cat` | monster + cat |
+1. 빠른 게임 레거시 규칙 세트
+2. 일일 도전 기본 규칙 세트 1
+3. 일일 도전 기본 규칙 세트 2
+4. 첨탑 오르기 기본 규칙 세트
+5. 숫자 세트 규칙
+6. 과일 세트 규칙
+7. 보석 세트 규칙
+8. 고양이 세트 규칙
+9. 교통수단 세트 규칙
+10. 괴물 세트 규칙
+11. 세트 조합 규칙
+12. 아티팩트 효과
 
 ---
 
-## Rule-description style
+# 1. 모드별 규칙 구성 방식
 
-- **한다체** (declarative plain form), uniform across all rule descriptions. No 합니다체.
-- **No 사족**: don't append speculative/redundant clauses. Banned patterns:
-  - "(유지된 칸은 이후 규칙으로 바뀔 수 있다)" / "이후 다른 규칙으로는 바뀔 수 있습니다."
-  - "마지막 칸이 이전 스핀의 값을 유지한다" style over-explanation when "다음 스핀 첫 굴림에서 유지된다" already says it.
-- Describe what the rule does, once, concretely.
+## 1.1 빠른 게임
 
-Example (유료 주차): `교통수단 칸 중 원하는 2칸을 직접 골라 칸마다 30점을 잃는다. 고른 칸은 다음 스핀 첫 굴림에서 유지된다.`
+빠른 게임은 기존 게임 규칙과 연출을 최대한 유지한다. (`빠른 게임 = legacy quick ruleset`)
 
----
+- 기존 숫자 특수 족보 유지
+- 기존 빠른 게임 연출 유지
+- 빠른 게임 랭킹은 시즌마다 초기화
+- 빠른 게임 랭킹은 게스트와 회원 모두 표시
+- 시즌 랭킹에는 반영되지 않음
 
-## Select rules (`lib/cascade.ts` `selectCount`)
+빠른 게임은 시즌 모드와 규칙이 달라도 된다. 필요하면 엔진 config를 별도로 분리한다.
 
-- `swap` → exactly 2.
-- `park` (유료 주차) → **원하는 2칸**: the player keeps up to 2 vehicle cells of their
-  choice — `min(2, #vehicles)`. (Capped at 2 by design: keeping every vehicle was too
-  strong/사기. Reverted from an earlier "원하는 만큼" variable-count attempt.) Uses the
-  standard fixed-count auto-complete select.
-- default → 1.
+## 1.2 일일 도전
 
----
+```txt
+일일 도전 규칙 풀 =
+오늘 선택된 기본 규칙 세트 1개 + 숫자 세트 규칙 + A세트 규칙 + B세트 규칙
+(+ A-B 조합 규칙이 존재하면 포함)
+```
 
-## UI labels (renames)
+매일 미리 DB에 저장된 config 사용: `date_key / seed / symbol_set_ids / basic_rule_set_id / pair_rule_ids`.
+A-B 조합 규칙이 없으면 아무것도 추가하지 않는다.
 
-- '시즌으로' / '시즌 허브로' / '공식 도전' are retired.
-- exit (SpireClient) → **'나가기'**
-- back-to-hub (Spire/Daily result) → **'메인 화면으로'**
-- attempts label (Daily) → **'도전 횟수'**
-- `/me` season score shows **"…점"**, never "/ 3000" (max is not 3000).
+## 1.3 첨탑 오르기
 
----
+숫자 세트를 기본 포함. 초기 규칙 풀 = 첨탑 기본 규칙 8개 + 처음 선택한 심볼 세트 규칙 중 랜덤 2개 = 총 10개.
+규칙 풀은 최대 10개. 새 규칙으로 10개를 초과하면 기존 규칙 중 하나를 제거해야 한다.
 
-## Known deviations / deferred
+## 1.4 퍼즐 모드
 
-1. **fruit/gem set 확률** use ×3 (matching FRUIT/GEM SURGE); spec calls for ×4 (`lib/symbols/sets.ts` header note). Unreconciled.
-
-2. **`SYMBOL_SETS` not fully engine-wired.** The legacy engine uses fruit/gem `SymbolType`;
-   cat/vehicle/monster set bonuses score from set membership + events, but those sets'
-   own rules aren't all authored.
+랜덤 규칙 선택이 없다. 퍼즐별로 정해진 규칙들이 처음부터 가방에 들어 있다
+(`퍼즐 규칙 = puzzle config의 고정 availableRuleIds`). 매 스핀 랜덤 3개 중 택1 방식이 아니다.
 
 ---
 
-## Open bugs (reported, not yet fixed)
+# 2. 일일 도전 기본 규칙 세트
 
-- **vehicle-parking next-spin skip**: after parking a vehicle, the next spin's 유료 주차 is skipped.
-- **held-cell rolling animation**: held (parked/locked) cells still play a roll animation — should not.
-- **same-value reroll animation**: a reroll that lands the same symbol looks like no roll happened
-  (commit `c8e93da` addressed same-value rerolls; verify it covers this case / hasn't regressed).
+## 2.1 세트 1 (5개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 직접 교환 | 직접 고른 두 칸이 서로 교체된다 |
+| 직접 재굴림 | 직접 고른 한 칸을 다시 굴린다 |
+| 직접 복사 | 직접 고른 칸이 바로 왼쪽 칸의 심볼을 복사한다 |
+| 마지막 칸 유지 | 마지막 칸이 첫 스핀에서 이전 심볼을 유지한다 |
+| 럭키 세븐세븐 | 점수를 77점 더 얻는다 |
+
+## 2.2 세트 2 (5개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 위 규칙 복사 | 바로 위 칸의 규칙을 한 번 더 적용한다 |
+| 왼쪽 복제 | 두 번째 칸이 첫 번째 칸의 심볼을 복사한다 |
+| 중앙 메아리 | 네 번째 칸이 두 번째 칸의 심볼을 복사한다 |
+| 직접 재굴림 | 직접 고른 한 칸을 다시 굴린다 |
+| 세 번째 칸 유지 | 세 번째 칸이 첫 스핀에서 유지된다 |
+
+---
+
+# 3. 첨탑 오르기 기본 규칙 세트 (8개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 세 번째 칸 유지 | 세 번째 칸이 첫 스핀에서 유지된다 |
+| 마지막 칸 유지 | 마지막 칸이 첫 스핀에서 이전 심볼을 유지한다 |
+| 7 확률 증가 | 7이 나올 확률이 세 배가 된다 |
+| 4 방어 | 나온 4를 모두 다시 굴리고, 이번 스핀에는 0이 나올 확률이 두 배가 된다 |
+| 더블 세븐 | 이번 스핀에서 7로 얻는 점수가 두 배가 된다 |
+| 직접 교환 | 직접 고른 두 칸이 서로 교체된다 |
+| 직접 재굴림 | 직접 고른 한 칸을 다시 굴린다 |
+| 직접 복사 | 직접 고른 칸이 바로 왼쪽 칸과 같아진다 |
+
+시작 시 이 8개 + 처음 고른 심볼 세트 규칙 중 랜덤 2개를 획득.
+
+---
+
+# 4. 숫자 세트
+
+심볼: 0, 4, 7. 기본 포커식 족보에 포함되지 않는다.
+
+| 조건 | 점수 |
+| --- | ---: |
+| 7 1개 | +10 |
+| 7 2개 | +77 |
+| 7 3개 | +150 |
+| 7 4개 | +500 |
+| 7 5개 | +777 |
+| 4 1개당 | −30 |
+
+## 숫자 세트 규칙 (7개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 7 확률 증가 | 7이 나올 확률이 세 배가 된다 |
+| 더블 세븐 | 이번 스핀에서 7로 얻는 점수가 두 배가 된다 |
+| 0 상승 | 가장 왼쪽 2개의 0이 7로 바뀐다 |
+| 4 방어 | 나온 4를 모두 다시 굴리고, 이번 스핀에는 0이 나올 확률이 두 배가 된다 |
+| 4 쳐내기 | 가장 왼쪽의 4를 4가 아닌 것이 나올 때까지 다시 굴린다 |
+| 불길한 행운 | 4가 나올 확률이 네 배가 되고, 4 하나당 +20점을 얻는다 |
+| 깨끗한 손 | 보드에 4가 하나도 없으면 120점을 얻는다 |
+
+## 숫자 특수 족보 (빠른 게임 기본; 시즌은 `4 석상`/`0 석상` 아티팩트 있을 때만)
+| 조건 | 빠른 게임 효과 |
+| --- | --- |
+| 0이 3개 이상 | 다음 스핀 전 규칙 1장 추가 |
+| 4가 4개 | 다음 스핀 점수 ×3 |
+| 4가 5개 | 다음 스핀 점수 ×4 |
+
+---
+
+# 5. 과일 세트
+심볼: 포도, 체리, 레몬.
+
+| 조건 | 점수 |
+| --- | ---: |
+| 과일 3종 | +50 |
+| 올 과일 | +100 |
+
+## 과일 세트 규칙 (5개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 과일 확률 증가 | 과일이 나올 확률이 4배가 된다 |
+| 첫 체리 | 첫 번째 칸이 체리가 된다 |
+| 과일 유지 | 이전 결과에서 가장 왼쪽 과일 두 개가 첫 스핀에서 유지된다 |
+| 과일 낚시 | 가장 왼쪽의 과일이 아닌 칸을 과일이 나올 때까지 다시 굴린다 |
+| 비타민 보충 | 과일 하나당 5점을 얻고, 과일을 모두 다시 굴린다 |
+
+---
+
+# 6. 보석 세트
+심볼: 사파이어, 루비, 다이아몬드.
+
+| 조건 | 점수 |
+| --- | ---: |
+| 보석 3종 | +80 |
+| 올 보석 | +150 |
+
+## 보석 세트 규칙 (5개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 보석 확률 증가 | 보석이 나올 확률이 네 배가 된다 |
+| 다이아몬드 컷 | 다이아몬드와 사파이어가 나오지 않는다 |
+| 보석 낚시 | 가장 왼쪽의 보석이 아닌 칸을 보석이 나올 때까지 다시 굴린다 |
+| 보석 셔플 | 가장 왼쪽의 보석 두 개를 보석이 아닌 것이 나올 때까지 다시 굴린다 |
+| 미의 추구 | 보석이 하나라도 있으면 100점을 얻는다 |
+
+---
+
+# 7. 고양이 세트
+심볼: 치즈냥, 턱시도냥, 삼색냥.
+
+| 조건 | 점수 |
+| --- | ---: |
+| 고양이 한 마리당 | +30 |
+| 다른 고양이와 이웃한 고양이 한 마리당 | −60 |
+| 고양이 3종 | +200 |
+
+이웃 판정: 좌우에 다른 고양이가 하나 이상 있는 고양이마다 −60점.
+
+## 고양이 세트 규칙 (5개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 고양이 확률 증가 | 홀수 번째 칸에서 고양이가 나올 확률이 4배가 된다 |
+| 우다다다 | **고양이 한 마리당 40점을 얻는다.** 가장 오른쪽의 고양이가 첫 번째 칸으로 이동하고, 그 사이의 심볼들은 오른쪽으로 한 칸씩 밀린다 |
+| 점프의 달인 | **고양이 한 마리당 40점을 얻는다.** 가장 왼쪽의 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽과 자리를 바꾼다 (가능한 방향 중 무작위) |
+| 영역 다툼 | 고양이와 이웃한 고양이를 모두 재굴림한다 |
+| 식빵 굽기 | 고양이는 첫 굴림에서 유지된다 |
+
+---
+
+# 8. 교통수단 세트
+심볼: 비행기, 배, 자동차.
+
+| 조건 | 점수 |
+| --- | ---: |
+| 교통수단 심볼이 이동할 때마다 | +20 |
+| 교통수단 심볼이 재굴림될 때마다 | +20 |
+
+## 교통수단 세트 규칙 (5개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 교통수단 확률 증가 | 교통수단이 나올 확률이 (현재 장착한 규칙 수 + 1)배가 된다 |
+| 유료 주차 | 교통수단을 원하는 만큼 선택한다. 선택한 칸만큼 −30점, 해당 칸들은 다음 스핀 첫 굴림에 유지된다 ⚠️ *(shipping: 최대 2칸 — [Known deviations](#known-deviations))* |
+| 교통사고 | 이웃한 교통수단이 있는 교통수단들을 모두 재굴림한다 |
+| 물류 사업 | 비행기의 수만큼 반복하여 **직접 고른** 두 칸을 교체한다 |
+| 배 크다 | 가장 왼쪽에 있는 배의 양쪽 칸은 그 배 심볼을 복사한다 |
+
+- 이동 점수 = `symbol_moved` 이벤트 기준. 재굴림 점수 = `symbol_rerolled` 이벤트 기준.
+- `물류 사업`은 비행기 수만큼 선택형 교환을 반복한다.
+
+---
+
+# 9. 괴물 세트
+심볼: 드라큘라, 좀비, 유령. 추가 심볼: 좀비고양이(좀비+고양이), 유령고양이(유령+고양이).
+
+| 조건 | 점수 |
+| --- | ---: |
+| 괴물 심볼이 복사될 때마다 | +40 |
+
+유령들린 칸: 기본 족보 계산 시 유령 심볼이 하나 더 있는 것으로 계산 (유령들린 칸에 유령 → 유령 2개).
+
+## 괴물 세트 규칙 (5개)
+| 규칙명 | 효과 |
+| --- | --- |
+| 백귀야행 | 괴물이 나올 확률이 (이전 스핀의 괴물 수 + 3)배가 된다 |
+| 지박령 | 가장 왼쪽의 유령이 있는 칸은 유령들리고, 해당 유령은 재굴림한다 |
+| 흡혈귀 퇴마사 | 흡혈귀가 있는 유령들린 칸은 더 이상 유령들리지 않게 되며, 그만큼 200점을 얻는다 |
+| 퍼져나가는 역병 | 가장 왼쪽 좀비 양쪽 칸이 좀비를 복사한다. 원본 좀비는 재굴림한다 |
+| 가족 만들기 | 드라큘라가 있으면 한 칸을 선택해 가장 왼쪽 드라큘라를 복사하고, 드라큘라 수만큼 20점을 얻는다 |
+
+---
+
+# 10. 세트 조합 규칙 (10개)
+
+**과일+보석**: 붉은 물들이기(레몬·다이아 → 체리), 푸른 물들이기(레몬·다이아 → 사파이어).
+**숫자+보석**: 루비 변환(0·7 → 루비), 다이아 변환(4 → 다이아몬드).
+**고양이+교통수단**: 기물 파손(고양이와 이웃한 교통수단 재굴림), 왜 여기 타 있어?(교통수단과 이웃한 가장 왼쪽 고양이를 원하는 곳과 교체).
+**괴물+보석**: 금품 갈취(드라큘라와 이웃한 보석당 +70 후 재굴림), 망령의 집착(가장 왼쪽 보석 칸 유령들림).
+**괴물+고양이**: 좀비 고양이(첫 칸이 좀비고양이; 좀비+고양이 취급), 유령 고양이(유령들린 칸의 고양이가 유령고양이가 되고 유령들림 해제; 유령+고양이 취급).
+
+---
+
+# 11. 아티팩트 효과 (19개)
+
+**범용**: 콩의 가호(매 스핀 두 번째 규칙 1회 더), 타임캡슐(1스핀 점수 0, 7스핀 점수 ×2), 가계부(이자 ×2), 차임벨(상점마다 무료 리롤 2회), 새하얀 도화지(빈 규칙 칸당 +50/스핀), 엔진(각 스테이지 첫 스핀 전 규칙 1개 더), 맥가이버 칼(규칙 선택지 4개), 물뿌리개(획득 시 0 제외 최다 심볼 +1/최소 심볼 −1), 슬롯머신(획득 시 심볼·규칙 풀 무작위 재구성).
+**숫자**: 4 석상(4가 4개→다음 스핀 ×2, 5개→×3), 0 석상(0이 4개 이상→다음 스핀 전 규칙 1개 더).
+**과일**: 영수증(올 과일 족보 +300), 체리(족보 계산 시 체리 1개 더).
+**보석**: 금고(보석 3종 족보 +200), 금괴(최종 보석 4개 이상 → 1원).
+**고양이**: 캣 타워(이웃 고양이 페널티 60점 완화), 녹아버린 고양이(각 스테이지 첫 스핀 고양이 안 나옴).
+**교통수단**: 으스스한 유람선(교통수단 복사당 +40), 전용기(한 스핀 교통수단 6회 이상 이동 → 그 스핀 ×2).
+**괴물**: 괴물 자동차(괴물 이동/재굴림당 +20), 빠루(한 스핀 괴물 3회 이상 재굴림 → 그 스핀 ×2).
+
+---
+
+# 12. 발동 시점
+스핀 이전 / 순서 적용 / 점수 계산 / 다음 스핀 / 획득 시 / 상점 / 정산. 모든 규칙은 이 중 하나 이상을 가진다.
+
+# 13. 필수 엔진 이벤트
+`symbol_moved`(교통수단 이동·괴물 자동차·전용기), `symbol_rerolled`(교통수단 재굴림·괴물 자동차·빠루), `symbol_copied`(괴물 복사·으스스한 유람선), `symbol_transformed`, `symbol_held`, `cell_status_added`(유령들림), `cell_status_removed`(유령들림 해제).
+
+# 14. Cell / Tag 구조
+보드는 `Cell { symbolId; statuses: CellStatus[] }` 배열. 심볼에는 태그: 0/4/7=number, 체리=fruit, 루비=gem, 치즈냥=cat, 자동차=vehicle, 드라큘라=monster·vampire, 좀비=monster·zombie, 유령=monster·ghost, 좀비고양이=cat·monster·zombie, 유령고양이=cat·monster·ghost.
+
+# 15. 최종 개수 요약
+기본 규칙 세트 18 (일일1=5, 일일2=5, 첨탑=8) · 심볼 세트 규칙 32 (숫자7, 과일5, 보석5, 고양이5, 교통수단5, 괴물5) · 조합 10 · 아티팩트 19.
+같은 효과가 여러 기본 세트에 중복될 수 있으므로 `ruleId`는 재사용해도 되지만, **세트 구성에서 빠지면 안 된다.**
