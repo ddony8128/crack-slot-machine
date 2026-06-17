@@ -257,6 +257,21 @@ const NUMBER_SYMBOL_IDS: string[] = (SYMBOL_SETS_BY_ID.number?.symbols ?? []).ma
 );
 
 /**
+ * Every symbol id that belongs to a set the run has INCLUDED (ownedSetIds always
+ * carries 'number' + the chosen/bought sets). These stay buyable even at count 0,
+ * so reducing a symbol to 0 (via 물뿌리개 / bag-adjust) never permanently locks it
+ * out — a once-included set can always be topped back up.
+ */
+export function includedSymbolIds(state: SpireRunState): Set<string> {
+  const ids = new Set<string>();
+  for (const setId of state.ownedSetIds) {
+    const set = SYMBOL_SETS_BY_ID[setId];
+    if (set) for (const s of set.symbols) ids.add(s.id);
+  }
+  return ids;
+}
+
+/**
  * Apply an artifact's one-time onAcquire effect to `state`, returning a NEW
  * state (input is never mutated). Artifacts without an onAcquire effect return a
  * clone unchanged.
@@ -543,8 +558,13 @@ export function buySymbolIncrement(
   if (state.money < cost) {
     return { ok: false, error: `not enough money (need ${cost})` };
   }
-  if ((state.symbolBag[targetSymbolId] ?? 0) < 1) {
-    return { ok: false, error: `target symbol not in bag: ${targetSymbolId}` };
+  // Allow buying a target at count 0 ONLY if it belongs to an included set (so a
+  // 0'd-out owned-set symbol can be restored); never let an off-set symbol in.
+  if (
+    (state.symbolBag[targetSymbolId] ?? 0) < 1 &&
+    !includedSymbolIds(state).has(targetSymbolId)
+  ) {
+    return { ok: false, error: `target symbol not available: ${targetSymbolId}` };
   }
   if ((state.symbolBag[replacedSymbolId] ?? 0) < 1) {
     return { ok: false, error: `replaced symbol not in bag: ${replacedSymbolId}` };

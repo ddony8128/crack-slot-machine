@@ -57,6 +57,22 @@ describe('spireShopOffers', () => {
     expect(o.symbols.every((s) => s.count > 0)).toBe(true);
     expect(o.symbols.find((s) => s.id === 'cherry')?.price).toBe(1);
   });
+
+  it('offers a 0-count included-set symbol so it can be restored (0 → 1)', () => {
+    // Drain cherry (an owned fruit symbol) to 0; it should still be offered at count 0.
+    const base = fruitState();
+    const bag = { ...base.symbolBag };
+    const cherryN = bag.cherry ?? 0;
+    bag.zero = (bag.zero ?? 0) + cherryN;
+    delete bag.cherry;
+    const o = spireShopOffers({ ...base, symbolBag: bag }, 0, 0);
+    const cherry = o.symbols.find((s) => s.id === 'cherry');
+    expect(cherry).toBeTruthy();
+    expect(cherry?.count).toBe(0);
+    expect(cherry?.price).toBe(0);
+    // An off-set symbol at 0 (e.g. a cat) is NOT offered.
+    expect(o.symbols.find((s) => s.id === 'cheese_cat')).toBeUndefined();
+  });
 });
 
 describe('spireRewardArtifacts (3/6/9 reward pick)', () => {

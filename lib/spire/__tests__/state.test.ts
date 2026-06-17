@@ -188,6 +188,39 @@ describe('buySymbolIncrement', () => {
     expect(buySymbolIncrement(rich, 'four', 'four').ok).toBe(false);
     expect(buySymbolIncrement(rich, 'four', 'cherry').ok).toBe(false); // not in bag
   });
+
+  it('restores a 0-count symbol that belongs to an included set (number always owned)', () => {
+    // seven at 0; the number set is always included → restorable for cost 0.
+    const s = { ...initialSpireState(SEED), money: 5, symbolBag: { zero: 16, four: 4 } };
+    const r = buySymbolIncrement(s, 'seven', 'zero');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.symbolBag.seven).toBe(1);
+    expect(bagTotal(r.state.symbolBag)).toBe(20);
+  });
+
+  it('rejects restoring a 0-count symbol that is NOT in any owned set', () => {
+    // ownedSetIds = ['number'] only → cherry (fruit) is off-set, so a 0→1 buy is blocked.
+    const s = { ...initialSpireState(SEED), money: 5, symbolBag: { zero: 16, four: 4 } };
+    expect(buySymbolIncrement(s, 'cherry', 'zero').ok).toBe(false);
+  });
+
+  it('allows restoring a set symbol once that set is owned', () => {
+    const chosen = applyInitialSetChoice(initialSpireState(SEED), 'fruit');
+    expect(chosen.ok).toBe(true);
+    if (!chosen.ok) return;
+    // Drain cherry to 0 (move its count into zero) to test the 0-restore path.
+    const bag = { ...chosen.state.symbolBag };
+    const cherryN = bag.cherry ?? 0;
+    bag.zero = (bag.zero ?? 0) + cherryN;
+    delete bag.cherry;
+    const s = { ...chosen.state, money: 5, symbolBag: bag };
+    const r = buySymbolIncrement(s, 'cherry', 'zero');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.symbolBag.cherry).toBe(1);
+    expect(bagTotal(r.state.symbolBag)).toBe(20);
+  });
 });
 
 describe('buySymbolSet', () => {

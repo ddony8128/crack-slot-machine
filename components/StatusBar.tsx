@@ -67,13 +67,22 @@ export default function StatusBar({
 
         {!hideReference &&
           (isSpire ? (
-            <button
-              type="button"
-              onClick={() => setHoldingsOpen(true)}
-              className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
-            >
-              보유 현황
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setHoldingsOpen(true)}
+                className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+              >
+                보유 현황
+              </button>
+              <button
+                type="button"
+                onClick={() => setRefView("scores")}
+                className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+              >
+                점수표
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <button
@@ -94,7 +103,7 @@ export default function StatusBar({
           ))}
       </div>
 
-      {isSpire ? (
+      {isSpire && (
         <HoldingsModal
           open={holdingsOpen}
           onClose={() => setHoldingsOpen(false)}
@@ -102,14 +111,15 @@ export default function StatusBar({
           ruleIds={runConfig?.rulePoolIds ?? []}
           artifactIds={runConfig?.artifacts ?? []}
         />
-      ) : (
-        <ReferenceModal
-          open={refView !== null}
-          view={refView ?? "rules"}
-          weights={baseWeights}
-          onClose={() => setRefView(null)}
-        />
       )}
+      {/* 점수표 — 첨탑도 보유 현황과 함께 노출(첨탑 심볼 풀 기준 족보). 특수 족보/색
+          보너스는 레거시 전용이라 자동으로 숨겨진다. */}
+      <ReferenceModal
+        open={refView !== null}
+        view={refView ?? "scores"}
+        weights={baseWeights}
+        onClose={() => setRefView(null)}
+      />
     </>
   );
 }

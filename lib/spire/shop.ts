@@ -23,7 +23,7 @@ import {
   SPIRE_BASE_RULE_IDS,
   spireBuySymbolPrice,
 } from '@/lib/spire/config';
-import type { SpireRunState } from '@/lib/spire/state';
+import { includedSymbolIds, type SpireRunState } from '@/lib/spire/state';
 
 export type ShopOffer = { id: string; price: number };
 export type ShopSymbolOffer = { id: string; count: number; price: number };
@@ -114,9 +114,18 @@ export function spireShopOffers(
     .slice(0, SHOP_RULE_SLOTS)
     .map((id) => ({ id, price: SPIRE_RULE_PRICE }));
 
-  const symbols = Object.entries(state.symbolBag)
-    .filter(([, count]) => count > 0)
-    .map(([id, count]) => ({ id, count, price: spireBuySymbolPrice(count) }));
+  // Every symbol currently in the bag, PLUS any included-set symbol that has been
+  // reduced to 0 — so a 0'd-out owned-set symbol stays restorable (0 → 1).
+  const included = includedSymbolIds(state);
+  const restorable = [...included]
+    .filter((id) => (state.symbolBag[id] ?? 0) === 0)
+    .map((id) => ({ id, count: 0, price: spireBuySymbolPrice(0) }));
+  const symbols = [
+    ...Object.entries(state.symbolBag)
+      .filter(([, count]) => count > 0)
+      .map(([id, count]) => ({ id, count, price: spireBuySymbolPrice(count) })),
+    ...restorable,
+  ];
 
   return {
     artifacts,

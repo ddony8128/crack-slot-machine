@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/gameStore";
+import Modal from "@/components/Modal";
 import {
   startSpire,
   submitSpire,
@@ -19,6 +20,9 @@ import {
   SPIRE_ARTIFACT_STAGES,
   SPIRE_ARTIFACTS,
   SPIRE_MAX_FAILURES,
+  SPIRE_INTEREST_DIVISOR,
+  SPIRE_SPIN_BONUS_PER,
+  SPIRE_SPINS_PER_STAGE,
 } from "@/lib/spire/config";
 import {
   initialSpireState,
@@ -66,7 +70,17 @@ type Phase =
   | "shop"
   | "result";
 
-type ClearBreakdown = { interest: number; spinBonus: number; payout: number } | null;
+type ClearBreakdown = {
+  interest: number;
+  spinBonus: number;
+  payout: number;
+  /** Pre-payout balance the interest was computed from. */
+  balance: number;
+  /** Unused spins on the clear (for the spin-bonus derivation). */
+  remainingSpins: number;
+  /** 가계부 artifact active → interest ×2. */
+  ledger: boolean;
+} | null;
 type FailBreakdown = { stage: number; failures: number; support: number } | null;
 type SubmitState = "submitting" | "submitted" | "rejected" | "error" | "version_mismatch";
 
@@ -129,6 +143,8 @@ export default function SpireClient() {
   const [rerollCount, setRerollCount] = useState(0);
 
   const [clearBreakdown, setClearBreakdown] = useState<ClearBreakdown>(null);
+  // Goal popup shown at each stage entry (target score + spin-bonus explainer).
+  const [stageIntroOpen, setStageIntroOpen] = useState(false);
   const [failBreakdown, setFailBreakdown] = useState<FailBreakdown>(null);
   const [submitState, setSubmitState] = useState<SubmitState>("submitting");
   const [seasonPoints, setSeasonPoints] = useState<number | null>(null);
@@ -201,6 +217,7 @@ export default function SpireClient() {
     startGame();
     setClearBreakdown(null);
     setFailBreakdown(null);
+    setStageIntroOpen(true); // show the goal popup on every stage entry
     setPhase("playing");
   }, [reset, beginRun, configureRun, setNickname, startGame]);
 
@@ -281,6 +298,9 @@ export default function SpireClient() {
           interest: r.breakdown.interest,
           spinBonus: r.breakdown.spinBonus,
           payout: r.breakdown.payout,
+          balance: stForSettle.money,
+          remainingSpins: outcome.remainingSpins,
+          ledger: stForSettle.artifacts.includes("ledger"),
         });
         setFailBreakdown(null);
         persist();
@@ -693,16 +713,31 @@ export default function SpireClient() {
           스테이지 {clearedStage} 클리어!
         </h1>
         {clearBreakdown && (
-          <div className="w-full space-y-1 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
+          <div className="w-full space-y-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
             <p className="text-xs font-bold uppercase tracking-wide text-emerald-300/80">
               정산
             </p>
-            <p>이자 +{clearBreakdown.interest}원</p>
-            <p>남은 스핀 보너스 +{clearBreakdown.spinBonus}원</p>
-            <p>클리어 보수 +{clearBreakdown.payout}원</p>
-            <p className="border-t border-emerald-500/30 pt-1 font-bold text-amber-300">
-              보유 금액 {runState.money}원
-            </p>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-emerald-200/80">
+                이자 (보유 {clearBreakdown.balance}원 ÷ {SPIRE_INTEREST_DIVISOR}
+                {clearBreakdown.ledger ? " × 가계부 2배" : ""})
+              </span>
+              <span className="font-mono font-bold">+{clearBreakdown.interest}원</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-emerald-200/80">
+                남은 스핀 ({clearBreakdown.remainingSpins} / {SPIRE_SPINS_PER_STAGE}회 × {SPIRE_SPIN_BONUS_PER}원)
+              </span>
+              <span className="font-mono font-bold">+{clearBreakdown.spinBonus}원</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-emerald-200/80">클리어 보수</span>
+              <span className="font-mono font-bold">+{clearBreakdown.payout}원</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2 border-t border-emerald-500/30 pt-1.5 font-bold text-amber-300">
+              <span>보유 금액</span>
+              <span className="font-mono">{runState.money}원</span>
+            </div>
           </div>
         )}
         <button
@@ -922,6 +957,37 @@ export default function SpireClient() {
           </div>
         </div>
         <GameScreen />
+
+        {/* Goal popup on stage entry — the clear condition + spin-bonus rule, which
+            players were missing from the in-screen banner alone. */}
+        <Modal
+          open={stageIntroOpen}
+          onClose={() => setStageIntroOpen(false)}
+          ariaLabel={`스테이지 ${stage} 목표`}
+          maxWidthClass="max-w-sm"
+        >
+          <div className="flex flex-col gap-4 p-6 text-center">
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-300/80">
+              스테이지 {stage} / {SPIRE_STAGE_COUNT}
+            </p>
+            <h2 className="text-2xl font-black tracking-tight text-zinc-100">
+              {SPIRE_SPINS_PER_STAGE}번의 스핀 안에
+              <br />
+              <span className="text-amber-300">{target}점</span> 넘기기
+            </h2>
+            <p className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-sm leading-relaxed text-emerald-200">
+              목표를 일찍 달성할수록 이득! 클리어 시 <b>남은 스핀 1회마다 +{SPIRE_SPIN_BONUS_PER}원</b>,
+              그리고 <b>보유 금액의 {SPIRE_INTEREST_DIVISOR}분의 1만큼 이자</b>를 받습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => setStageIntroOpen(false)}
+              className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+            >
+              시작
+            </button>
+          </div>
+        </Modal>
       </>
     );
   }
