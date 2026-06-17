@@ -56,7 +56,7 @@ export const RULES: Rule[] = [
     type: 'weight',
     phase: 'pre-spin',
     build: '7',
-    description: '첫 굴림에서 직전 결과가 숫자였던 칸은 다시 숫자가 나옵니다.',
+    description: '첫 굴림에서 직전 결과가 숫자였던 칸은 다시 숫자가 나온다.',
   },
 
   // ---- fruit ----
@@ -250,7 +250,7 @@ export const RULES: Rule[] = [
     type: 'transform',
     phase: 'sequential',
     build: 'cat',
-    description: '가장 왼쪽 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽 칸과 자리를 바꿉니다. 방향은 가능한 쪽 중 무작위로 정해집니다.',
+    description: '가장 왼쪽 고양이가 두 칸 오른쪽 또는 두 칸 왼쪽 칸과 자리를 바꾼다. 방향은 가능한 쪽 중 무작위로 정해진다.',
   },
   {
     id: 'cat-turf',
@@ -318,7 +318,7 @@ export const RULES: Rule[] = [
     type: 'transform',
     phase: 'sequential',
     build: 'monster',
-    description: '가장 왼쪽 괴물 칸이 유령에 들립니다. 이번 스핀의 족보 계산에서 유령 1개로 추가 계산됩니다.',
+    description: '가장 왼쪽 괴물 칸이 유령에 들린다. 이번 스핀의 족보 계산에서 유령 1개로 추가 계산된다.',
   },
   {
     id: 'jibakryeong',
@@ -350,7 +350,7 @@ export const RULES: Rule[] = [
     type: 'transform',
     phase: 'sequential',
     build: 'monster',
-    description: '괴물이 있으면 가장 왼쪽 고양이가 좀비고양이로 변합니다. 좀비고양이는 고양이이자 괴물로 계산됩니다.',
+    description: '괴물이 있으면 가장 왼쪽 고양이가 좀비고양이로 변한다. 좀비고양이는 고양이이자 괴물로 계산된다.',
   },
   {
     id: 'vampire-exorcist',
