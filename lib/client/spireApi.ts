@@ -46,6 +46,20 @@ export async function fetchSpireCurrent(): Promise<SpireCurrentResponse> {
   return res.json();
 }
 
+export type SpireLeaderboardItem = {
+  rank: number;
+  nickname: string;
+  bestStageReached: number;
+  bestTotalScore: number;
+};
+
+/** GET /api/spire/leaderboard — the season's 첨탑 ranking (best run per player). */
+export async function fetchSpireLeaderboard(): Promise<{ items: SpireLeaderboardItem[] }> {
+  const res = await fetch('/api/spire/leaderboard');
+  if (!res.ok) throw new Error(await errorCode(res));
+  return res.json();
+}
+
 /**
  * POST /api/spire/progress — autosave the in-progress action stream onto the
  * pending run. Fire-and-forget from the client (best-effort); never throws so a

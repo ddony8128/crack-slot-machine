@@ -102,6 +102,7 @@ function setBonusLabel(b: SetBonus): string {
 export default function SpireClient() {
   // Active-stage store (one RC run per stage attempt).
   const status = useGameStore((s) => s.status);
+  const nickname = useGameStore((s) => s.nickname);
   const spinLogs = useGameStore((s) => s.spinLogs);
   const beginRun = useGameStore((s) => s.beginRun);
   const configureRun = useGameStore((s) => s.configureRun);
@@ -668,6 +669,7 @@ export default function SpireClient() {
           scoreChange={scoreChange ?? undefined}
           submitState={submitState}
           rejectReason={rejectReason}
+          playerNickname={nickname || undefined}
           onRetry={startNewGame}
         />
         <DonationModal open={donation.open} onClose={donation.close} />
