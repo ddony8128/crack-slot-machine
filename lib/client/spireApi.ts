@@ -30,6 +30,42 @@ export async function startSpire(): Promise<StartSpireResponse> {
   return res.json();
 }
 
+export type SpireCurrentResponse = {
+  current: {
+    runId: string;
+    seed: string;
+    actions: SpireAction[];
+    stageReached: number;
+  } | null;
+};
+
+/** GET /api/spire/current — the player's resumable run, or {current:null}. */
+export async function fetchSpireCurrent(): Promise<SpireCurrentResponse> {
+  const res = await fetch('/api/spire/current');
+  if (!res.ok) throw new Error(await errorCode(res));
+  return res.json();
+}
+
+/**
+ * POST /api/spire/progress — autosave the in-progress action stream onto the
+ * pending run. Fire-and-forget from the client (best-effort); never throws so a
+ * transient failure can't interrupt play.
+ */
+export async function saveSpireProgress(
+  runId: string,
+  actions: SpireAction[],
+): Promise<void> {
+  try {
+    await fetch('/api/spire/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runId, actions }),
+    });
+  } catch {
+    // best-effort autosave; localStorage remains the offline fallback.
+  }
+}
+
 /** POST /api/spire/submit. Returns 200 for both submitted and rejected. */
 export async function submitSpire(
   runId: string,

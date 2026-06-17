@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/gameStore";
-import { startSpire, submitSpire } from "@/lib/client/spireApi";
+import {
+  startSpire,
+  submitSpire,
+  fetchSpireCurrent,
+  saveSpireProgress,
+} from "@/lib/client/spireApi";
 import { fetchMe } from "@/lib/client/authApi";
 import { saveSpire, loadSpire, clearSpire, type SpireSave } from "@/lib/client/spireResume";
 import { SYMBOL_SETS_BY_ID, type SetBonus } from "@/lib/symbols/sets";
@@ -160,10 +165,16 @@ export default function SpireClient() {
     });
   }, []);
 
-  /** Persist the current run snapshot (no-op when nothing to save). */
+  /**
+   * Persist the current run snapshot at every safe boundary (set choice, stage
+   * settle, shop buy/reroll): localStorage for instant same-device resume, AND the
+   * server (best-effort) so the hub can offer 이어하기 across devices. The server
+   * run stays 'pending' until submit, so it survives 나가기.
+   */
   const persist = useCallback(() => {
     if (!runIdRef.current || !seedRef.current) return;
     saveSpire({ seed: seedRef.current, runId: runIdRef.current, actions: actionsRef.current });
+    void saveSpireProgress(runIdRef.current, actionsRef.current);
   }, []);
 
   /** Begin the ACTIVE-stage store for the run's current stage/attempt. */
@@ -346,8 +357,24 @@ export default function SpireClient() {
     if (startedRef.current) return;
     startedRef.current = true;
     reset();
-    if (loadSpire()) return; // wait for the player's resume choice
-    startFresh();
+    if (loadSpire()) return; // local save → wait for the player's resume choice
+    // No local save (e.g. another device, or after 나가기): ask the server whether
+    // this player has a resumable pending run, and offer it before starting fresh.
+    fetchSpireCurrent()
+      .then((r) => {
+        if (startedRef.current && r.current) {
+          const save: SpireSave = {
+            seed: r.current.seed,
+            runId: r.current.runId,
+            actions: r.current.actions,
+          };
+          setResumeSave(save);
+          setPhase("resume");
+        } else {
+          startFresh();
+        }
+      })
+      .catch(() => startFresh());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -391,18 +418,17 @@ export default function SpireClient() {
     startFresh();
   }
 
-  // §8: exit the spire run (Policy A — no save). Confirm, drop the in-progress
-  // run (the pending server run is harmless; a future start supersedes it), then
-  // navigate to the season hub via next/navigation router.
+  // Exit to the season hub. Progress is KEPT — the pending server run (saved at the
+  // last shop/stage boundary) lets the hub + this device offer 이어하기. We leave the
+  // local save too so same-device resume is instant; only 새로 시작 clears it.
   function exitRun() {
     if (
       !window.confirm(
-        "첨탑을 나가면 현재 런이 사라집니다. 나가시겠어요?",
+        "첨탑에서 나가시겠어요? 진행 상황은 저장되어 시즌 허브에서 이어할 수 있습니다.",
       )
     ) {
       return;
     }
-    clearSpire();
     reset();
     router.push("/season");
   }
@@ -846,7 +872,7 @@ export default function SpireClient() {
             나가기
           </button>
           <p className="text-[11px] text-zinc-600">
-            첨탑은 저장되지 않습니다 — 나가면 현재 런이 사라집니다.
+            진행 상황은 자동 저장됩니다 — 나가도 시즌 허브에서 이어할 수 있습니다.
           </p>
         </div>
       </>
@@ -883,7 +909,7 @@ export default function SpireClient() {
               나가기
             </button>
             <p className="text-[11px] text-zinc-600">
-              첨탑은 저장되지 않습니다 — 나가면 현재 런이 사라집니다.
+              진행 상황은 자동 저장됩니다 — 나가도 시즌 허브에서 이어할 수 있습니다.
             </p>
           </div>
         </div>

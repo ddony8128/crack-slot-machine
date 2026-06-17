@@ -7,6 +7,7 @@ import { dailyDateKey, dailyAttemptsAllowed } from "@/lib/daily/challenge";
 import { settleDueDailyChallenges } from "@/lib/server/dailySettlement";
 import { PUZZLES } from "@/lib/puzzle/config";
 import { buildSeasonRanking } from "@/lib/season/scoring";
+import { replaySpireRun, type SpireAction } from "@/lib/spire/replay";
 
 const SEASON_PERIOD = "2026년 6월 16일 낮 12시 ~ 6월 30일 낮 12시 (KST)";
 
@@ -56,12 +57,14 @@ async function buildPlayerStatus(
   const db = getDb();
   const dateKey = dailyDateKey(new Date());
 
-  const [dailyStatus, dailyUsed, puzzleRecords, spireRecord] = await Promise.all([
-    db.getDailyUserStatus({ playerId, seasonId, dateKey }),
-    db.countResolvedDailyRuns({ playerId, seasonId, dateKey }),
-    db.listPlayerPuzzleRecords(playerId, seasonId),
-    db.getSpireRecord(playerId, seasonId),
-  ]);
+  const [dailyStatus, dailyUsed, puzzleRecords, spireRecord, spireInProgress] =
+    await Promise.all([
+      db.getDailyUserStatus({ playerId, seasonId, dateKey }),
+      db.countResolvedDailyRuns({ playerId, seasonId, dateKey }),
+      db.listPlayerPuzzleRecords(playerId, seasonId),
+      db.getSpireRecord(playerId, seasonId),
+      db.getInProgressRun(playerId, seasonId, "spire"),
+    ]);
 
   // ── Daily ──
   const adRefillUsed = dailyStatus?.adRefillUsed ?? false;
@@ -81,6 +84,16 @@ async function buildPlayerStatus(
         `최고 도달 ${spireRecord.bestStageReached}스테이지 · 최고 ${spireRecord.bestTotalScore}점`,
       ]
     : ["아직 기록 없음"];
+  // Resumable run (saved at the last stage/shop boundary) → prepend an 이어하기 line.
+  if (spireInProgress?.actions) {
+    const replay = replaySpireRun(
+      spireInProgress.seed,
+      spireInProgress.actions as SpireAction[],
+    );
+    if (replay.ok && !replay.runEnded) {
+      spireLines.unshift(`▶ 이어하기 — ${replay.finalState.currentStage}스테이지 진행 중`);
+    }
+  }
 
   return {
     "/season/daily": { lines: dailyLines },
