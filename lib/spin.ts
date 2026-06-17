@@ -42,10 +42,10 @@ export function computeWeights(
         weights.seven *= 3;
         break;
       case 'fruit-surge':
-        for (const f of FRUITS) weights[f] *= 3;
+        for (const f of FRUITS) weights[f] *= 4;
         break;
       case 'gem-surge':
-        for (const g of GEMS) weights[g] *= 3;
+        for (const g of GEMS) weights[g] *= 4;
         break;
       case 'vehicle-surge':
         for (const v of VEHICLES) weights[v] *= slotRuleCount + 1;

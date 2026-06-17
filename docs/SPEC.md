@@ -31,14 +31,18 @@ These intentionally differ from the checklist below (explicit user decisions):
 Discovered by auditing the code against the checklist (2026-06-17). ✅=fixed, ⬜=open.
 
 - ⬜ **물류 사업**: should be a SELECT repeated per plane (직접 고른 두 칸 교체 × 비행기 수), NOT random swaps.
-- ⬜ **우다다다 / 점프의 달인**: each should award **+40 per cat** on top of the move (currently no score → the "사라진 고양이 점수").
-- ⬜ **0 상승 (zero-to-seven)**: should convert the **가장 왼쪽 2개의 0** (currently 모든 0).
-- ⬜ **보석 셔플 (gem-shuffle)**: should reroll the **가장 왼쪽 보석 2개** (currently 1개).
-- ⬜ **과일/보석/고양이 확률 증가**: ×4 per spec (verify fruit/gem currently ×3).
-- ⬜ **7 scores / 4 penalty**: verify 7=10/77/150/500/777, 4 penalty=−30 (§4).
-- ⬜ **특수 족보 multipliers**: 4가 4개 → ×3, 4가 5개 → ×4, 0≥3 → 규칙 1장 추가 (verify constants).
+- ✅ **우다다다 / 점프의 달인**: each awards **+40 per cat** on top of the move (the "사라진 고양이 점수").
+- ✅ **0 상승 (zero-to-seven)**: converts the **가장 왼쪽 2개의 0** (was 모든 0). Patched in 빠른 게임 too.
+- ✅ **보석 셔플 (gem-shuffle)**: rerolls the **가장 왼쪽 보석 2개** (was 1개). Patched in 빠른 게임 too.
+- ✅ **과일/보석 확률 증가**: ×4 (was ×3). Patched in 빠른 게임 too (cat-odds already ×4).
+- ✅ **7 scores / 4 penalty**: verified already correct — 7=10/77/150/500/777, 4 penalty=−30.
+- ✅ **특수 족보 multipliers**: verified already correct — 4×4 → ×3, 4×5 → ×4, 0≥3 → 규칙 1장 추가.
 - ✅ Non-spec 페어 보너스 (과수원 보석상 / 고양이 택시) removed; `PAIR_RULES = []`.
 - ✅ 점수표 hides 특수 족보 outside 빠른 게임; uniform 한다체; calico cat emoji distinct.
+
+> NOTE: the surge ×4 / 0상승(왼쪽 2개) / gem-shuffle(2개) fixes apply to **빠른 게임 too**
+> (user decision) — so 빠른 게임 is no longer byte-identical to pre-`season-1` for these
+> three rules; it now matches the spec everywhere.
 
 ---
 

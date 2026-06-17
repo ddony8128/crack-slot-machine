@@ -255,8 +255,10 @@ function applyOne(
       return [];
     }
     case 'gem-shuffle': {
-      const idx = working.findIndex((s) => GEM_SET.has(s));
-      if (idx !== -1) {
+      // 보석 셔플: the LEFTMOST TWO gems are each rerolled until non-gem (기획).
+      const rerolled: number[] = [];
+      for (let idx = 0; idx < working.length && rerolled.length < 2; idx++) {
+        if (!GEM_SET.has(working[idx])) continue;
         const old = working[idx];
         let iter = 0;
         while (iter < REROLL_CAP && GEM_SET.has(working[idx])) {
@@ -265,9 +267,9 @@ function applyOne(
         }
         if (locked[idx]) locked[idx] = false;
         emitReroll(old, idx);
-        return [idx];
+        rerolled.push(idx);
       }
-      return [];
+      return rerolled;
     }
     case 'fruit-fish': {
       const idx = working.findIndex((s) => !FRUIT_SET.has(s));
@@ -330,14 +332,18 @@ function applyOne(
         }
       }
       return [];
-    case 'zero-to-seven':
-      for (let i = 0; i < working.length; i++) {
+    case 'zero-to-seven': {
+      // 0 상승: the LEFTMOST TWO 0s become 7 (기획).
+      let converted = 0;
+      for (let i = 0; i < working.length && converted < 2; i++) {
         const old = working[i];
         if (old === 'zero') {
           if (write(working, locked, i, 'seven')) emitTransform(old, 'seven', i);
+          converted += 1;
         }
       }
       return [];
+    }
     case 'ruby-convert':
       // 루비 변환 (combo number×gem): every 0 OR 7 becomes a ruby.
       for (let i = 0; i < working.length; i++) {

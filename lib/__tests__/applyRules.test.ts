@@ -53,10 +53,10 @@ describe('applyRules — transforms', () => {
     expect(finalResult).toEqual(['cherry', 'zero', 'zero', 'zero', 'zero']);
   });
 
-  it('zero-to-seven: all zeros become sevens', () => {
+  it('zero-to-seven: the leftmost two 0s become sevens (3rd 0 untouched)', () => {
     const base: SymbolType[] = ['zero', 'cherry', 'zero', 'four', 'zero'];
     const { finalResult } = applyRules(base, [RULES_BY_ID['zero-to-seven']], noCtx);
-    expect(finalResult).toEqual(['seven', 'cherry', 'seven', 'four', 'seven']);
+    expect(finalResult).toEqual(['seven', 'cherry', 'seven', 'four', 'zero']);
   });
 
   it('red-dye: all 🍋 and 💎 => 🍒 (ruby stays ruby)', () => {

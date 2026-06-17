@@ -48,7 +48,7 @@ export const RULES: Rule[] = [
     type: 'transform',
     phase: 'sequential',
     build: '7',
-    description: '모든 0이 7로 바뀐다.',
+    description: '가장 왼쪽 2개의 0이 7로 바뀐다.',
   },
   {
     id: 'number-spin',
@@ -66,7 +66,7 @@ export const RULES: Rule[] = [
     type: 'weight',
     phase: 'pre-spin',
     build: 'fruit',
-    description: '과일이 나올 확률이 세 배가 된다.',
+    description: '과일이 나올 확률이 네 배가 된다.',
   },
   {
     id: 'diamond-cut',
@@ -100,7 +100,7 @@ export const RULES: Rule[] = [
     type: 'weight',
     phase: 'pre-spin',
     build: 'gem',
-    description: '보석이 나올 확률이 세 배가 된다.',
+    description: '보석이 나올 확률이 네 배가 된다.',
   },
   {
     id: 'fruit-freeze',
@@ -408,7 +408,7 @@ export const RULES: Rule[] = [
     type: 'reroll',
     phase: 'sequential',
     build: 'safe',
-    description: '가장 왼쪽의 보석을 보석이 아닌 것이 나올 때까지 다시 굴린다.',
+    description: '가장 왼쪽의 보석 두 개를 보석이 아닌 것이 나올 때까지 다시 굴린다.',
   },
 
   // ---- score ----
