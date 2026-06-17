@@ -34,6 +34,9 @@ export const PARKING_FEE_PER = 30;
 // 가족 만들기 (monster-family): +this per dracula on the FINAL board, per rule
 // occurrence (×stacks via copy-above). Added to the bonus, like a set bonus.
 export const DRACULA_FAMILY_PER = 20;
+// 우다다다 (cat-zoomies) / 점프의 달인 (cat-jump): each awards +this per cat on the
+// FINAL board, per rule occurrence — on top of their move effect (spec §7).
+export const CAT_MOVE_PER = 40;
 // FOUR FORTUNE rule: each 4 scores +this instead of the penalty.
 export const FOUR_FORTUNE_PER = 20;
 

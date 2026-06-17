@@ -15,6 +15,7 @@ import {
   FOUR_FORTUNE_PER,
   PARKING_FEE_PER,
   DRACULA_FAMILY_PER,
+  CAT_MOVE_PER,
   VITAMIN_PER,
   HAND_FLAT_UPGRADE,
   BONUS_77,
@@ -79,6 +80,13 @@ function parkingHolds(events?: EngineEvent[]): number {
 /** Draculas on the (final) board — drives the 가족 만들기 family bonus. */
 function countDraculas(result: SymbolType[]): number {
   return result.filter((s) => s === 'dracula').length;
+}
+
+/** Cats on the (final) board (incl. hybrids) — drives the 우다다다 / 점프의 달인 bonus. */
+function countCats(result: SymbolType[]): number {
+  const cat = SYMBOL_SETS_BY_ID['cat'];
+  if (!cat) return 0;
+  return result.filter((s) => symbolInSet(s, cat)).length;
 }
 
 /** Does the (final) board contain ≥1 gem-set symbol? Drives 미의 추구. */
@@ -475,6 +483,16 @@ export function scoreItems(
     items.push({ label: `가족 만들기 (드라큘라 ${draculas})`, points: DRACULA_FAMILY_PER * draculas * family });
   }
 
+  // 우다다다 (cat-zoomies) / 점프의 달인 (cat-jump): each +CAT_MOVE_PER per cat on the
+  // final board, ×rule occurrences. Both can be slotted; each scores independently.
+  const cats = countCats(result);
+  if (cats > 0) {
+    const zoom = countRule(expanded, 'cat-zoomies');
+    if (zoom > 0) items.push({ label: `우다다다 (고양이 ${cats})`, points: CAT_MOVE_PER * cats * zoom });
+    const jump = countRule(expanded, 'cat-jump');
+    if (jump > 0) items.push({ label: `점프의 달인 (고양이 ${cats})`, points: CAT_MOVE_PER * cats * jump });
+  }
+
   // 유료 주차 (vehicle-parking): lose PARKING_FEE_PER per HELD vehicle cell. Now
   // EVENT-based — counts symbol_held events from the player's pick, not the final
   // board (×stacks falls out naturally since copy-above re-runs the select). A
@@ -541,6 +559,13 @@ export function scoreResult(
   // 가족 만들기 (monster-family): +DRACULA_FAMILY_PER per dracula on the final
   // board, ×rule occurrences (copy-above stacks).
   bonusScore += DRACULA_FAMILY_PER * countDraculas(result) * countRule(expanded, 'monster-family');
+
+  // 우다다다 (cat-zoomies) / 점프의 달인 (cat-jump): +CAT_MOVE_PER per cat on the final
+  // board, ×rule occurrences (copy-above stacks). Both rules score independently.
+  bonusScore +=
+    CAT_MOVE_PER *
+    countCats(result) *
+    (countRule(expanded, 'cat-zoomies') + countRule(expanded, 'cat-jump'));
 
   // FOUR FORTUNE: while active, each 4 scores +FOUR_FORTUNE_PER (×count via
   // copy-above) instead of incurring the normal penalty.
