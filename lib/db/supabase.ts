@@ -604,6 +604,24 @@ export class SupabaseDb implements Db {
     return data ? toPlayer(data) : null;
   }
 
+  async listPlayers({
+    page,
+    pageSize,
+  }: {
+    page: number;
+    pageSize: number;
+  }): Promise<{ players: PlayerRow[]; total: number }> {
+    const from = Math.max(0, (page - 1) * pageSize);
+    const to = from + pageSize - 1;
+    const { data, error, count } = await this.sb
+      .from('players')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    return { players: (data ?? []).map(toPlayer), total: count ?? 0 };
+  }
+
   async updatePlayerPassword(
     playerId: string,
     passwordHash: string,

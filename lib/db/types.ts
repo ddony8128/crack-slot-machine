@@ -287,6 +287,12 @@ export interface Db {
     granted: boolean,
     note?: string | null,
   ): Promise<PlayerRow | null>;
+  /** Paginated list of ALL players (admin), newest first. Includes soft-deleted
+   *  rows so 탈퇴 accounts stay visible. `total` is the full count for paging. */
+  listPlayers(input: {
+    page: number;
+    pageSize: number;
+  }): Promise<{ players: PlayerRow[]; total: number }>;
 
   // ── Season 1: seasons ──────────────────────────────────────────────────────
   getSeasonBySlug(slug: string): Promise<SeasonRow | null>;

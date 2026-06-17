@@ -863,6 +863,30 @@ describe('MemoryDb spire records', () => {
   });
 });
 
+describe('MemoryDb listPlayers', () => {
+  it('paginates all players newest-first with a correct total', async () => {
+    const db = new MemoryDb();
+    for (let i = 1; i <= 5; i++) {
+      await db.createPlayer({
+        nickname: `u${i}`,
+        contactType: 'email',
+        contactValue: `u${i}@t.com`,
+        email: `u${i}@t.com`,
+        phone: null,
+        passwordHash: 'h',
+      });
+    }
+    const p1 = await db.listPlayers({ page: 1, pageSize: 2 });
+    expect(p1.total).toBe(5);
+    expect(p1.players.length).toBe(2);
+    expect(p1.players[0].nickname).toBe('u5'); // newest first
+
+    const p3 = await db.listPlayers({ page: 3, pageSize: 2 });
+    expect(p3.players.length).toBe(1); // 5 players, page 3 of size 2 = last one
+    expect(p3.players[0].nickname).toBe('u1');
+  });
+});
+
 describe('MemoryDb announcements', () => {
   it('create defaults to unpublished; listPublished shows only published, pinned first', async () => {
     const db = new MemoryDb();

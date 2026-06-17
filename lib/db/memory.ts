@@ -412,6 +412,22 @@ export class MemoryDb implements Db {
     return row;
   }
 
+  async listPlayers({
+    page,
+    pageSize,
+  }: {
+    page: number;
+    pageSize: number;
+  }): Promise<{ players: PlayerRow[]; total: number }> {
+    // Newest first (createdAt desc, insertion-order tiebreak).
+    const sorted = this.players
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => (a.p.createdAt < b.p.createdAt ? 1 : a.p.createdAt > b.p.createdAt ? -1 : b.i - a.i))
+      .map((x) => x.p);
+    const start = Math.max(0, (page - 1) * pageSize);
+    return { players: sorted.slice(start, start + pageSize), total: this.players.length };
+  }
+
   async updatePlayerPassword(
     playerId: string,
     passwordHash: string,
