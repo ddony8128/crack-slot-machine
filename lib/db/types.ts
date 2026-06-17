@@ -210,6 +210,20 @@ export interface Db {
   getRun(runId: string): Promise<RunRow | null>;
   finalizeRun(runId: string, input: FinalizeRunInput): Promise<RunRow | null>;
   /**
+   * Persist in-progress actions onto a still-PENDING run (첨탑 stage-boundary
+   * autosave). No-op (returns null) if the run is missing or already resolved.
+   */
+  saveRunActions(runId: string, actions: PersistedActions): Promise<RunRow | null>;
+  /**
+   * The player's most recent PENDING run for a mode+season that has saved actions
+   * — drives 첨탑 "이어하기" (resume) on the hub + client. null when none.
+   */
+  getInProgressRun(
+    playerId: string,
+    seasonId: string,
+    mode: RunMode,
+  ): Promise<RunRow | null>;
+  /**
    * Admin invalidation: mark a run rejected with the given reason and clear its
    * verified flag. Does NOT recompute best_scores (a future cleanup pass owns
    * that) — rankings read from best_scores, so the run row alone is updated.

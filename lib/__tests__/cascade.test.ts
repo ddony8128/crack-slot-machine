@@ -401,15 +401,15 @@ describe('rule interaction (sequential, lower-wins)', () => {
   });
 
   it('zero-to-seven then seven-fish-like chain: conversions stack sequentially', () => {
-    // zero-to-seven: all zeros -> seven. Then left-pair copies cell0 (now seven)
-    // into cell1 -> demonstrates reading a converted value downstream.
+    // zero-to-seven: the LEFTMOST TWO 0s -> seven (3rd 0 untouched). Then left-pair
+    // copies cell0 (now seven) into cell1 -> reading a converted value downstream.
     const base: SymbolType[] = ['zero', 'lemon', 'zero', 'diamond', 'zero'];
     const rules: Rule[] = [RULES_BY_ID['zero-to-seven'], RULES_BY_ID['left-pair']];
     const { finalResult } = applyRules(base, rules, ctx());
-    expect(finalResult[0]).toBe('seven'); // converted
+    expect(finalResult[0]).toBe('seven'); // converted (1st 0)
     expect(finalResult[1]).toBe('seven'); // left-pair copied the converted cell0
-    expect(finalResult[2]).toBe('seven');
-    expect(finalResult[4]).toBe('seven');
+    expect(finalResult[2]).toBe('seven'); // converted (2nd 0)
+    expect(finalResult[4]).toBe('zero'); // 3rd 0 — beyond the leftmost two, untouched
   });
 });
 

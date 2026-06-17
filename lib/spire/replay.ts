@@ -23,11 +23,13 @@ import {
   buyArtifact,
   buyHandFlat,
   buyHandDouble,
+  buySetBonus,
   rerollShop,
   settleClear,
   settleFail,
   applyArtifactAcquire,
   type SpireRunState,
+  type SetBonusUpgradeKind,
 } from '@/lib/spire/state';
 import {
   spireStageRunConfig,
@@ -48,6 +50,7 @@ export type SpireAction =
   | { type: 'buy_artifact'; artifactId: string; cost: number }
   | { type: 'buy_hand_flat'; handType: string }
   | { type: 'buy_hand_double'; handType: string }
+  | { type: 'buy_setbonus'; bonusKey: string; kind: SetBonusUpgradeKind }
   | { type: 'reroll_shop' }
   | { type: 'choose_artifact'; artifactId: string | null };
 
@@ -136,6 +139,7 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
           state.rulePool,
           state.handUpgrades,
           state.artifacts,
+          state.setBonusUpgrades,
         );
         const seed = `${runSeed}:stage-${stage}:attempt-${attempt}`;
         const rr = replayRun(seed, action.actions, cfg);
@@ -222,6 +226,12 @@ export function replaySpireRun(runSeed: string, actions: SpireAction[]): SpireRe
       }
       case 'buy_hand_double': {
         const r = buyHandDouble(state, action.handType);
+        if (!r.ok) return fail(r.error);
+        state = r.state;
+        break;
+      }
+      case 'buy_setbonus': {
+        const r = buySetBonus(state, action.bonusKey, action.kind);
         if (!r.ok) return fail(r.error);
         state = r.state;
         break;

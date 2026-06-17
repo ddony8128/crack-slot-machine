@@ -9,6 +9,7 @@ import RulePicker from "@/components/RulePicker";
 import SlotMachine from "@/components/SlotMachine";
 import SpinStage from "@/components/SpinStage";
 import ScorePanel from "@/components/ScorePanel";
+import PuzzlePanel from "@/components/PuzzlePanel";
 import SpinResultLog from "@/components/SpinResultLog";
 import {
   JackpotCelebration,
@@ -28,6 +29,8 @@ type Celebration =
 
 export default function GameScreen() {
   const status = useGameStore((s) => s.status);
+  const eventSlug = useGameStore((s) => s.eventSlug);
+  const isPuzzle = eventSlug === "puzzle";
   const spinLogs = useGameStore((s) => s.spinLogs);
   const currentResult = useGameStore((s) => s.currentResult);
   const pendingSelection = useGameStore((s) => s.pendingSelection);
@@ -71,13 +74,23 @@ export default function GameScreen() {
 
   function handlePick(i: number) {
     if (!pendingSelection) return;
-    const count = pendingSelection.count;
+    const { kind, count } = pendingSelection;
+    // park (유료 주차) = "최대 N칸": toggle picks up to the cap and wait for the
+    // player to confirm (1 or 2) — never auto-resolve.
+    if (kind === "park") {
+      setChosen((prev) => {
+        if (prev.includes(i)) return prev.filter((x) => x !== i);
+        if (prev.length >= count) return prev; // capped at max (min(2,#vehicles))
+        return [...prev, i];
+      });
+      return;
+    }
     if (count === 1) {
       selectCells([i]);
       return;
     }
-    // count >= 2 (swap / park): collect `count` distinct picks; clicking an
-    // already-chosen cell deselects it. Resolve once `count` cells are chosen.
+    // count >= 2 (swap): collect `count` distinct picks; clicking an already-chosen
+    // cell deselects it. Resolve once `count` cells are chosen.
     setChosen((prev) => {
       if (prev.includes(i)) return prev.filter((x) => x !== i);
       const next = [...prev, i];
@@ -89,6 +102,14 @@ export default function GameScreen() {
     });
   }
 
+  // park confirm: commit the chosen vehicle cells (1..max).
+  const canConfirmPark =
+    pendingSelection?.kind === "park" && chosen.length >= 1;
+  function handleConfirmPark() {
+    if (!canConfirmPark) return;
+    selectCells(chosen);
+  }
+
   const promptText = pendingSelection
     ? pendingSelection.kind === "copy"
       ? "복사할 칸을 선택하세요 (바로 왼쪽 칸이 복사됩니다)"
@@ -98,7 +119,11 @@ export default function GameScreen() {
           ? "다시 굴릴 칸을 선택하세요"
           : pendingSelection.kind === "family"
             ? "복사할 칸을 선택하세요 (가장 왼쪽 드라큘라가 복사됩니다)"
-            : `주차할 교통수단 칸을 선택하세요 (${chosen.length}/${pendingSelection.count})`
+            : pendingSelection.kind === "catswap"
+              ? "옮길 칸을 선택하세요 (교통수단 옆 고양이가 이 칸으로 이동합니다)"
+              : pendingSelection.kind === "logiswap"
+                ? `물류 사업 — 교체할 두 칸을 선택하세요 (남은 교환 ${pendingSelection.remaining ?? 1}회 · ${chosen.length}/2)`
+                : `주차할 교통수단 칸을 선택하세요 (최대 ${pendingSelection.count}칸, ${chosen.length}칸 선택됨)`
     : "";
 
   // Celebrations fire once the reveal completes for the latest log.
@@ -199,7 +224,7 @@ export default function GameScreen() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-6">
-      <StatusBar />
+      <StatusBar hideReference={isPuzzle} />
       <RuleSlots />
 
       {showSlot && !stageActive && (
@@ -217,12 +242,16 @@ export default function GameScreen() {
 
       {status === "choosing-rule" && <RulePicker />}
 
-      {showScore && (
-        <>
-          <ScorePanel log={latestLog} />
-          {latestLog.steps.length > 0 && <SpinResultLog log={latestLog} />}
-        </>
-      )}
+      {showScore &&
+        (isPuzzle ? (
+          // Puzzle: per-spin score is irrelevant — show only clear / not-clear.
+          <PuzzlePanel />
+        ) : (
+          <>
+            <ScorePanel log={latestLog} />
+            {latestLog.steps.length > 0 && <SpinResultLog log={latestLog} />}
+          </>
+        ))}
 
       {stageActive && (
         <SpinStage
@@ -239,6 +268,10 @@ export default function GameScreen() {
           onPick={handlePick}
           promptText={promptText}
           pickRuleName={pendingSelection?.ruleName}
+          confirmable={pendingSelection?.kind === "park"}
+          confirmDisabled={!canConfirmPark}
+          confirmLabel={`주차 확정${chosen.length ? ` (${chosen.length}칸)` : ""}`}
+          onConfirm={handleConfirmPark}
         />
       )}
 

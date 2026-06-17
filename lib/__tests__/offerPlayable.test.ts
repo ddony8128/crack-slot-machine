@@ -10,14 +10,12 @@ describe('rulePlayable', () => {
     expect(rulePlayable(RULES_BY_ID['cat-zoomies'], BASE_WEIGHTS)).toBe(false);
     expect(rulePlayable(RULES_BY_ID['vehicle-surge'], BASE_WEIGHTS)).toBe(false);
     expect(rulePlayable(RULES_BY_ID['monster-haunt'], BASE_WEIGHTS)).toBe(false);
-    expect(rulePlayable(RULES_BY_ID['pair-cat-vehicle'], BASE_WEIGHTS)).toBe(false);
   });
   it('keeps number/fruit/gem + generic rules playable under BASE_WEIGHTS', () => {
     expect(rulePlayable(RULES_BY_ID['seven-fever'], BASE_WEIGHTS)).toBe(true); // build '7'
     expect(rulePlayable(RULES_BY_ID['fruit-surge'], BASE_WEIGHTS)).toBe(true);
     expect(rulePlayable(RULES_BY_ID['gem-surge'], BASE_WEIGHTS)).toBe(true);
     expect(rulePlayable(RULES_BY_ID['center-lock'], BASE_WEIGHTS)).toBe(true); // build 'order'
-    expect(rulePlayable(RULES_BY_ID['pair-fruit-gem'], BASE_WEIGHTS)).toBe(true);
   });
   it('a set rule becomes playable once its symbols can roll', () => {
     const withCats = { ...BASE_WEIGHTS, cheese_cat: 1, tuxedo_cat: 1, calico_cat: 1 } as typeof BASE_WEIGHTS;

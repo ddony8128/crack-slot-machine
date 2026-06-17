@@ -4,18 +4,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/gameStore";
-import { startSpire, submitSpire } from "@/lib/client/spireApi";
+import {
+  startSpire,
+  submitSpire,
+  fetchSpireCurrent,
+  saveSpireProgress,
+} from "@/lib/client/spireApi";
 import { fetchMe } from "@/lib/client/authApi";
 import { saveSpire, loadSpire, clearSpire, type SpireSave } from "@/lib/client/spireResume";
 import { SYMBOL_SETS_BY_ID, type SetBonus } from "@/lib/symbols/sets";
-import { SYMBOL_EMOJI } from "@/data/symbols";
 import { RULES_BY_ID } from "@/data/rules";
 import {
   SPIRE_STAGE_COUNT,
   SPIRE_ARTIFACT_STAGES,
   SPIRE_ARTIFACTS,
   SPIRE_MAX_FAILURES,
-  SPIRE_RULE_POOL_MAX,
 } from "@/lib/spire/config";
 import {
   initialSpireState,
@@ -26,6 +29,8 @@ import {
   buyArtifact,
   buyHandFlat,
   buyHandDouble,
+  buySetBonus,
+  type SetBonusUpgradeKind,
   rerollShop,
   settleClear,
   settleFail,
@@ -47,7 +52,6 @@ import SpireResultScreen from "@/components/SpireResultScreen";
 import DonationModal from "@/components/DonationModal";
 import { useDonationPrompt } from "@/components/useDonationPrompt";
 import ModeIntro from "@/components/ModeIntro";
-import type { SymbolType } from "@/types";
 import type { SeasonScoreChange } from "@/lib/season/scoring";
 
 type Phase =
@@ -57,6 +61,7 @@ type Phase =
   | "choosing-set"
   | "playing"
   | "cleared"
+  | "failed"
   | "artifact"
   | "shop"
   | "result";
@@ -66,11 +71,6 @@ type FailBreakdown = { stage: number; failures: number; support: number } | null
 type SubmitState = "submitting" | "submitted" | "rejected" | "error" | "version_mismatch";
 
 const ARTIFACT_BY_ID = Object.fromEntries(SPIRE_ARTIFACTS.map((a) => [a.id, a]));
-
-/** Emoji for a symbol id, falling back to the id itself. */
-function emojiFor(id: string): string {
-  return SYMBOL_EMOJI[id as SymbolType] ?? id;
-}
 
 /** Rule display name, falling back to the id. */
 function ruleNameOf(id: string): string {
@@ -82,21 +82,6 @@ const PER_EVENT_LABEL: Record<"moved" | "rerolled" | "copied", string> = {
   rerolled: "재굴림",
   copied: "복사",
 };
-
-/** Short active-effect note for the playing-HUD artifact strip (기획 §6 P3:
- *  chime free-reroll count, swiss-knife 4-candidates, engine). */
-function activeArtifactNote(id: string): string {
-  switch (id) {
-    case "chime":
-      return "(상점 무료 리롤 2회)";
-    case "swiss-knife":
-      return "(규칙 후보 4개)";
-    case "engine":
-      return "(스테이지 첫 스핀 전 규칙 +1)";
-    default:
-      return "";
-  }
-}
 
 /** Human-readable 족보 보너스 line for the set-choice card (기획 §17). */
 function setBonusLabel(b: SetBonus): string {
@@ -117,6 +102,7 @@ function setBonusLabel(b: SetBonus): string {
 export default function SpireClient() {
   // Active-stage store (one RC run per stage attempt).
   const status = useGameStore((s) => s.status);
+  const nickname = useGameStore((s) => s.nickname);
   const spinLogs = useGameStore((s) => s.spinLogs);
   const beginRun = useGameStore((s) => s.beginRun);
   const configureRun = useGameStore((s) => s.configureRun);
@@ -180,10 +166,16 @@ export default function SpireClient() {
     });
   }, []);
 
-  /** Persist the current run snapshot (no-op when nothing to save). */
+  /**
+   * Persist the current run snapshot at every safe boundary (set choice, stage
+   * settle, shop buy/reroll): localStorage for instant same-device resume, AND the
+   * server (best-effort) so the hub can offer 이어하기 across devices. The server
+   * run stays 'pending' until submit, so it survives 나가기.
+   */
   const persist = useCallback(() => {
     if (!runIdRef.current || !seedRef.current) return;
     saveSpire({ seed: seedRef.current, runId: runIdRef.current, actions: actionsRef.current });
+    void saveSpireProgress(runIdRef.current, actionsRef.current);
   }, []);
 
   /** Begin the ACTIVE-stage store for the run's current stage/attempt. */
@@ -201,6 +193,7 @@ export default function SpireClient() {
       st.rulePool,
       st.handUpgrades,
       st.artifacts,
+      st.setBonusUpgrades,
     );
     beginRun(stageAttemptSeed(seedRef.current, stage, attempt), runIdRef.current, "spire");
     configureRun(cfg);
@@ -291,13 +284,9 @@ export default function SpireClient() {
         });
         setFailBreakdown(null);
         persist();
-        if (stage >= SPIRE_STAGE_COUNT) {
-          endRun();
-        } else if (SPIRE_ARTIFACT_STAGES.includes(stage)) {
-          setPhase("artifact");
-        } else {
-          setPhase("shop");
-        }
+        // Show the clear + settlement screen; its 계속 routes onward (see
+        // proceedAfterStage). The clearing spin's result was just shown in-game.
+        setPhase("cleared");
       } else {
         const r = settleFail(stForSettle);
         if (!r.ok) {
@@ -307,24 +296,40 @@ export default function SpireClient() {
         }
         runStateRef.current = r.state;
         setRunState(r.state);
+        setClearBreakdown(null);
+        setFailBreakdown({
+          stage,
+          failures: r.state.failures,
+          support: r.breakdown.support,
+        });
         persist();
+        // Final fail (3rd) → straight to the result screen; otherwise show the
+        // 실패 + 지원금 screen, whose 계속 returns to the shop for a retry.
         if (r.breakdown.ended) {
           endRun();
         } else {
-          // Non-final fail: surface the failure + 지원금 + 재도전 messaging on the
-          // shop screen (settleFail already advanced the attempt, same stage).
-          setClearBreakdown(null);
-          setFailBreakdown({
-            stage,
-            failures: r.state.failures,
-            support: r.breakdown.support,
-          });
-          setPhase("shop");
+          setPhase("failed");
         }
       }
     },
     [getActions, recordAction, spinLogs, persist, endRun],
   );
+
+  /** 계속 from the clear-settlement screen: route to reward / shop / result. */
+  const proceedAfterClear = useCallback(() => {
+    const st = runStateRef.current;
+    if (!st) return;
+    // settleClear already advanced currentStage, so the stage just cleared is one
+    // below it. Mirrors the original routing (reward stage opens before the shop).
+    const clearedStage = st.currentStage - 1;
+    if (clearedStage >= SPIRE_STAGE_COUNT) {
+      endRun();
+    } else if (SPIRE_ARTIFACT_STAGES.includes(clearedStage)) {
+      setPhase("artifact");
+    } else {
+      setPhase("shop");
+    }
+  }, [endRun]);
 
   // ── start / resume bootstrap ───────────────────────────────────────────────
 
@@ -353,8 +358,24 @@ export default function SpireClient() {
     if (startedRef.current) return;
     startedRef.current = true;
     reset();
-    if (loadSpire()) return; // wait for the player's resume choice
-    startFresh();
+    if (loadSpire()) return; // local save → wait for the player's resume choice
+    // No local save (e.g. another device, or after 나가기): ask the server whether
+    // this player has a resumable pending run, and offer it before starting fresh.
+    fetchSpireCurrent()
+      .then((r) => {
+        if (startedRef.current && r.current) {
+          const save: SpireSave = {
+            seed: r.current.seed,
+            runId: r.current.runId,
+            actions: r.current.actions,
+          };
+          setResumeSave(save);
+          setPhase("resume");
+        } else {
+          startFresh();
+        }
+      })
+      .catch(() => startFresh());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -398,18 +419,17 @@ export default function SpireClient() {
     startFresh();
   }
 
-  // §8: exit the spire run (Policy A — no save). Confirm, drop the in-progress
-  // run (the pending server run is harmless; a future start supersedes it), then
-  // navigate to the season hub via next/navigation router.
+  // Exit to the season hub. Progress is KEPT — the pending server run (saved at the
+  // last shop/stage boundary) lets the hub + this device offer 이어하기. We leave the
+  // local save too so same-device resume is instant; only 새로 시작 clears it.
   function exitRun() {
     if (
       !window.confirm(
-        "첨탑을 나가면 현재 런이 사라집니다. 나가시겠어요?",
+        "첨탑에서 나가시겠어요? 진행 상황은 저장되어 시즌 허브에서 이어할 수 있습니다.",
       )
     ) {
       return;
     }
-    clearSpire();
     reset();
     router.push("/season");
   }
@@ -443,10 +463,10 @@ export default function SpireClient() {
     const target = spireStageTarget(st.currentStage);
     const cumulative = spinLogs.reduce((a, l) => a + l.roundScore, 0);
     if (finalizedRef.current) return;
-    if (status === "spin-result" && cumulative >= target) {
-      finalizedRef.current = true;
-      setPhase("cleared");
-    } else if (status === "finished") {
+    // The clearing spin now stays in 'spin-result' (stageCleared) so its reveal +
+    // result show; pressing "스테이지 클리어 →" runs next() → 'finished'. A failed
+    // stage reaches 'finished' by exhausting spins. Either way we settle on 'finished'.
+    if (status === "finished") {
       finalizedRef.current = true;
       finalizeStage(cumulative >= target);
     }
@@ -468,6 +488,29 @@ export default function SpireClient() {
   const offers: SpireShopOffers | null = runState
     ? spireShopOffers(runState, shopVisitIndex, rerollCount)
     : null;
+
+  // 품절 처리: the discrete (artifact/set/rule) offer slots are SNAPSHOT when a shop
+  // visit opens or is rerolled, so buying one shows it 품절 in place instead of the
+  // next seeded candidate sliding in (which made reroll pointless). Symbols + prices
+  // stay live (from `offers`). Keyed on (shopVisitIndex, rerollCount) only.
+  const [shopSnapshot, setShopSnapshot] = useState<SpireShopOffers | null>(null);
+  useEffect(() => {
+    if (phase !== "shop") return;
+    const st = runStateRef.current;
+    if (!st) return;
+    // Snapshot ONLY on visit/reroll change — NOT on every runState (buy) change.
+    setShopSnapshot(spireShopOffers(st, shopVisitIndex, rerollCount));
+  }, [phase, shopVisitIndex, rerollCount]);
+  // Merge: frozen discrete lists from the snapshot, live symbols/prices from offers.
+  const shopOffers: SpireShopOffers | null =
+    offers && shopSnapshot
+      ? {
+          ...offers,
+          artifacts: shopSnapshot.artifacts,
+          sets: shopSnapshot.sets,
+          rules: shopSnapshot.rules,
+        }
+      : offers;
 
   // 후원 안내 (spec §9): on the result screen the SeasonScoreRise animation
   // shows FIRST; only open the donation modal a short delay after the result
@@ -537,7 +580,7 @@ export default function SpireClient() {
           </button>
         </div>
         <Link href="/season" className="text-sm text-zinc-400 underline">
-          ← 시즌으로
+          ← 나가기
         </Link>
       </Centered>
     );
@@ -606,7 +649,7 @@ export default function SpireClient() {
           })}
         </div>
         <Link href="/season" className="text-sm text-zinc-400 underline">
-          ← 시즌으로
+          ← 나가기
         </Link>
       </main>
     );
@@ -626,6 +669,7 @@ export default function SpireClient() {
           scoreChange={scoreChange ?? undefined}
           submitState={submitState}
           rejectReason={rejectReason}
+          playerNickname={nickname || undefined}
           onRetry={startNewGame}
         />
         <DonationModal open={donation.open} onClose={donation.close} />
@@ -634,17 +678,62 @@ export default function SpireClient() {
   }
 
   if (phase === "cleared" && runState) {
+    // settleClear already advanced currentStage; the stage just cleared is one below.
+    const clearedStage = runState.currentStage - 1;
+    const lastStage = clearedStage >= SPIRE_STAGE_COUNT;
     return (
       <Centered>
         <h1 className="text-3xl font-black tracking-tight text-emerald-300">
-          스테이지 {runState.currentStage} 클리어!
+          스테이지 {clearedStage} 클리어!
         </h1>
+        {clearBreakdown && (
+          <div className="w-full space-y-1 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-300/80">
+              정산
+            </p>
+            <p>이자 +{clearBreakdown.interest}원</p>
+            <p>남은 스핀 보너스 +{clearBreakdown.spinBonus}원</p>
+            <p>클리어 보수 +{clearBreakdown.payout}원</p>
+            <p className="border-t border-emerald-500/30 pt-1 font-bold text-amber-300">
+              보유 금액 {runState.money}원
+            </p>
+          </div>
+        )}
         <button
           type="button"
-          onClick={() => finalizeStage(true)}
+          onClick={proceedAfterClear}
           className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
         >
-          계속
+          {lastStage ? "결과 보기" : "계속"}
+        </button>
+      </Centered>
+    );
+  }
+
+  if (phase === "failed" && runState && failBreakdown) {
+    return (
+      <Centered>
+        <h1 className="text-3xl font-black tracking-tight text-rose-300">
+          스테이지 {failBreakdown.stage} 실패
+        </h1>
+        <div className="w-full space-y-1 rounded-xl border border-rose-500/40 bg-rose-950/20 px-4 py-3 text-sm text-rose-200">
+          <p>
+            실패 {failBreakdown.failures} / {SPIRE_MAX_FAILURES}
+          </p>
+          <p className="font-bold text-amber-300">지원금 +{failBreakdown.support}원</p>
+          <p className="text-rose-200/70">
+            정산 보상 없이 지원금만 지급됩니다. 같은 스테이지를 다시 도전하세요.
+          </p>
+          <p className="border-t border-rose-500/30 pt-1 font-bold text-amber-300">
+            보유 금액 {runState.money}원
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPhase("shop")}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+        >
+          상점으로
         </button>
       </Centered>
     );
@@ -699,31 +788,12 @@ export default function SpireClient() {
     );
   }
 
-  if (phase === "shop" && runState && offers) {
+  if (phase === "shop" && runState && shopOffers) {
     return (
       <>
-        {clearBreakdown && (
-          <div className="mx-auto mt-3 w-full max-w-md px-4">
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-2 text-center text-xs text-emerald-200">
-              정산 — 이자 +{clearBreakdown.interest} · 남은 스핀 +{clearBreakdown.spinBonus} · 클리어 보수 +{clearBreakdown.payout}
-            </div>
-          </div>
-        )}
-        {failBreakdown && (
-          <div className="mx-auto mt-3 w-full max-w-md px-4">
-            <div className="space-y-1 rounded-xl border border-rose-500/40 bg-rose-950/20 px-4 py-2 text-center text-xs">
-              <p className="font-bold text-rose-300">
-                스테이지 실패 ({failBreakdown.failures}/{SPIRE_MAX_FAILURES}) · 지원금 +{failBreakdown.support}원 · 같은 스테이지 재도전
-              </p>
-              <p className="text-rose-200/70">
-                스테이지 {failBreakdown.stage} 재도전 — 정산 보상 없음(지원금만 지급)
-              </p>
-            </div>
-          </div>
-        )}
         <SpireShop
           runState={runState}
-          offers={offers}
+          offers={shopOffers}
           onBuySymbol={(target, replaced) =>
             applyReducer(buySymbolIncrement(runState, target, replaced), {
               type: "buy_symbol",
@@ -765,6 +835,13 @@ export default function SpireClient() {
           onBuyHandDouble={(hand) =>
             applyReducer(buyHandDouble(runState, hand), { type: "buy_hand_double", handType: hand })
           }
+          onBuySetBonus={(key, kind) =>
+            applyReducer(buySetBonus(runState, key, kind), {
+              type: "buy_setbonus",
+              bonusKey: key,
+              kind,
+            })
+          }
           onReroll={() => {
             // chime (차임벨): first 2 rerolls of this shop visit are free. rerollCount
             // resets to 0 on leaveShop, so it IS the per-visit index — derived the
@@ -786,6 +863,7 @@ export default function SpireClient() {
             setRerollCount(0);
             startStage();
           }}
+          rerollFree={runState.artifacts.includes("chime") && rerollCount < 2}
         />
         <div className="mx-auto -mt-2 mb-4 flex w-full max-w-md flex-col items-center gap-1 px-4">
           <button
@@ -796,7 +874,7 @@ export default function SpireClient() {
             나가기
           </button>
           <p className="text-[11px] text-zinc-600">
-            첨탑은 저장되지 않습니다 — 나가면 현재 런이 사라집니다.
+            진행 상황은 자동 저장됩니다 — 나가도 시즌 허브에서 이어할 수 있습니다.
           </p>
         </div>
       </>
@@ -808,10 +886,6 @@ export default function SpireClient() {
     const stage = runState.currentStage;
     const target = spireStageTarget(stage);
     const cumulative = spinLogs.reduce((a, l) => a + l.roundScore, 0);
-    const bag = Object.entries(runState.symbolBag)
-      .filter(([, c]) => c > 0)
-      .map(([id, c]) => `${emojiFor(id)}×${c}`)
-      .join("  ");
     return (
       <>
         <div className="mx-auto w-full max-w-2xl px-4 pt-4">
@@ -824,40 +898,10 @@ export default function SpireClient() {
             <span className="text-amber-200">돈 {runState.money}원</span>
             <span className="text-zinc-400">클리어 {stage - 1}</span>
           </div>
-          <p className="mt-1 text-center text-xs text-zinc-500">심볼 주머니: {bag}</p>
-          <details className="text-center">
-            <summary className="cursor-pointer text-[11px] text-zinc-600">
-              심볼 주머니란?
-            </summary>
-            <p className="mx-auto mt-0.5 max-w-md text-[11px] text-zinc-500">
-              각 칸은 매 스핀 이 주머니에서 뽑습니다. 숫자는 최대 등장 횟수가 아니라
-              등장 확률(가중치)입니다.
-            </p>
-          </details>
-          {runState.artifacts.length > 0 && (
-            <div className="mt-1 flex flex-wrap justify-center gap-1.5">
-              {runState.artifacts.map((id) => (
-                <span
-                  key={id}
-                  title={ARTIFACT_BY_ID[id]?.description}
-                  className="rounded-full border border-emerald-500/40 bg-emerald-950/20 px-2 py-0.5 text-[11px] text-emerald-200"
-                >
-                  {ARTIFACT_BY_ID[id]?.name ?? id}
-                  {activeArtifactNote(id) && (
-                    <span className="ml-1 text-emerald-300/70">{activeArtifactNote(id)}</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
-          <details className="mt-1 text-center">
-            <summary className="cursor-pointer text-xs text-zinc-500">
-              규칙 풀 {runState.rulePool.length}/{SPIRE_RULE_POOL_MAX}
-            </summary>
-            <p className="mt-1 text-xs text-amber-200/80">
-              {runState.rulePool.map(ruleNameOf).join(" · ")}
-            </p>
-          </details>
+          {/* 심볼 주머니 · 규칙 풀 · 아티팩트(설명 포함)는 아래 '보유 현황' 버튼에서 확인. */}
+          <p className="mt-1 text-center text-[11px] text-zinc-600">
+            주머니 · 규칙 · 아티팩트는 아래 “보유 현황”에서 확인하세요.
+          </p>
           <div className="mt-2 flex flex-col items-center gap-1">
             <button
               type="button"
@@ -867,7 +911,7 @@ export default function SpireClient() {
               나가기
             </button>
             <p className="text-[11px] text-zinc-600">
-              첨탑은 저장되지 않습니다 — 나가면 현재 런이 사라집니다.
+              진행 상황은 자동 저장됩니다 — 나가도 시즌 허브에서 이어할 수 있습니다.
             </p>
           </div>
         </div>

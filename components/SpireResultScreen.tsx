@@ -1,8 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SPIRE_STAGE_COUNT, SPIRE_ARTIFACTS } from "@/lib/spire/config";
 import SeasonScoreRise from "@/components/SeasonScoreRise";
+import {
+  fetchSpireLeaderboard,
+  type SpireLeaderboardItem,
+} from "@/lib/client/spireApi";
 import {
   SPIRE_STAGE_POINTS,
   SPIRE_MONEY_PER,
@@ -23,6 +28,8 @@ export type SpireResultProps = {
   /** null = still submitting; 'submitted' / 'rejected' / 'error'. */
   submitState: "submitting" | "submitted" | "rejected" | "error" | "version_mismatch";
   rejectReason?: string | null;
+  /** The player's nickname, to highlight their row in the ranking. */
+  playerNickname?: string;
   onRetry: () => void;
 };
 
@@ -41,6 +48,7 @@ export default function SpireResultScreen({
   scoreChange,
   submitState,
   rejectReason,
+  playerNickname,
   onRetry,
 }: SpireResultProps) {
   if (submitState === "version_mismatch") {
@@ -148,11 +156,16 @@ export default function SpireResultScreen({
         <SeasonScoreRise change={scoreChange} />
       )}
 
+      {/* Others' standings — fetched once this run is recorded so it's included. */}
+      {submitState === "submitted" && (
+        <SpireRankingPanel playerNickname={playerNickname} />
+      )}
+
       <Link
         href="/season"
         className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
       >
-        시즌으로
+        메인 화면으로
       </Link>
       <button
         type="button"
@@ -162,5 +175,64 @@ export default function SpireResultScreen({
         다시 도전
       </button>
     </main>
+  );
+}
+
+/** 시즌 첨탑 랭킹 — others' best runs (도달 스테이지 + 점수), the player's row highlighted. */
+function SpireRankingPanel({ playerNickname }: { playerNickname?: string }) {
+  const [items, setItems] = useState<SpireLeaderboardItem[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetchSpireLeaderboard()
+      .then((r) => alive && setItems(r.items))
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (failed) return null;
+
+  return (
+    <section className="w-full space-y-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+      <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+        시즌 첨탑 랭킹
+      </h2>
+      {items == null ? (
+        <p className="text-sm text-zinc-500">불러오는 중…</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-zinc-500">아직 기록이 없습니다.</p>
+      ) : (
+        <ul className="space-y-1">
+          {items.map((it) => {
+            const mine = !!playerNickname && it.nickname === playerNickname;
+            return (
+              <li
+                key={`${it.rank}-${it.nickname}`}
+                className={`flex items-center gap-2 rounded-lg px-2 py-1 text-sm ${
+                  mine ? "bg-emerald-500/10 ring-1 ring-emerald-400/40" : ""
+                }`}
+              >
+                <span className="w-6 shrink-0 font-mono font-bold text-amber-300">
+                  {it.rank}
+                </span>
+                <span
+                  className={`flex-1 truncate font-semibold ${
+                    mine ? "text-emerald-300" : "text-zinc-200"
+                  }`}
+                >
+                  {it.nickname}
+                </span>
+                <span className="shrink-0 font-mono text-zinc-400">
+                  {it.bestStageReached}스테이지 · {it.bestTotalScore}점
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

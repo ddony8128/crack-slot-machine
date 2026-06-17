@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { EngineEvent, SymbolType } from '@/types';
-import { setBonuses, scoreResult, scoreItems } from '@/lib/score';
+import {
+  setBonuses,
+  scoreResult,
+  scoreItems,
+  upgradedBonusPoints,
+  type SetBonusUpgradeMap,
+} from '@/lib/score';
 
 // New Season-1 set symbols are in the SymbolType union, so no casts are needed.
 const sum = (items: { points: number }[]) => items.reduce((a, it) => a + it.points, 0);
@@ -139,5 +145,35 @@ describe('generalized integration with scoreResult / scoreItems', () => {
     const s = scoreResult(r, []);
     expect(s.hand).toBe('Triple');
     expect(s.handScore).toBe(30);
+  });
+});
+
+describe('owned-set 족보 강화 (setBonusUpgrades)', () => {
+  it('upgradedBonusPoints: positive +50/×2; penalty mitigates toward 0', () => {
+    expect(upgradedBonusPoints(50, { flatBonusCount: 1, doubleCount: 0, mitigateCount: 0 })).toBe(100);
+    expect(upgradedBonusPoints(50, { flatBonusCount: 0, doubleCount: 1, mitigateCount: 0 })).toBe(100);
+    expect(upgradedBonusPoints(50, { flatBonusCount: 1, doubleCount: 1, mitigateCount: 0 })).toBe(200);
+    // penalty −60: one 완화 (+50) → −10; mitigate never overshoots past 0.
+    expect(upgradedBonusPoints(-60, { flatBonusCount: 0, doubleCount: 0, mitigateCount: 1 })).toBe(-10);
+    expect(upgradedBonusPoints(-60, undefined)).toBe(-60);
+  });
+
+  it('setBonuses applies a flat upgrade to 과일 3종 (+50 → +100)', () => {
+    const r: SymbolType[] = ['cherry', 'lemon', 'grape', 'zero', 'four'];
+    const ups: SetBonusUpgradeMap = {
+      'fruit:all-types': { flatBonusCount: 1, doubleCount: 0, mitigateCount: 0 },
+    };
+    const { items } = setBonuses(r, undefined, ups);
+    expect(items).toContainEqual({ label: '과일 3종', points: 100 });
+  });
+
+  it('setBonuses mitigates the 이웃 고양이 penalty (−60 → −10 per adjacent cat)', () => {
+    const r: SymbolType[] = ['cheese_cat', 'tuxedo_cat', 'zero', 'four', 'seven'];
+    const ups: SetBonusUpgradeMap = {
+      'cat:adjacent-penalty': { flatBonusCount: 0, doubleCount: 0, mitigateCount: 1 },
+    };
+    const { items } = setBonuses(r, undefined, ups);
+    // 2 adjacent cats × −10 = −20 (was −120).
+    expect(items).toContainEqual({ label: '이웃 고양이', points: -20 });
   });
 });

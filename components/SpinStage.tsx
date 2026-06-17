@@ -32,6 +32,14 @@ type SpinStageProps = {
   promptText: string;
   /** Rule name driving the current selection. */
   pickRuleName?: string;
+  /** Variable-count select (park 유료 주차): show a confirm button instead of auto-resolving. */
+  confirmable?: boolean;
+  /** Disable the confirm button (e.g. nothing picked yet). */
+  confirmDisabled?: boolean;
+  /** Confirm button label. */
+  confirmLabel?: string;
+  /** Commit the current selection (variable-count select only). */
+  onConfirm?: () => void;
 };
 
 /**
@@ -56,6 +64,10 @@ export default function SpinStage({
   onPick,
   promptText,
   pickRuleName,
+  confirmable,
+  confirmDisabled,
+  confirmLabel,
+  onConfirm,
 }: SpinStageProps) {
   const reduced = useReducedMotion();
 
@@ -115,6 +127,20 @@ export default function SpinStage({
             stage
             hideSpinButton
           />
+
+          {/* Variable-count select (유료 주차): confirm the chosen cells (1..max). */}
+          {picking && confirmable && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={confirmDisabled}
+                className="rounded-xl bg-amber-400 px-8 py-3 text-lg font-black uppercase tracking-wide text-zinc-950 shadow-lg shadow-amber-500/40 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+              >
+                {confirmLabel ?? "확인"}
+              </button>
+            </div>
+          )}
       </div>
     </div>
   );

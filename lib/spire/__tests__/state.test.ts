@@ -7,6 +7,8 @@ import {
   buyRule,
   buyHandFlat,
   buyHandDouble,
+  buySetBonus,
+  listUpgradeableSetBonuses,
   rerollShop,
   settleClear,
   settleFail,
@@ -279,7 +281,7 @@ describe('buyRule', () => {
 });
 
 describe('hand upgrades', () => {
-  it('buyHandFlat increments flatBonusCount and deducts money', () => {
+  it('buyHandFlat sets flatBonusCount to 1 and deducts money; only once per hand', () => {
     const s = { ...initialSpireState(SEED), money: 5 };
     const before = snapshot(s);
     const r = buyHandFlat(s, 'Pair');
@@ -288,18 +290,20 @@ describe('hand upgrades', () => {
     expect(r.state.handUpgrades.Pair).toEqual({ flatBonusCount: 1, doubleCount: 0 });
     expect(r.state.money).toBe(4);
     expect(snapshot(s)).toBe(before);
-    // second purchase stacks
+    // +50 is buyable ONCE per hand (기획) — a second purchase is rejected.
     const r2 = buyHandFlat(r.state, 'Pair');
-    expect(r2.ok && r2.state.handUpgrades.Pair.flatBonusCount).toBe(2);
+    expect(r2.ok).toBe(false);
   });
 
-  it('buyHandDouble increments doubleCount and deducts money', () => {
+  it('buyHandDouble sets doubleCount to 1 and deducts money; only once per hand', () => {
     const s = { ...initialSpireState(SEED), money: 5 };
     const r = buyHandDouble(s, 'Triple');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.state.handUpgrades.Triple).toEqual({ flatBonusCount: 0, doubleCount: 1 });
     expect(r.state.money).toBe(2); // SPIRE_HAND_DOUBLE_PRICE = 3
+    // ×2 is buyable ONCE per hand (기획) — a second purchase is rejected.
+    expect(buyHandDouble(r.state, 'Triple').ok).toBe(false);
   });
 
   it('rejects unknown hand and insufficient money', () => {
@@ -402,5 +406,58 @@ describe('replay determinism', () => {
       return b.state;
     };
     expect(snapshot(run())).toBe(snapshot(run()));
+  });
+});
+
+describe('buySetBonus — owned-set 족보 강화', () => {
+  // Own fruit (positive bonuses) + cat (has an adjacent penalty) for these tests.
+  function withSets(money: number): SpireRunState {
+    let s = initialSpireState(SEED);
+    const f = applyInitialSetChoice(s, 'fruit');
+    if (!f.ok) throw new Error(f.error);
+    s = f.state;
+    const c = applyInitialSetChoice(s, 'cat');
+    if (!c.ok) throw new Error(c.error);
+    return { ...c.state, money };
+  }
+
+  it('lists only owned non-number sets bonuses; number set contributes none', () => {
+    const keys = listUpgradeableSetBonuses(withSets(0).ownedSetIds).map((e) => e.key);
+    expect(keys).toContain('fruit:all-types');
+    expect(keys).toContain('fruit:all-symbols');
+    expect(keys).toContain('cat:adjacent-penalty');
+    expect(keys.some((k) => k.startsWith('number:'))).toBe(false);
+  });
+
+  it('flat (+50) on a positive bonus is buyable ONCE; double allowed, mitigate rejected', () => {
+    const s = withSets(20);
+    const r = buySetBonus(s, 'fruit:all-types', 'flat');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.setBonusUpgrades['fruit:all-types']).toEqual({
+      flatBonusCount: 1,
+      doubleCount: 0,
+      mitigateCount: 0,
+    });
+    // second flat rejected; double still allowed; mitigate invalid for a positive bonus.
+    expect(buySetBonus(r.state, 'fruit:all-types', 'flat').ok).toBe(false);
+    expect(buySetBonus(r.state, 'fruit:all-types', 'double').ok).toBe(true);
+    expect(buySetBonus(s, 'fruit:all-types', 'mitigate').ok).toBe(false);
+  });
+
+  it('penalty bonus (이웃 고양이) allows ONLY 완화, once; flat/double rejected', () => {
+    const s = withSets(20);
+    expect(buySetBonus(s, 'cat:adjacent-penalty', 'flat').ok).toBe(false);
+    expect(buySetBonus(s, 'cat:adjacent-penalty', 'double').ok).toBe(false);
+    const r = buySetBonus(s, 'cat:adjacent-penalty', 'mitigate');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.setBonusUpgrades['cat:adjacent-penalty'].mitigateCount).toBe(1);
+    expect(buySetBonus(r.state, 'cat:adjacent-penalty', 'mitigate').ok).toBe(false);
+  });
+
+  it('rejects a bonus key for an unowned set, and when broke', () => {
+    expect(buySetBonus(withSets(20), 'gem:all-types', 'flat').ok).toBe(false); // gem not owned
+    expect(buySetBonus(withSets(0), 'fruit:all-types', 'flat').ok).toBe(false); // no money
   });
 });

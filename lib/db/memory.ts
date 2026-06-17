@@ -18,6 +18,7 @@ import type {
   ScoreEventRow,
   RunMode,
   RunStatus,
+  PersistedActions,
 } from '@/lib/db/types';
 import { TOTAL_SLUG, normalizePhone } from '@/lib/db/types';
 import {
@@ -206,6 +207,34 @@ export class MemoryDb implements Db {
     row.clearedStageCount = input.clearedStageCount ?? null;
     row.seasonPoints = input.seasonPoints ?? null;
     return row;
+  }
+
+  async saveRunActions(
+    runId: string,
+    actions: PersistedActions,
+  ): Promise<RunRow | null> {
+    const row = this.runs.find((r) => r.id === runId);
+    if (!row || row.status !== 'pending') return null;
+    row.actions = actions;
+    return row;
+  }
+
+  async getInProgressRun(
+    playerId: string,
+    seasonId: string,
+    mode: RunMode,
+  ): Promise<RunRow | null> {
+    const matches = this.runs
+      .filter(
+        (r) =>
+          r.playerId === playerId &&
+          r.seasonId === seasonId &&
+          r.mode === mode &&
+          r.status === 'pending' &&
+          r.actions != null,
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return matches[0] ?? null;
   }
 
   async invalidateRun(runId: string, reason: string): Promise<void> {

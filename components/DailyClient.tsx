@@ -66,7 +66,14 @@ export default function DailyClient() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [adOpen, setAdOpen] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
   const [refilling, setRefilling] = useState(false);
+  // attemptsLeft reported by the most recent ad refill (authoritative, unlike the
+  // mount-time `current`). Drives the result screen's 다시 도전 after a refill; cleared
+  // when a new run starts so the next result uses that run's own submit value.
+  const [refilledAttempts, setRefilledAttempts] = useState<number | undefined>(
+    undefined,
+  );
   const [refillError, setRefillError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -90,10 +97,23 @@ export default function DailyClient() {
       );
   }, [reset]);
 
+  // Re-fetch the day's attempts/refill state. Called after a run is submitted so
+  // attemptsLeft/canRefill/adRefillUsed are fresh (the mount fetch goes stale once
+  // the player spends attempts) — this drives both the result-screen refill/retry
+  // buttons and the 후원 prompt's fullyExhausted gate.
+  const refreshCurrent = () => {
+    fetchDailyCurrent()
+      .then(setCurrent)
+      .catch(() => {
+        /* keep the stale value; the next action can retry */
+      });
+  };
+
   async function handleStart() {
     if (starting) return;
     setStarting(true);
     setStartError(null);
+    setRefilledAttempts(undefined); // this run reports its own attemptsLeft on submit
     try {
       // The store gates startGame() on a non-empty nickname; the daily score is
       // recorded under the server-side player nickname regardless, but we set it
@@ -125,8 +145,11 @@ export default function DailyClient() {
     setRefilling(true);
     setRefillError(null);
     try {
-      await refillDaily();
-      // Re-fetch so attemptsLeft/allowed/adRefillUsed (and canRefill) update.
+      const resp = await refillDaily();
+      // The refill response's attemptsLeft is authoritative — feed it to the
+      // result screen so 다시 도전 appears immediately after refilling.
+      setRefilledAttempts(resp.attemptsLeft);
+      // Re-fetch so canRefill/adRefillUsed (and the 후원 gate) also update.
       const next = await fetchDailyCurrent();
       setCurrent(next);
       setAdOpen(false);
@@ -153,14 +176,49 @@ export default function DailyClient() {
     storageKey: "daily-exhausted",
   });
 
+  // Whether the one-time ad refill is still available for the result-screen CTA.
+  // `current` is re-fetched on submit (onSubmitted) so this reflects the finished run.
+  const refillAvailable =
+    !!current && current.loggedIn && current.canRefill === true;
+
   // §1: the result screen is the natural "session over" moment, but DailyClient
-  // owns the donation hook/modal — render the modal alongside the result screen
-  // too (it opens only when fullyExhausted, i.e. no attempts left and no refill).
+  // owns the attempts/refill state + donation + ad modals. After the run submits,
+  // refreshCurrent() makes fullyExhausted (→ 후원) and the refill/retry buttons accurate.
   if (status === "finished")
     return (
       <>
-        <DailyResultScreen />
-        <DonationModal open={donation.open} onClose={donation.close} />
+        <DailyResultScreen
+          onSubmitted={refreshCurrent}
+          attemptsLeftOverride={refilledAttempts}
+          refillAvailable={refillAvailable}
+          refillPending={refilling}
+          onRefill={() => {
+            setRefillError(null);
+            setAdOpen(true);
+          }}
+          onPlayAgain={reset}
+        />
+        <DummyAdModal
+          open={adOpen}
+          onConfirm={handleRefillConfirm}
+          onClose={() => {
+            if (refilling) return;
+            setAdOpen(false);
+          }}
+          pending={refilling}
+          onDonate={() => {
+            if (refilling) return;
+            setAdOpen(false);
+            setDonateOpen(true);
+          }}
+        />
+        <DonationModal
+          open={donation.open || donateOpen}
+          onClose={() => {
+            donation.close();
+            setDonateOpen(false);
+          }}
+        />
       </>
     );
 
@@ -168,7 +226,13 @@ export default function DailyClient() {
     return (
       <>
         <GameScreen />
-        <DonationModal open={donation.open} onClose={donation.close} />
+        <DonationModal
+          open={donation.open || donateOpen}
+          onClose={() => {
+            donation.close();
+            setDonateOpen(false);
+          }}
+        />
       </>
     );
 
@@ -187,7 +251,7 @@ export default function DailyClient() {
         title="일일 도전"
         lines={[
           "오늘 정해진 심볼 세트와 규칙으로 점수를 겨룹니다.",
-          "공식 도전은 하루 5회이며, 광고를 보면 5회 추가 도전할 수 있습니다.",
+          "도전 횟수는 하루 5회이며, 광고를 보면 5회 추가 도전할 수 있습니다.",
           "오늘의 최고 점수만 랭킹에 반영됩니다.",
         ]}
       />
@@ -238,7 +302,7 @@ export default function DailyClient() {
                   남은 도전
                 </p>
                 <p className="font-mono text-lg font-bold text-amber-300">
-                  공식 도전: {current.attemptsLeft} /{" "}
+                  도전 횟수: {current.attemptsLeft} /{" "}
                   {current.allowed ??
                     (current.adRefillUsed
                       ? DAILY_MAX_ATTEMPTS
@@ -269,7 +333,7 @@ export default function DailyClient() {
                   </>
                 ) : refillAvailableButHeld ? (
                   <p className="text-sm text-zinc-500">
-                    공식 도전을 모두 사용하면 광고로 5회 추가 충전할 수 있습니다.
+                    도전 횟수를 모두 사용하면 광고로 5회 추가 충전할 수 있습니다.
                   </p>
                 ) : current.adRefillUsed ? (
                   <p className="text-sm text-zinc-400">
@@ -310,7 +374,7 @@ export default function DailyClient() {
         href="/season"
         className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
       >
-        시즌 허브로
+        메인 화면으로
       </Link>
 
       <DummyAdModal
@@ -321,9 +385,20 @@ export default function DailyClient() {
           setAdOpen(false);
         }}
         pending={refilling}
+        onDonate={() => {
+          if (refilling) return;
+          setAdOpen(false);
+          setDonateOpen(true);
+        }}
       />
 
-      <DonationModal open={donation.open} onClose={donation.close} />
+      <DonationModal
+        open={donation.open || donateOpen}
+        onClose={() => {
+          donation.close();
+          setDonateOpen(false);
+        }}
+      />
     </main>
   );
 }

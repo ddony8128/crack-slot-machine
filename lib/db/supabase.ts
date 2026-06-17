@@ -21,6 +21,7 @@ import type {
   SpireRecordRow,
   ScoreEventRow,
   RunMode,
+  PersistedActions,
 } from '@/lib/db/types';
 import { TOTAL_SLUG, normalizePhone } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
@@ -359,6 +360,42 @@ export class SupabaseDb implements Db {
       })
       .eq('id', runId)
       .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toRun(data) : null;
+  }
+
+  async saveRunActions(
+    runId: string,
+    actions: PersistedActions,
+  ): Promise<RunRow | null> {
+    // Only autosave onto a still-pending run — never overwrite a resolved one.
+    const { data, error } = await this.sb
+      .from('game_runs')
+      .update({ actions })
+      .eq('id', runId)
+      .eq('status', 'pending')
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toRun(data) : null;
+  }
+
+  async getInProgressRun(
+    playerId: string,
+    seasonId: string,
+    mode: RunMode,
+  ): Promise<RunRow | null> {
+    const { data, error } = await this.sb
+      .from('game_runs')
+      .select('*')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId)
+      .eq('mode', mode)
+      .eq('status', 'pending')
+      .not('actions', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (error) throw error;
     return data ? toRun(data) : null;

@@ -92,15 +92,25 @@ export type SpinLog = {
   haunted: boolean[];
 };
 
-export type SelectKind = 'copy' | 'swap' | 'reroll' | 'family' | 'park' | 'catswap';
+export type SelectKind =
+  | 'copy'
+  | 'swap'
+  | 'reroll'
+  | 'family'
+  | 'park'
+  | 'catswap'
+  | 'logiswap'; // 물류 사업: a swap repeated once per plane on the board
 
 // A `select` rule that paused the cascade for player input.
 export type PendingSelection = {
   kind: SelectKind;
   ruleName: string;
-  // Cells the player must pick: copy/reroll/family=1, swap=2, park=min(2, #vehicles).
+  // Cells the player must pick: copy/reroll/family=1, swap/logiswap=2, park=min(2, #vehicles).
   count: number;
   selectable: boolean[];   // which cells the player may pick (length 5)
+  // logiswap (물류 사업): swaps still to perform INCLUDING this one. >1 means the
+  // select re-pauses after this swap resolves. Undefined for single-shot selects.
+  remaining?: number;
 };
 
 export type GameStatus =
@@ -160,4 +170,14 @@ export type GameState = {
   // a later rule that spin (held = first-roll only). REPLACED each spin: a spin
   // with no parking rule yields frame.nextHold [] → this clears.
   nextHoldCells: number[];
+  // Puzzle runs ONLY: true once every puzzle goal is met across the resolved
+  // spins. The cleared spin still ends in 'spin-result' (so its reveal plays and
+  // the board settles); the puzzle UI then shows 클리어 + a 결과 보기 action that
+  // advances to 'finished'. Always false in quick/daily/spire.
+  puzzleCleared: boolean;
+  // 첨탑 stage runs ONLY (RunConfig.stageTarget set): true once the cumulative
+  // stage score meets the target. Like puzzleCleared, the clearing spin still
+  // ends in 'spin-result' (reveal plays); the result button then advances to
+  // 'finished' so SpireClient can show the settlement. Always false otherwise.
+  stageCleared: boolean;
 };

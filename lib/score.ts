@@ -1,8 +1,7 @@
 import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
 import { NUMBERS } from '@/data/symbols';
-import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { SYMBOL_SETS, SYMBOL_SETS_BY_ID, type SetBonus } from '@/lib/symbols/sets';
 import { symbolInSet } from '@/lib/symbols/tags';
-import { PAIR_RULES } from '@/lib/pairRules';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
   SEVEN_SCORE,
@@ -16,6 +15,7 @@ import {
   FOUR_FORTUNE_PER,
   PARKING_FEE_PER,
   DRACULA_FAMILY_PER,
+  CAT_MOVE_PER,
   VITAMIN_PER,
   HAND_FLAT_UPGRADE,
   BONUS_77,
@@ -34,6 +34,36 @@ export function upgradedHandScore(hand: string, base: number, ups?: HandUpgradeM
   const u = ups[hand];
   if (!u) return base;
   return (base + HAND_FLAT_UPGRADE * (u.flatBonusCount ?? 0)) * 2 ** (u.doubleCount ?? 0);
+}
+
+/**
+ * 첨탑 per-set-bonus upgrades (shop "족보 강화" — owned sets' bonuses). Keyed by
+ * `setBonusKey`. POSITIVE bonuses upgrade like a hand (+50 flat / ×2 double, each
+ * once). PENALTY bonuses (negative points, e.g. 이웃 고양이) only MITIGATE: +50
+ * toward 0 (once, capped at 0) — no double.
+ */
+export type SetBonusUpgrade = {
+  flatBonusCount: number;
+  doubleCount: number;
+  mitigateCount: number;
+};
+export type SetBonusUpgradeMap = Record<string, SetBonusUpgrade>;
+
+/** Stable upgrade key for a set's bonus (per-event split by its event). */
+export function setBonusKey(setId: string, bonus: SetBonus): string {
+  return bonus.type === 'per-event'
+    ? `${setId}:per-event:${bonus.event}`
+    : `${setId}:${bonus.type}`;
+}
+
+/** Per-unit bonus points after the owned-set 족보 강화 (positive: +50/×2; penalty: +50 완화). */
+export function upgradedBonusPoints(base: number, up?: SetBonusUpgrade): number {
+  if (!up) return base;
+  if (base < 0) {
+    // 페널티 완화: move toward 0 by HAND_FLAT_UPGRADE per mitigate, capped at 0.
+    return Math.min(0, base + HAND_FLAT_UPGRADE * (up.mitigateCount ?? 0));
+  }
+  return (base + HAND_FLAT_UPGRADE * (up.flatBonusCount ?? 0)) * 2 ** (up.doubleCount ?? 0);
 }
 
 /** +VITAMIN_PER per fruit rerolled by 비타민 보충 (counted from the event log, so
@@ -80,6 +110,13 @@ function parkingHolds(events?: EngineEvent[]): number {
 /** Draculas on the (final) board — drives the 가족 만들기 family bonus. */
 function countDraculas(result: SymbolType[]): number {
   return result.filter((s) => s === 'dracula').length;
+}
+
+/** Cats on the (final) board (incl. hybrids) — drives the 우다다다 / 점프의 달인 bonus. */
+function countCats(result: SymbolType[]): number {
+  const cat = SYMBOL_SETS_BY_ID['cat'];
+  if (!cat) return 0;
+  return result.filter((s) => symbolInSet(s, cat)).length;
 }
 
 /** Does the (final) board contain ≥1 gem-set symbol? Drives 미의 추구. */
@@ -183,6 +220,7 @@ export function sevenScore(
 export function setBonuses(
   result: SymbolType[],
   events?: EngineEvent[],
+  upgrades?: SetBonusUpgradeMap,
 ): { sum: number; items: ScoreItem[] } {
   const items: ScoreItem[] = [];
 
@@ -199,20 +237,22 @@ export function setBonuses(
     const onBoard = result.filter(isMember).length;
 
     for (const bonus of set.bonuses) {
+      // Per-unit points after the owned-set 족보 강화 (no-op when not upgraded).
+      const pts = upgradedBonusPoints(bonus.points, upgrades?.[setBonusKey(set.id, bonus)]);
       switch (bonus.type) {
         case 'all-types': {
           const present = set.symbols.every((s) => result.includes(s.id as SymbolType));
-          if (present) items.push({ label: `${set.name} 3종`, points: bonus.points });
+          if (present) items.push({ label: `${set.name} 3종`, points: pts });
           break;
         }
         case 'all-symbols': {
           if (result.length === 5 && result.every(isMember))
-            items.push({ label: `올 ${set.name}`, points: bonus.points });
+            items.push({ label: `올 ${set.name}`, points: pts });
           break;
         }
         case 'per-symbol': {
           if (onBoard > 0)
-            items.push({ label: `${set.name} ${onBoard}개`, points: bonus.points * onBoard });
+            items.push({ label: `${set.name} ${onBoard}개`, points: pts * onBoard });
           break;
         }
         case 'adjacent-penalty': {
@@ -227,8 +267,8 @@ export function setBonuses(
             const right = i + 1 < result.length && isMember(result[i + 1]);
             if (left || right) adj += 1;
           }
-          if (adj > 0)
-            items.push({ label: `이웃 ${set.name}`, points: bonus.points * adj });
+          if (adj > 0 && pts !== 0)
+            items.push({ label: `이웃 ${set.name}`, points: pts * adj });
           break;
         }
         case 'per-event': {
@@ -241,7 +281,7 @@ export function setBonuses(
           if (count > 0)
             items.push({
               label: `${set.name} ${PER_EVENT_LABEL[bonus.event]}`,
-              points: bonus.points * count,
+              points: pts * count,
             });
           break;
         }
@@ -286,34 +326,6 @@ function cleanSweepCount(
     ).length;
   }
   return countFours(result) === 0 ? countRule(expanded, 'clean-bonus') : 0;
-}
-
-/** Does the board contain ≥1 member of the given symbol set? */
-function boardHasSet(result: SymbolType[], setId: string): boolean {
-  const set = SYMBOL_SETS_BY_ID[setId];
-  if (!set) return false;
-  const members = new Set<SymbolType>(set.symbols.map((s) => s.id as SymbolType));
-  return result.some((s) => members.has(s));
-}
-
-/**
- * Generic A–B pair bonus. For each PairRule active in `expanded` (n = count,
- * so copy-above stacks), pay points*n iff the board has ≥1 member of BOTH sets.
- * Returns the running sum + labeled line items so scoreResult/scoreItems agree.
- */
-function pairBonus(
-  expanded: (Rule | null)[],
-  result: SymbolType[],
-): { sum: number; items: ScoreItem[] } {
-  const items: ScoreItem[] = [];
-  for (const pair of PAIR_RULES) {
-    const n = countRule(expanded, pair.id);
-    if (n <= 0) continue;
-    if (!boardHasSet(result, pair.setA) || !boardHasSet(result, pair.setB)) continue;
-    items.push({ label: n > 1 ? `${pair.name} ×${n}` : pair.name, points: pair.points * n });
-  }
-  const sum = items.reduce((a, it) => a + it.points, 0);
-  return { sum, items };
 }
 
 // Per-event types carrying a single acted-on symbol (moved/rerolled/copied).
@@ -439,6 +451,7 @@ export function scoreItems(
   haunted?: boolean[],
   handUpgrades?: HandUpgradeMap,
   artifacts: string[] = [],
+  setBonusUpgrades?: SetBonusUpgradeMap,
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -463,7 +476,7 @@ export function scoreItems(
     });
   }
 
-  items.push(...setBonuses(result, events).items);
+  items.push(...setBonuses(result, events, setBonusUpgrades).items);
 
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
@@ -481,8 +494,6 @@ export function scoreItems(
 
   const exorcised = exorcistCells(events);
   if (exorcised > 0) items.push({ label: `흡혈귀 퇴마사 (${exorcised})`, points: EXORCIST_PER * exorcised });
-
-  items.push(...pairBonus(expanded, result).items);
 
   const clean = cleanSweepCount(expanded, result, scoreBoards);
   if (clean > 0)
@@ -504,6 +515,16 @@ export function scoreItems(
   const draculas = countDraculas(result);
   if (family > 0 && draculas > 0) {
     items.push({ label: `가족 만들기 (드라큘라 ${draculas})`, points: DRACULA_FAMILY_PER * draculas * family });
+  }
+
+  // 우다다다 (cat-zoomies) / 점프의 달인 (cat-jump): each +CAT_MOVE_PER per cat on the
+  // final board, ×rule occurrences. Both can be slotted; each scores independently.
+  const cats = countCats(result);
+  if (cats > 0) {
+    const zoom = countRule(expanded, 'cat-zoomies');
+    if (zoom > 0) items.push({ label: `우다다다 (고양이 ${cats})`, points: CAT_MOVE_PER * cats * zoom });
+    const jump = countRule(expanded, 'cat-jump');
+    if (jump > 0) items.push({ label: `점프의 달인 (고양이 ${cats})`, points: CAT_MOVE_PER * cats * jump });
   }
 
   // 유료 주차 (vehicle-parking): lose PARKING_FEE_PER per HELD vehicle cell. Now
@@ -538,6 +559,7 @@ export function scoreResult(
   haunted?: boolean[],
   handUpgrades?: HandUpgradeMap,
   artifacts: string[] = [],
+  setBonusUpgrades?: SetBonusUpgradeMap,
 ): {
   hand: string;
   handScore: number;
@@ -559,7 +581,7 @@ export function scoreResult(
   const sevenDoubleCount = countRule(expanded, 'seven-double');
   for (let k = 0; k < sevenDoubleCount; k++) sevenPts *= 2;
 
-  let bonusScore = setBonuses(result, events).sum;
+  let bonusScore = setBonuses(result, events, setBonusUpgrades).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
   // 미의 추구 (gem-beauty): +GEM_BEAUTY per rule occurrence, ONLY if the board has
   // ≥1 gem. No gem -> no points even if slotted.
@@ -567,12 +589,18 @@ export function scoreResult(
   bonusScore += VITAMIN_PER * vitaminFruits(events);
   bonusScore += SHAKEDOWN_PER * shakedownGems(events);
   bonusScore += EXORCIST_PER * exorcistCells(events);
-  bonusScore += pairBonus(expanded, result).sum;
   bonusScore += CLEAN_BONUS * cleanSweepCount(expanded, result, scoreBoards);
 
   // 가족 만들기 (monster-family): +DRACULA_FAMILY_PER per dracula on the final
   // board, ×rule occurrences (copy-above stacks).
   bonusScore += DRACULA_FAMILY_PER * countDraculas(result) * countRule(expanded, 'monster-family');
+
+  // 우다다다 (cat-zoomies) / 점프의 달인 (cat-jump): +CAT_MOVE_PER per cat on the final
+  // board, ×rule occurrences (copy-above stacks). Both rules score independently.
+  bonusScore +=
+    CAT_MOVE_PER *
+    countCats(result) *
+    (countRule(expanded, 'cat-zoomies') + countRule(expanded, 'cat-jump'));
 
   // FOUR FORTUNE: while active, each 4 scores +FOUR_FORTUNE_PER (×count via
   // copy-above) instead of incurring the normal penalty.

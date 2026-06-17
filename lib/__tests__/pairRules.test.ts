@@ -9,71 +9,43 @@ import { buildRulePool } from '@/lib/modes/config';
 import { scoreResult } from '@/lib/score';
 import { RULES_BY_ID } from '@/data/rules';
 
-describe('pairRulesForSets', () => {
-  it('includes pair-fruit-gem when both fruit and gem are present', () => {
-    expect(pairRulesForSets(['number', 'fruit', 'gem'])).toContain('pair-fruit-gem');
+// The non-spec 페어 보너스 system (과수원 보석상 / 고양이 택시) was removed. PAIR_RULES is
+// now empty; the generic plumbing is kept so a future spec-correct pair rule can
+// be re-introduced as pure data. These tests pin that removed state.
+describe('PAIR_RULES removed', () => {
+  it('PAIR_RULES is empty', () => {
+    expect(PAIR_RULES).toEqual([]);
+    expect(Object.keys(PAIR_RULES_BY_ID)).toEqual([]);
   });
 
-  it('includes pair-cat-vehicle when both cat and vehicle are present', () => {
-    expect(pairRulesForSets(['number', 'cat', 'vehicle'])).toContain('pair-cat-vehicle');
+  it('pairRulesForSets yields nothing for any set combination', () => {
+    expect(pairRulesForSets(['number', 'fruit', 'gem'])).toEqual([]);
+    expect(pairRulesForSets(['number', 'cat', 'vehicle'])).toEqual([]);
   });
 
-  it('includes neither when only one set of a pair is present', () => {
-    const ids = pairRulesForSets(['number', 'fruit', 'cat']);
-    expect(ids).not.toContain('pair-fruit-gem');
-    expect(ids).not.toContain('pair-cat-vehicle');
+  it('the removed pair rule ids are no longer registered', () => {
+    expect(RULES_BY_ID['pair-fruit-gem']).toBeUndefined();
+    expect(RULES_BY_ID['pair-cat-vehicle']).toBeUndefined();
   });
 
-  it('dedupes and ignores duplicate set ids', () => {
-    expect(pairRulesForSets(['fruit', 'fruit'])).toEqual([]);
-  });
-});
-
-describe('buildRulePool', () => {
-  it('includes pair-fruit-gem when both sets are selected', () => {
-    expect(buildRulePool(['number', 'fruit', 'gem'], 'daily_basic_1')).toContain('pair-fruit-gem');
-  });
-
-  it('omits pair-fruit-gem when only fruit is selected', () => {
-    expect(buildRulePool(['number', 'fruit'], 'daily_basic_1')).not.toContain('pair-fruit-gem');
+  it('no rule in RULES carries the pair build', () => {
+    expect(Object.values(RULES_BY_ID).some((r) => r.build === 'pair')).toBe(false);
   });
 });
 
-describe('pair-bonus scoring', () => {
-  it('pays +100 when both a fruit AND a gem are on the board', () => {
-    // cherry (fruit) + diamond (gem) present
+describe('buildRulePool no longer adds pair rules', () => {
+  it('does not include the removed pair-fruit-gem when fruit+gem are selected', () => {
+    const pool = buildRulePool(['number', 'fruit', 'gem'], 'daily_basic_1');
+    expect(pool).not.toContain('pair-fruit-gem');
+  });
+});
+
+describe('scoring carries no pair bonus', () => {
+  it('a fruit + a gem on the board score no extra pair bonus', () => {
+    // cherry (fruit) + diamond (gem) present — used to grant +100, now nothing.
     const r: SymbolType[] = ['cherry', 'diamond', 'zero', 'zero', 'four'];
-    const base = scoreResult(r, []);
-    const withPair = scoreResult(r, [RULES_BY_ID['pair-fruit-gem']]);
-    expect(withPair.bonusScore).toBe(base.bonusScore + 100);
-  });
-
-  it('pays +0 when only a fruit (no gem) is on the board', () => {
-    const r: SymbolType[] = ['cherry', 'lemon', 'zero', 'zero', 'four'];
-    const base = scoreResult(r, []);
-    const withPair = scoreResult(r, [RULES_BY_ID['pair-fruit-gem']]);
-    expect(withPair.bonusScore).toBe(base.bonusScore);
-  });
-
-  it('copy-above stacks the pair bonus (×2 => +200)', () => {
-    const r: SymbolType[] = ['cherry', 'diamond', 'zero', 'zero', 'four'];
-    const base = scoreResult(r, []);
-    const dup = scoreResult(r, [RULES_BY_ID['pair-fruit-gem'], RULES_BY_ID['copy-above']]);
-    expect(dup.bonusScore).toBe(base.bonusScore + 200);
-  });
-});
-
-describe('sync with RULES_BY_ID', () => {
-  it('every PAIR_RULE id exists in RULES_BY_ID', () => {
-    for (const p of PAIR_RULES) {
-      expect(RULES_BY_ID[p.id]).toBeDefined();
-      expect(RULES_BY_ID[p.id].name).toBe(p.name);
-    }
-  });
-
-  it('PAIR_RULES_BY_ID covers every pair rule', () => {
-    for (const p of PAIR_RULES) {
-      expect(PAIR_RULES_BY_ID[p.id]).toBe(p);
-    }
+    // bonusScore here reflects only the surviving set bonuses (none for a single
+    // fruit + single gem), so it must be 0.
+    expect(scoreResult(r, []).bonusScore).toBe(0);
   });
 });

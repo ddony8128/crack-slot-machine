@@ -77,7 +77,7 @@ async function renderRecords(
             </p>
             <p className="mt-1 font-mono text-4xl font-black text-emerald-300">
               {mine?.seasonPoints ?? 0}
-              <span className="ml-1 text-lg text-zinc-500">/ 3000</span>
+              <span className="ml-1 text-lg text-zinc-500">점</span>
             </p>
           </div>
           <dl className="flex gap-5 text-sm">

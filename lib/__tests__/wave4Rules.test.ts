@@ -62,6 +62,25 @@ describe('night-parade (백귀야행) — monster ×(prev monsters + 3)', () => 
     const board = rollBoard([], w, prev, fixed(0.5), 5);
     expect(board).toEqual(['lemon', 'lemon', 'lemon', 'lemon', 'lemon']);
   });
+
+  it('COPY ABOVE stacks 백귀야행 (5 prev monsters: ×8 → ×64)', () => {
+    // dracula:1, lemon:20. 5 previous monsters → mult 8. Iteration order is
+    // lemon-then-dracula, so dracula lands when r ≥ lemon/total.
+    //   single ×8 : dracula 8,  total 28 → threshold 20/28 ≈ 0.71 → r=0.5 lands lemon
+    //   stacked ×64: dracula 64, total 84 → threshold 20/84 ≈ 0.24 → r=0.5 lands dracula
+    const wb = bag({ dracula: 1, lemon: 20 });
+    const prev: SymbolType[] = ['dracula', 'dracula', 'dracula', 'dracula', 'dracula'];
+    const single = rollBoard([NIGHT_PARADE], wb, prev, fixed(0.5), 5);
+    expect(single).toEqual(['lemon', 'lemon', 'lemon', 'lemon', 'lemon']);
+    const stacked = rollBoard(
+      [NIGHT_PARADE, RULES_BY_ID['copy-above']],
+      wb,
+      prev,
+      fixed(0.5),
+      5,
+    );
+    expect(stacked).toEqual(['dracula', 'dracula', 'dracula', 'dracula', 'dracula']);
+  });
 });
 
 describe('replay determinism — no-op in legacy bags (cat/monster weight 0)', () => {

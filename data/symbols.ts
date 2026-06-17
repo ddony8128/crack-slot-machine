@@ -13,7 +13,7 @@ export const SYMBOL_EMOJI: Record<SymbolType, string> = {
   // Season 1 sets (emoji sourced from SYMBOL_SETS in lib/symbols/sets.ts).
   cheese_cat: '🐱',
   tuxedo_cat: '🐈‍⬛',
-  calico_cat: '😺',
+  calico_cat: '🐈',
   plane: '✈️',
   ship: '🚢',
   car: '🚗',

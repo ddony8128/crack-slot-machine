@@ -9,7 +9,7 @@ import {
   type ApplyCtx,
   type CascadeFrame,
 } from '@/lib/cascade';
-import { scoreResult, scoreItems, type HandUpgradeMap } from '@/lib/score';
+import { scoreResult, scoreItems, type HandUpgradeMap, type SetBonusUpgradeMap } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
 import { rulePlayable } from '@/lib/rules/playable';
 import { RULES, RULES_BY_ID } from '@/data/rules';
@@ -49,6 +49,8 @@ export type RunConfig = {
   // 첨탑 per-hand upgrades, applied to every spin's hand score (other modes
   // leave this unset → scoring is unchanged).
   handUpgrades?: HandUpgradeMap;
+  // 첨탑 owned-set 족보 강화 (shop) — per-set-bonus upgrades applied in setBonuses.
+  setBonusUpgrades?: SetBonusUpgradeMap;
   // 첨탑 owned artifacts — flow into scoring (lib/score) for artifact effects.
   artifacts?: string[];
   // Number special hands (4×4/4×5 multiplier, 0≥3 extra rule). Unset → ON
@@ -63,6 +65,11 @@ export type RunConfig = {
   // Reconstructed identically server-side (puzzleRunConfig), so client + replay
   // end the run at the same spin from seed + actions.
   puzzleGoals?: PuzzleGoal[];
+  // 첨탑 stage target: when set, the run marks stageCleared the instant the
+  // cumulative stage score reaches it (the clearing spin still shows its result;
+  // the player then advances to settlement). Reconstructed server-side via
+  // spireStageRunConfig so replay matches. Unset for quick/daily/puzzle.
+  stageTarget?: number;
 };
 
 /**
@@ -242,6 +249,8 @@ function freshState(nickname: string): GameState {
     pendingSelection: null,
     revealStream: null,
     nextHoldCells: [],
+    puzzleCleared: false,
+    stageCleared: false,
   };
 }
 
@@ -334,8 +343,9 @@ function buildInitializer(initialRng: Rng): Initializer {
       const haunted = frame.haunted ?? [];
       const ups = runConfig?.handUpgrades;
       const arts = runConfig?.artifacts ?? [];
-      const score = scoreResult(finalResult, slots, events, boards, haunted, ups, arts);
-      const items = scoreItems(finalResult, slots, events, boards, haunted, ups, arts);
+      const setUps = runConfig?.setBonusUpgrades;
+      const score = scoreResult(finalResult, slots, events, boards, haunted, ups, arts, setUps);
+      const items = scoreItems(finalResult, slots, events, boards, haunted, ups, arts, setUps);
       const specials = detectSpecials(finalResult, runConfig?.numberSpecials);
       const multiplier = state.nextMultiplier;
       let roundScore = score.baseRoundScore * multiplier;
@@ -396,12 +406,14 @@ function buildInitializer(initialRng: Rng): Initializer {
 
       const nextSpinLogs = [...state.spinLogs, log];
 
-      // Puzzle immediate-clear: when this run carries puzzleGoals, end the run the
-      // INSTANT every goal is satisfied across the resolved spins (incl. this one),
-      // instead of forcing the player through every spin. Driven purely by the
-      // deterministic spin logs + config, so the server replay (same puzzleGoals)
-      // ends at the identical spin. No-op for quick/daily/spire (no puzzleGoals).
-      let resolvedStatus: GameState['status'] = 'spin-result';
+      // Puzzle clear: when this run carries puzzleGoals, mark the run cleared the
+      // INSTANT every goal is satisfied across the resolved spins (incl. this one).
+      // The spin still ENDS in 'spin-result' so its reveal plays + board settles;
+      // the puzzle UI shows 클리어 and a 결과 보기 action that calls next() → finished
+      // (so the player isn't forced through the remaining spins). Driven purely by
+      // the deterministic spin logs + config; the server replay (same puzzleGoals)
+      // detects the same clearing spin. No-op for quick/daily/spire (no puzzleGoals).
+      let puzzleCleared = false;
       const goals = runConfig?.puzzleGoals;
       if (goals && goals.length > 0) {
         const ctxs: GoalContext[] = nextSpinLogs.map((l) => ({
@@ -409,10 +421,15 @@ function buildInitializer(initialRng: Rng): Initializer {
           hand: computeHand(l.finalResult).hand,
           spinScore: l.roundScore,
         }));
-        if (checkPuzzleRun(goals, ctxs).count === goals.length) {
-          resolvedStatus = 'finished';
-        }
+        puzzleCleared = checkPuzzleRun(goals, ctxs).count === goals.length;
       }
+
+      // 첨탑 stage clear: cumulative stage score (incl. this spin) meets the target.
+      // Like puzzleCleared, the clearing spin stays in 'spin-result' so its reveal
+      // plays; the result button advances to 'finished' (see next()).
+      const stageTarget = runConfig?.stageTarget;
+      const stageCleared =
+        stageTarget != null && state.totalScore + roundScore >= stageTarget;
 
       set({
         totalScore: state.totalScore + roundScore,
@@ -421,7 +438,9 @@ function buildInitializer(initialRng: Rng): Initializer {
         previousResult: finalResult,
         nextMultiplier: specials.nextMultiplier,
         extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
-        status: resolvedStatus,
+        status: 'spin-result',
+        puzzleCleared,
+        stageCleared,
         pendingSelection: null,
         revealStream,
         // Carry this spin's parking holds to the NEXT spin's preHeld pass. This
@@ -684,6 +703,7 @@ function buildInitializer(initialRng: Rng): Initializer {
             ruleName: p.ruleName,
             count: p.count,
             selectable: [...p.selectable],
+            remaining: p.remaining,
           },
           status: 'awaiting-selection',
         });
@@ -706,8 +726,14 @@ function buildInitializer(initialRng: Rng): Initializer {
       const pending = activeFrame.pending;
       const expectedCount = pending.count;
 
-      // Validate: right count, all distinct, all selectable.
-      if (indices.length !== expectedCount) return;
+      // Validate count: park (유료 주차) is "최대 N칸" — any 1..N selection is valid
+      // (player confirms with a button); every other kind needs exactly `count`.
+      // Then: all distinct, all selectable.
+      if (pending.kind === 'park') {
+        if (indices.length < 1 || indices.length > expectedCount) return;
+      } else if (indices.length !== expectedCount) {
+        return;
+      }
       const seen = new Set<number>();
       for (const i of indices) {
         if (i < 0 || i >= pending.selectable.length) return;
@@ -744,6 +770,7 @@ function buildInitializer(initialRng: Rng): Initializer {
             ruleName: p.ruleName,
             count: p.count,
             selectable: [...p.selectable],
+            remaining: p.remaining,
           },
           status: 'awaiting-selection',
         });
@@ -758,6 +785,14 @@ function buildInitializer(initialRng: Rng): Initializer {
       const state = get();
       if (state.status !== 'spin-result') return;
       record({ type: 'next' });
+
+      // Puzzle clear / 첨탑 stage clear: advancing ends the run immediately (don't
+      // force the player through the remaining spins). The clearing spin's result
+      // was already shown; SpireClient/PuzzleClient handle the finished state.
+      if (state.puzzleCleared || state.stageCleared) {
+        set({ status: 'finished' });
+        return;
+      }
 
       const nextSpinIndex = state.spinIndex + 1;
       if (nextSpinIndex >= state.maxSpins) {

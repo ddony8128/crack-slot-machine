@@ -11,7 +11,7 @@ import type { Rng } from '@/lib/rng';
  * The two RULE SLOT rules that became PLAYER-SELECTED (직접 선택):
  *   - 가족 만들기 (monster-family) -> kind 'family' (pick 1 target; leftmost
  *     dracula copied in; +20 × dracula count at scoring).
- *   - 유료 주차 (vehicle-parking) -> kind 'park' (pick up to 2 vehicle cells;
+ *   - 유료 주차 (vehicle-parking) -> kind 'park' (keep 원하는 2칸 vehicle cells;
  *     each held next spin + a 30-point fee, scored EVENT-based via symbol_held).
  */
 
@@ -81,7 +81,7 @@ describe('select family (가족 만들기) — player picks the dracula copy tar
   });
 });
 
-describe('select park (유료 주차) — player picks up to 2 vehicle cells', () => {
+describe('select park (유료 주차) — player keeps 원하는 2칸 vehicle cells', () => {
   const rules: Rule[] = [RULES_BY_ID['vehicle-parking']];
 
   it('count = min(2, #vehicles) and selectableFor restricts to VEHICLE cells', () => {

@@ -25,9 +25,27 @@ function tierMessage(score: number): string {
 
 export default function DailyResultScreen({
   scoreChange,
+  onSubmitted,
+  attemptsLeftOverride,
+  refillAvailable,
+  refillPending,
+  onRefill,
+  onPlayAgain,
 }: {
   /** Optional override; otherwise read from this screen's own submit response. */
   scoreChange?: SeasonScoreChange;
+  /** Called once the run is submitted, so the parent can refresh attempts/refill state. */
+  onSubmitted?: () => void;
+  /** Fresh attemptsLeft from the parent (preferred over this run's submit value once known). */
+  attemptsLeftOverride?: number;
+  /** Whether the one-time ad refill is still available (exhausted-but-refillable). */
+  refillAvailable?: boolean;
+  /** Disable the refill CTA while a refill is in flight. */
+  refillPending?: boolean;
+  /** Open the ad-refill modal (parent-owned). */
+  onRefill?: () => void;
+  /** Reset to a fresh daily attempt (parent-owned; falls back to store reset). */
+  onPlayAgain?: () => void;
 } = {}) {
   const nickname = useGameStore((s) => s.nickname);
   const totalScore = useGameStore((s) => s.totalScore);
@@ -57,6 +75,9 @@ export default function DailyResultScreen({
         // Bust the cached server render of the daily ranking/leaderboard so the
         // just-submitted best score is reflected without a manual refresh.
         if (result.status === "submitted") router.refresh();
+        // Tell the parent the run is in — it re-fetches attempts/refill state so
+        // the 후원 prompt + refill/retry buttons reflect the just-finished run.
+        onSubmitted?.();
       })
       .catch(() => setState({ phase: "error" }));
     // Run once on mount.
@@ -73,6 +94,10 @@ export default function DailyResultScreen({
   const staleVersion = rejectReason === "version_mismatch";
   const attemptsLeft =
     state.phase === "done" ? (state.result.attemptsLeft ?? 0) : 0;
+  // Prefer the parent's freshly-fetched value once known (e.g. after an ad refill
+  // bumps it back to 5); otherwise this run's submit value.
+  const effAttemptsLeft = attemptsLeftOverride ?? attemptsLeft;
+  const playAgain = onPlayAgain ?? reset;
   const animatedScore = useCountUp(rejected ? 0 : totalScore, 900, 0);
 
   if (staleVersion) {
@@ -102,13 +127,13 @@ export default function DailyResultScreen({
           치팅이 감지되었습니다
         </h1>
         <p className="text-zinc-300">기록이 등록되지 않았습니다.</p>
-        {attemptsLeft > 0 && (
+        {effAttemptsLeft > 0 && (
           <button
             type="button"
-            onClick={reset}
+            onClick={playAgain}
             className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
           >
-            다시 도전 ({attemptsLeft}회 남음)
+            다시 도전 ({effAttemptsLeft}회 남음)
           </button>
         )}
         <Link
@@ -121,7 +146,7 @@ export default function DailyResultScreen({
           href="/season"
           className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
         >
-          시즌 허브로
+          메인 화면으로
         </Link>
       </main>
     );
@@ -168,7 +193,7 @@ export default function DailyResultScreen({
 
         {submitted && (
           <p className="text-sm text-zinc-400">
-            남은 도전: <span className="font-bold text-zinc-200">{attemptsLeft}</span>회
+            남은 도전: <span className="font-bold text-zinc-200">{effAttemptsLeft}</span>회
           </p>
         )}
       </div>
@@ -186,19 +211,40 @@ export default function DailyResultScreen({
           href="/season"
           className="flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-4 py-3 text-base font-semibold text-zinc-200 transition hover:bg-zinc-800/60"
         >
-          시즌 허브로
+          메인 화면으로
         </Link>
       </section>
 
-      {(state.phase === "error" || (submitted && attemptsLeft > 0)) && (
+      {/* Next action after the run:
+          - attempts left  → 다시 도전 (play again)
+          - exhausted + ad refill available → 광고 보고 충전 (refill, then 다시 도전 appears)
+          - submit error → let the player retry the run */}
+      {effAttemptsLeft > 0 ? (
         <button
           type="button"
-          onClick={reset}
+          onClick={playAgain}
           className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
         >
           다시 도전
         </button>
-      )}
+      ) : submitted && refillAvailable && onRefill ? (
+        <button
+          type="button"
+          onClick={onRefill}
+          disabled={refillPending}
+          className="w-full rounded-xl border border-amber-500/60 bg-amber-500/10 px-6 py-3 text-lg font-bold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {refillPending ? "충전 중…" : "광고 보고 5회 충전"}
+        </button>
+      ) : state.phase === "error" ? (
+        <button
+          type="button"
+          onClick={playAgain}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+        >
+          다시 도전
+        </button>
+      ) : null}
     </main>
   );
 }

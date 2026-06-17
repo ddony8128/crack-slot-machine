@@ -12,11 +12,14 @@ export default function DummyAdModal({
   onConfirm,
   onClose,
   pending,
+  onDonate,
 }: {
   open: boolean;
   onConfirm: () => void;
   onClose: () => void;
   pending: boolean;
+  /** Opens the 후원 안내 modal. When omitted, the donation CTA is hidden. */
+  onDonate?: () => void;
 }) {
   const ad = DEFAULT_DUMMY_AD;
 
@@ -39,6 +42,14 @@ export default function DummyAdModal({
           </a>
         )}
 
+        {onDonate && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm leading-relaxed text-emerald-200">
+            광고 대신, 후원으로 개발을 응원해 주실 수도 있어요.
+            <br />
+            후원은 선택이며 게임 플레이·시즌 점수·랭킹에는 영향을 주지 않습니다.
+          </div>
+        )}
+
         <div className="mt-2 flex flex-col gap-2">
           <button
             type="button"
@@ -48,6 +59,16 @@ export default function DummyAdModal({
           >
             {pending ? "충전 중…" : "5회 충전하기"}
           </button>
+          {onDonate && (
+            <button
+              type="button"
+              onClick={onDonate}
+              disabled={pending}
+              className="w-full rounded-xl border border-amber-500/50 bg-amber-500/10 px-6 py-3 text-base font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              후원 안내 보기
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

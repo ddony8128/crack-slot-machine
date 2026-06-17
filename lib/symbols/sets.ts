@@ -91,7 +91,7 @@ export const SYMBOL_SETS: SymbolSet[] = [
     symbols: [
       { id: 'cheese_cat', name: '치즈냥', emoji: '🐱' },
       { id: 'tuxedo_cat', name: '턱시도냥', emoji: '🐈‍⬛' },
-      { id: 'calico_cat', name: '삼색냥', emoji: '😺' },
+      { id: 'calico_cat', name: '삼색냥', emoji: '🐈' },
     ],
     bonuses: [
       { type: 'per-symbol', points: 30 },

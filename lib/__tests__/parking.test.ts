@@ -45,7 +45,7 @@ const ctxFor = (previousResult: SymbolType[] = PREV_ZEROS, rng: Rng = queuedRng(
   rng,
 });
 
-describe('vehicle-parking — PLAYER picks up to 2 vehicle cells; resolveSelection flags nextHold', () => {
+describe('vehicle-parking — PLAYER picks 원하는 2칸 vehicle cells; resolveSelection flags nextHold', () => {
   it('pauses for the pick; count = min(2, #vehicles); selectable = vehicle cells only', () => {
     // vehicles at idx0 (plane), idx2 (ship), idx4 (car); others are fruits.
     const base: SymbolType[] = ['plane', 'cherry', 'ship', 'lemon', 'car'];
@@ -91,6 +91,25 @@ describe('vehicle-parking — PLAYER picks up to 2 vehicle cells; resolveSelecti
     expect(frame.nextHold).toEqual([]);
     expect(frame.working).toEqual(base);
     expect(frame.steps.some((s) => s.label.includes('건너뜀'))).toBe(true);
+  });
+
+  it('a vehicle HELD from last spin (preHeld → locked) is still selectable — it can be re-parked', () => {
+    // prev[0]='car' was parked last spin; this spin preHeld=[0] holds it (locked).
+    const prev: SymbolType[] = ['car', 'lemon', 'ship', 'grape', 'diamond'];
+    const base: SymbolType[] = ['cherry', 'lemon', 'plane', 'grape', 'diamond'];
+    const frame = beginCascade(
+      base,
+      [RULES_BY_ID['vehicle-parking']],
+      ctxFor(prev),
+      { preHeld: [0] },
+    );
+    // cell 0 is held (locked) AND a vehicle (car) → still offered for parking.
+    expect(frame.locked[0]).toBe(true);
+    expect(frame.pending?.kind).toBe('park');
+    expect(frame.pending?.selectable[0]).toBe(true);
+    // vehicles: held car@0 + plane@2 → 2 selectable; count = min(2, 2) = 2.
+    expect(frame.pending?.selectable).toEqual([true, false, true, false, false]);
+    expect(frame.pending?.count).toBe(2);
   });
 });
 
@@ -140,7 +159,7 @@ describe('store carry — 유료 주차 holds the PLAYER-PICKED cells on the NEX
   it('all-car board: player picks 2 cells; only those are held at the next first roll', () => {
     // Car-only bag: every roll lands 'car' regardless of rng, so the board is
     // deterministic and the parking rule always offers all 5 cells. The player
-    // directly picks up to 2 of them (count = min(2, 5) = 2).
+    // keeps 원하는 2칸 of them (count = min(2, 5) = 2).
     const carOnly = Object.fromEntries(
       (Object.keys(BASE_WEIGHTS) as SymbolType[]).map((k) => [k, k === 'car' ? 1 : 0]),
     ) as Record<SymbolType, number>;
@@ -169,10 +188,10 @@ describe('store carry — 유료 주차 holds the PLAYER-PICKED cells on the NEX
     expect(s().status).toBe('awaiting-selection');
     const sel = s().pendingSelection!;
     expect(sel.kind).toBe('park');
-    expect(sel.count).toBe(2);
+    expect(sel.count).toBe(2); // min(2, 5 cars)
     expect(sel.selectable).toEqual([true, true, true, true, true]);
 
-    // Player picks cells 1 and 3 -> only those carry to the next spin.
+    // Player keeps 원하는 2칸 — cells 1 and 3 carry to the next spin.
     s().selectCells([1, 3]);
     expect(s().status).toBe('spin-result');
     const firstFinal = s().spinLogs[0].finalResult;

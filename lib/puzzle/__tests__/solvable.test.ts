@@ -199,7 +199,7 @@ describe('Season 1 puzzles are intentionally solvable (deterministic, not luck)'
         `[solver] ${key} seed=${PUZZLES_BY_KEY[key].seed} clearSpin=${solution!.clearSpin} ` +
           `slots=${JSON.stringify(solution!.slotRuleIds)}`,
       );
-    });
+    }, 30_000); // exhaustive BFS solver; p02's branch is slow on cold CI/Win
   }
 });
 
@@ -214,15 +214,15 @@ function firstClearSpin(
   return null;
 }
 
-describe('puzzle immediate-clear: the run ends on the clearing spin', () => {
+describe('puzzle clear: the run is marked cleared on the clearing spin', () => {
   for (const key of ['p01', 'p02']) {
-    it(`${key} drives status:'finished' the instant goals are met (no exhausting spins)`, () => {
+    it(`${key} sets puzzleCleared the instant goals are met; 결과 보기 then finishes (no exhausting spins)`, () => {
       const solution = solve(key);
       expect(solution, `no clearing sequence found for ${key}`).not.toBeNull();
 
       // Replay the SOLVED action sequence through a fresh seeded+configured store,
-      // exactly the server-replay path. With puzzleGoals in the config, the store
-      // must end on the clearing spin — NOT play out the full spinLimit.
+      // exactly the server-replay path. The clearing spin ends in 'spin-result'
+      // with puzzleCleared=true (so its reveal can play) — NOT the full spinLimit.
       const store = freshStore(key);
       for (const a of solution!.actions) {
         switch (a.type) {
@@ -252,17 +252,25 @@ describe('puzzle immediate-clear: the run ends on the clearing spin', () => {
 
       const p = PUZZLES_BY_KEY[key];
       const finalState = store.getState();
-      // Cleared → finished, and it ended early (logs ≤ the solver's clearSpin,
-      // strictly < spinLimit when the solver cleared before the limit).
-      expect(finalState.status).toBe('finished');
+      // Cleared on the clearing spin, ended early (logs === the solver's clearSpin,
+      // ≤ spinLimit), and the run did NOT auto-finish — it waits in 'spin-result'.
+      expect(finalState.puzzleCleared).toBe(true);
       expect(finalState.spinLogs.length).toBe(solution!.clearSpin);
+      if (finalState.status === 'spin-result') {
+        // 결과 보기 ends the run immediately (no remaining spins played).
+        store.getState().next();
+        expect(store.getState().status).toBe('finished');
+        expect(store.getState().spinLogs.length).toBe(solution!.clearSpin);
+      } else {
+        expect(finalState.status).toBe('finished');
+      }
 
       // The submit-route clearSpin computation returns the SAME first-meeting spin.
       const ctxs: GoalContext[] = finalState.spinLogs.map((l) => ctxFor(l.finalResult));
       const clearSpin = firstClearSpin(p.goals, ctxs);
       expect(clearSpin).toBe(solution!.clearSpin);
       expect(clearSpin).toBeLessThanOrEqual(p.spinLimit);
-    });
+    }, 30_000); // exhaustive BFS solver; p02's branch is slow under parallel load
   }
 });
 

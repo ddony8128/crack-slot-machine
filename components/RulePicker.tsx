@@ -13,8 +13,10 @@ export default function RulePicker() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">장착할 규칙을 선택하세요</h2>
         {picksLeft > 1 && (
+          // Extra picks come from different sources (0 보너스 in 빠른 게임, 엔진
+          // 아티팩트 in 첨탑), so keep the label source-neutral.
           <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300 ring-1 ring-emerald-400/40">
-            🎁 0 보너스 · 이번 턴 {picksLeft}장 선택
+            🎁 이번 턴 규칙 {picksLeft}장 선택
           </span>
         )}
       </div>
