@@ -400,15 +400,21 @@ export default function SpireClient() {
       setRunState(r.finalState);
       if (r.runEnded) {
         endRun();
+      } else if (save.actions[save.actions.length - 1]?.type === "choose_set") {
+        // The shop only exists AFTER a play_stage (next-stage shop on clear, or the
+        // retry shop on a non-final fail). If the last boundary was the set choice,
+        // the player picked their set but never played stage 1 — resume INTO stage 1,
+        // not the shop. (Stage 1 has no preceding shop.)
+        startStage();
       } else {
-        // Safe boundary: the player resumes at the shop before their next stage;
-        // mid-stage progress was never persisted.
+        // A play_stage / shop boundary: resume at the shop before the next stage
+        // (or the retry). Mid-stage progress was never persisted.
         setShopVisitIndex(Math.max(0, r.finalState.currentStage - 1));
         setRerollCount(0);
         setPhase("shop");
       }
     },
-    [reset, startFresh, endRun],
+    [reset, startFresh, endRun, startStage],
   );
 
   function startNewGame() {
