@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SeasonNav from "@/components/SeasonNav";
+import AnnouncementBell from "@/components/AnnouncementBell";
 import { currentPlayer } from "@/lib/server/playerAuth";
 import { getDb } from "@/lib/db";
 import { SEASON_TITLE, SEASON_NOTICE, MODE_LABELS } from "@/lib/season/config";
@@ -145,6 +146,23 @@ export default async function SeasonHubPage() {
           buildSeasonSummary(player.id, player.nickname, season.id),
         ])
       : [null, null];
+
+  // Published announcements for the hub's 공지 button (logged-in players). Degrade
+  // to none on any read failure so the hub never breaks.
+  const announcements = player
+    ? await getDb()
+        .listPublishedAnnouncements(season?.id ?? null)
+        .then((rows) =>
+          rows.map((a) => ({
+            id: a.id,
+            title: a.title,
+            body: a.body,
+            pinned: a.pinned,
+            createdAt: a.createdAt,
+          })),
+        )
+        .catch(() => [])
+    : [];
 
   return (
     <div className="flex min-h-full flex-col">
@@ -314,6 +332,7 @@ export default async function SeasonHubPage() {
           >
             내 기록
           </Link>
+          {player && <AnnouncementBell announcements={announcements} variant="hub" />}
         </section>
       </main>
     </div>
