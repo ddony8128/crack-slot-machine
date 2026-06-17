@@ -179,7 +179,20 @@ function FeedbackSection({ open }: { open: boolean }) {
           <p className="text-xs text-zinc-500">
             {loggedIn ? `${nickname} 님으로 작성됩니다.` : "불러오는 중…"}
           </p>
-          <StarPicker rating={rating} onPick={setRating} />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400">별점</span>
+            <span className="text-[11px] text-zinc-600">(선택)</span>
+            <StarPicker rating={rating} onPick={setRating} />
+            {rating > 0 && (
+              <button
+                type="button"
+                onClick={() => setRating(0)}
+                className="text-[11px] text-zinc-500 underline-offset-2 hover:underline"
+              >
+                지우기
+              </button>
+            )}
+          </div>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
