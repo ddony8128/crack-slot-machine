@@ -107,16 +107,19 @@ export default function SlotMachine({
             const rolling = reelRolling[i] && !isLocked;
             const flashing = flashSet.has(i);
             const landed = landSet.has(i);
+            const isSelectable = picking && selectableSet.has(i);
+            const isChosen = picking && chosenSet.has(i);
             const motion = [
               rolling ? rollClass : "",
               flashing ? "reel-flash" : "",
               !rolling && landed ? "reel-land" : "",
-              isLocked ? "reel-locked" : "",
+              // Don't grey a held cell while it's a valid pick — the dimmed
+              // 'reel-locked' look reads as "disabled", but held cells ARE
+              // selectable (e.g. re-park, copy into/over a held cell).
+              isLocked && !isSelectable ? "reel-locked" : "",
             ]
               .filter(Boolean)
               .join(" ");
-            const isSelectable = picking && selectableSet.has(i);
-            const isChosen = picking && chosenSet.has(i);
             // While picking: selectable cells get a highlight ring + pointer;
             // chosen cells get a stronger accent; the rest are dimmed/inert.
             const pickClass = picking
