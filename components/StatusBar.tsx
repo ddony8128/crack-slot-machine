@@ -5,7 +5,12 @@ import { useGameStore } from "@/store/gameStore";
 import ReferenceModal from "@/components/ReferenceModal";
 import { BASE_WEIGHTS } from "@/data/symbols";
 
-export default function StatusBar() {
+export default function StatusBar({
+  hideReference = false,
+}: {
+  /** Hide the 규칙/점수표 buttons (puzzle mode shows its symbol pool instead). */
+  hideReference?: boolean;
+} = {}) {
   const nickname = useGameStore((s) => s.nickname);
   const spinIndex = useGameStore((s) => s.spinIndex);
   const maxSpins = useGameStore((s) => s.maxSpins);
@@ -53,22 +58,24 @@ export default function StatusBar() {
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setRefView("rules")}
-            className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
-          >
-            규칙
-          </button>
-          <button
-            type="button"
-            onClick={() => setRefView("scores")}
-            className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
-          >
-            점수표
-          </button>
-        </div>
+        {!hideReference && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRefView("rules")}
+              className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+            >
+              규칙
+            </button>
+            <button
+              type="button"
+              onClick={() => setRefView("scores")}
+              className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-4 py-2 text-sm font-bold text-zinc-100 transition hover:bg-zinc-700"
+            >
+              점수표
+            </button>
+          </div>
+        )}
       </div>
 
       <ReferenceModal

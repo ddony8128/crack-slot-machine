@@ -12,6 +12,7 @@ import GameScreen from "@/components/GameScreen";
 import PuzzleResultScreen from "@/components/PuzzleResultScreen";
 import ModeIntro from "@/components/ModeIntro";
 import SymbolView from "@/components/SymbolView";
+import SymbolPool from "@/components/SymbolPool";
 import type { PuzzleGoal } from "@/lib/puzzle/config";
 
 function startErrorMessage(code: string): string {
@@ -36,6 +37,9 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
   const [startError, setStartError] = useState<string | null>(null);
 
   const puzzle = PUZZLES_BY_KEY[puzzleKey];
+  // The puzzle's rollable symbol pool (for the 심볼 풀 display) — derived from the
+  // same config the run uses, so it matches exactly what can appear on the reels.
+  const poolWeights = puzzle ? puzzleRunConfig(puzzleKey).baseWeights : undefined;
 
   // The store is a module singleton that survives client navigations, so reset
   // to a clean 'start' state whenever this page mounts.
@@ -107,7 +111,14 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
                 </span>
                 회 · 규칙은 가방에서 시작합니다 — 슬롯으로 드래그해 배치하세요.
               </p>
-              <PuzzleRuleReference ruleIds={puzzle.availableRuleIds} />
+              {poolWeights && (
+                <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/40 px-3 py-2 text-left">
+                  <p className="mb-1.5 text-center text-xs font-bold text-amber-200/90">
+                    이 퍼즐에 나오는 심볼
+                  </p>
+                  <SymbolPool weights={poolWeights} />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -169,6 +180,15 @@ export default function PuzzleClient({ puzzleKey }: { puzzleKey: string }) {
             {puzzle.spinLimit}스핀
           </p>
         </div>
+
+        {poolWeights && (
+          <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/40 px-3 py-2 text-left">
+            <p className="mb-1.5 text-xs uppercase tracking-wide text-zinc-500">
+              나오는 심볼
+            </p>
+            <SymbolPool weights={poolWeights} />
+          </div>
+        )}
 
         <PuzzleRuleReference ruleIds={puzzle.availableRuleIds} />
 

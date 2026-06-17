@@ -9,6 +9,7 @@ import RulePicker from "@/components/RulePicker";
 import SlotMachine from "@/components/SlotMachine";
 import SpinStage from "@/components/SpinStage";
 import ScorePanel from "@/components/ScorePanel";
+import PuzzlePanel from "@/components/PuzzlePanel";
 import SpinResultLog from "@/components/SpinResultLog";
 import {
   JackpotCelebration,
@@ -28,6 +29,8 @@ type Celebration =
 
 export default function GameScreen() {
   const status = useGameStore((s) => s.status);
+  const eventSlug = useGameStore((s) => s.eventSlug);
+  const isPuzzle = eventSlug === "puzzle";
   const spinLogs = useGameStore((s) => s.spinLogs);
   const currentResult = useGameStore((s) => s.currentResult);
   const pendingSelection = useGameStore((s) => s.pendingSelection);
@@ -219,7 +222,7 @@ export default function GameScreen() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-6">
-      <StatusBar />
+      <StatusBar hideReference={isPuzzle} />
       <RuleSlots />
 
       {showSlot && !stageActive && (
@@ -237,12 +240,16 @@ export default function GameScreen() {
 
       {status === "choosing-rule" && <RulePicker />}
 
-      {showScore && (
-        <>
-          <ScorePanel log={latestLog} />
-          {latestLog.steps.length > 0 && <SpinResultLog log={latestLog} />}
-        </>
-      )}
+      {showScore &&
+        (isPuzzle ? (
+          // Puzzle: per-spin score is irrelevant — show only clear / not-clear.
+          <PuzzlePanel />
+        ) : (
+          <>
+            <ScorePanel log={latestLog} />
+            {latestLog.steps.length > 0 && <SpinResultLog log={latestLog} />}
+          </>
+        ))}
 
       {stageActive && (
         <SpinStage
