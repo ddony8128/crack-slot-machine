@@ -165,4 +165,9 @@ export type GameState = {
   // the board settles); the puzzle UI then shows 클리어 + a 결과 보기 action that
   // advances to 'finished'. Always false in quick/daily/spire.
   puzzleCleared: boolean;
+  // 첨탑 stage runs ONLY (RunConfig.stageTarget set): true once the cumulative
+  // stage score meets the target. Like puzzleCleared, the clearing spin still
+  // ends in 'spin-result' (reveal plays); the result button then advances to
+  // 'finished' so SpireClient can show the settlement. Always false otherwise.
+  stageCleared: boolean;
 };

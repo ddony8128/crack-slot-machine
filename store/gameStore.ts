@@ -63,6 +63,11 @@ export type RunConfig = {
   // Reconstructed identically server-side (puzzleRunConfig), so client + replay
   // end the run at the same spin from seed + actions.
   puzzleGoals?: PuzzleGoal[];
+  // 첨탑 stage target: when set, the run marks stageCleared the instant the
+  // cumulative stage score reaches it (the clearing spin still shows its result;
+  // the player then advances to settlement). Reconstructed server-side via
+  // spireStageRunConfig so replay matches. Unset for quick/daily/puzzle.
+  stageTarget?: number;
 };
 
 /**
@@ -243,6 +248,7 @@ function freshState(nickname: string): GameState {
     revealStream: null,
     nextHoldCells: [],
     puzzleCleared: false,
+    stageCleared: false,
   };
 }
 
@@ -415,6 +421,13 @@ function buildInitializer(initialRng: Rng): Initializer {
         puzzleCleared = checkPuzzleRun(goals, ctxs).count === goals.length;
       }
 
+      // 첨탑 stage clear: cumulative stage score (incl. this spin) meets the target.
+      // Like puzzleCleared, the clearing spin stays in 'spin-result' so its reveal
+      // plays; the result button advances to 'finished' (see next()).
+      const stageTarget = runConfig?.stageTarget;
+      const stageCleared =
+        stageTarget != null && state.totalScore + roundScore >= stageTarget;
+
       set({
         totalScore: state.totalScore + roundScore,
         spinLogs: nextSpinLogs,
@@ -424,6 +437,7 @@ function buildInitializer(initialRng: Rng): Initializer {
         extraRulePickCount: state.extraRulePickCount + (specials.zeroDraw ? 1 : 0),
         status: 'spin-result',
         puzzleCleared,
+        stageCleared,
         pendingSelection: null,
         revealStream,
         // Carry this spin's parking holds to the NEXT spin's preHeld pass. This
@@ -767,9 +781,10 @@ function buildInitializer(initialRng: Rng): Initializer {
       if (state.status !== 'spin-result') return;
       record({ type: 'next' });
 
-      // Puzzle: once cleared, 결과 보기 ends the run immediately (don't force the
-      // player through the remaining spins).
-      if (state.puzzleCleared) {
+      // Puzzle clear / 첨탑 stage clear: advancing ends the run immediately (don't
+      // force the player through the remaining spins). The clearing spin's result
+      // was already shown; SpireClient/PuzzleClient handle the finished state.
+      if (state.puzzleCleared || state.stageCleared) {
         set({ status: 'finished' });
         return;
       }

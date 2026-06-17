@@ -15,11 +15,16 @@ export default function ScorePanel({ log }: { log: SpinLog }) {
   const extraRulePickCount = useGameStore((s) => s.extraRulePickCount);
   const next = useGameStore((s) => s.next);
 
+  const stageCleared = useGameStore((s) => s.stageCleared);
+
   const isLastSpin = spinIndex === maxSpins - 1;
   const animatedTotal = useCountUp(totalScore, 700);
 
   let nextLabel = "다음 스핀";
-  if (extraRulePickCount > 0) {
+  if (stageCleared) {
+    // 첨탑: target met — advancing settles the stage (next() → finished).
+    nextLabel = "스테이지 클리어 →";
+  } else if (extraRulePickCount > 0) {
     nextLabel = "추가 규칙 선택";
   } else if (isLastSpin) {
     nextLabel = "결과 보기";

@@ -87,6 +87,9 @@ export function spireStageRunConfig(
     baseWeights: weights,
     provisioning: 'pool',
     rulePoolIds: [...rulePool],
+    // Marks stageCleared the instant cumulative score meets the target, so the
+    // clearing spin shows its result before the stage settles (client + replay).
+    stageTarget: spireStageTarget(stage),
     handUpgrades,
     artifacts: [...artifacts],
     // Number specials are OFF in 첨탑 unless the matching 석상 artifact is owned.

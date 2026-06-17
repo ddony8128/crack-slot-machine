@@ -57,6 +57,7 @@ type Phase =
   | "choosing-set"
   | "playing"
   | "cleared"
+  | "failed"
   | "artifact"
   | "shop"
   | "result";
@@ -291,13 +292,9 @@ export default function SpireClient() {
         });
         setFailBreakdown(null);
         persist();
-        if (stage >= SPIRE_STAGE_COUNT) {
-          endRun();
-        } else if (SPIRE_ARTIFACT_STAGES.includes(stage)) {
-          setPhase("artifact");
-        } else {
-          setPhase("shop");
-        }
+        // Show the clear + settlement screen; its 계속 routes onward (see
+        // proceedAfterStage). The clearing spin's result was just shown in-game.
+        setPhase("cleared");
       } else {
         const r = settleFail(stForSettle);
         if (!r.ok) {
@@ -307,24 +304,40 @@ export default function SpireClient() {
         }
         runStateRef.current = r.state;
         setRunState(r.state);
+        setClearBreakdown(null);
+        setFailBreakdown({
+          stage,
+          failures: r.state.failures,
+          support: r.breakdown.support,
+        });
         persist();
+        // Final fail (3rd) → straight to the result screen; otherwise show the
+        // 실패 + 지원금 screen, whose 계속 returns to the shop for a retry.
         if (r.breakdown.ended) {
           endRun();
         } else {
-          // Non-final fail: surface the failure + 지원금 + 재도전 messaging on the
-          // shop screen (settleFail already advanced the attempt, same stage).
-          setClearBreakdown(null);
-          setFailBreakdown({
-            stage,
-            failures: r.state.failures,
-            support: r.breakdown.support,
-          });
-          setPhase("shop");
+          setPhase("failed");
         }
       }
     },
     [getActions, recordAction, spinLogs, persist, endRun],
   );
+
+  /** 계속 from the clear-settlement screen: route to reward / shop / result. */
+  const proceedAfterClear = useCallback(() => {
+    const st = runStateRef.current;
+    if (!st) return;
+    // settleClear already advanced currentStage, so the stage just cleared is one
+    // below it. Mirrors the original routing (reward stage opens before the shop).
+    const clearedStage = st.currentStage - 1;
+    if (clearedStage >= SPIRE_STAGE_COUNT) {
+      endRun();
+    } else if (SPIRE_ARTIFACT_STAGES.includes(clearedStage)) {
+      setPhase("artifact");
+    } else {
+      setPhase("shop");
+    }
+  }, [endRun]);
 
   // ── start / resume bootstrap ───────────────────────────────────────────────
 
@@ -443,10 +456,10 @@ export default function SpireClient() {
     const target = spireStageTarget(st.currentStage);
     const cumulative = spinLogs.reduce((a, l) => a + l.roundScore, 0);
     if (finalizedRef.current) return;
-    if (status === "spin-result" && cumulative >= target) {
-      finalizedRef.current = true;
-      setPhase("cleared");
-    } else if (status === "finished") {
+    // The clearing spin now stays in 'spin-result' (stageCleared) so its reveal +
+    // result show; pressing "스테이지 클리어 →" runs next() → 'finished'. A failed
+    // stage reaches 'finished' by exhausting spins. Either way we settle on 'finished'.
+    if (status === "finished") {
       finalizedRef.current = true;
       finalizeStage(cumulative >= target);
     }
@@ -634,17 +647,62 @@ export default function SpireClient() {
   }
 
   if (phase === "cleared" && runState) {
+    // settleClear already advanced currentStage; the stage just cleared is one below.
+    const clearedStage = runState.currentStage - 1;
+    const lastStage = clearedStage >= SPIRE_STAGE_COUNT;
     return (
       <Centered>
         <h1 className="text-3xl font-black tracking-tight text-emerald-300">
-          스테이지 {runState.currentStage} 클리어!
+          스테이지 {clearedStage} 클리어!
         </h1>
+        {clearBreakdown && (
+          <div className="w-full space-y-1 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-300/80">
+              정산
+            </p>
+            <p>이자 +{clearBreakdown.interest}원</p>
+            <p>남은 스핀 보너스 +{clearBreakdown.spinBonus}원</p>
+            <p>클리어 보수 +{clearBreakdown.payout}원</p>
+            <p className="border-t border-emerald-500/30 pt-1 font-bold text-amber-300">
+              보유 금액 {runState.money}원
+            </p>
+          </div>
+        )}
         <button
           type="button"
-          onClick={() => finalizeStage(true)}
+          onClick={proceedAfterClear}
           className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
         >
-          계속
+          {lastStage ? "결과 보기" : "계속"}
+        </button>
+      </Centered>
+    );
+  }
+
+  if (phase === "failed" && runState && failBreakdown) {
+    return (
+      <Centered>
+        <h1 className="text-3xl font-black tracking-tight text-rose-300">
+          스테이지 {failBreakdown.stage} 실패
+        </h1>
+        <div className="w-full space-y-1 rounded-xl border border-rose-500/40 bg-rose-950/20 px-4 py-3 text-sm text-rose-200">
+          <p>
+            실패 {failBreakdown.failures} / {SPIRE_MAX_FAILURES}
+          </p>
+          <p className="font-bold text-amber-300">지원금 +{failBreakdown.support}원</p>
+          <p className="text-rose-200/70">
+            정산 보상 없이 지원금만 지급됩니다. 같은 스테이지를 다시 도전하세요.
+          </p>
+          <p className="border-t border-rose-500/30 pt-1 font-bold text-amber-300">
+            보유 금액 {runState.money}원
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPhase("shop")}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
+        >
+          상점으로
         </button>
       </Centered>
     );
@@ -702,25 +760,6 @@ export default function SpireClient() {
   if (phase === "shop" && runState && offers) {
     return (
       <>
-        {clearBreakdown && (
-          <div className="mx-auto mt-3 w-full max-w-md px-4">
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-4 py-2 text-center text-xs text-emerald-200">
-              정산 — 이자 +{clearBreakdown.interest} · 남은 스핀 +{clearBreakdown.spinBonus} · 클리어 보수 +{clearBreakdown.payout}
-            </div>
-          </div>
-        )}
-        {failBreakdown && (
-          <div className="mx-auto mt-3 w-full max-w-md px-4">
-            <div className="space-y-1 rounded-xl border border-rose-500/40 bg-rose-950/20 px-4 py-2 text-center text-xs">
-              <p className="font-bold text-rose-300">
-                스테이지 실패 ({failBreakdown.failures}/{SPIRE_MAX_FAILURES}) · 지원금 +{failBreakdown.support}원 · 같은 스테이지 재도전
-              </p>
-              <p className="text-rose-200/70">
-                스테이지 {failBreakdown.stage} 재도전 — 정산 보상 없음(지원금만 지급)
-              </p>
-            </div>
-          </div>
-        )}
         <SpireShop
           runState={runState}
           offers={offers}
