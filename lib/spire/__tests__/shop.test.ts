@@ -58,6 +58,17 @@ describe('spireShopOffers', () => {
     expect(o.symbols.find((s) => s.id === 'cherry')?.price).toBe(1);
   });
 
+  it('NEVER offers a NOTHING card in the shop (rules), even with NOTHING in the pool', () => {
+    const base = fruitState(); // pool from applyInitialSetChoice already holds 3 NOTHING
+    expect(base.rulePool.some((id) => id.startsWith('nothing-'))).toBe(true);
+    for (let visit = 0; visit < 5; visit++) {
+      for (let reroll = 0; reroll < 4; reroll++) {
+        const o = spireShopOffers(base, visit, reroll);
+        expect(o.rules.some((r) => r.id.startsWith('nothing-'))).toBe(false);
+      }
+    }
+  });
+
   it('offers a 0-count included-set symbol so it can be restored (0 → 1)', () => {
     // Drain cherry (an owned fruit symbol) to 0; it should still be offered at count 0.
     const base = fruitState();

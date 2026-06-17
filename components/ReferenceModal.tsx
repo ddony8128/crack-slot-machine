@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { RULES, RULE_PHASE_LABELS, LEGACY_RULE_IDS } from "@/data/rules";
+import { RULES, RULE_PHASE_LABELS, LEGACY_RULE_IDS, NOTHING_RULE_IDS } from "@/data/rules";
 import type { Rule, SymbolType } from "@/types";
 import { BASE_WEIGHTS } from "@/data/symbols";
 import { rulePlayable } from "@/lib/rules/playable";
@@ -243,6 +243,8 @@ export default function ReferenceModal({
   const legacy = weights === BASE_WEIGHTS;
   const visibleRules = RULES.filter(
     (r) =>
+      // NOTHING cards are spire-internal placeholders — never documented anywhere.
+      !NOTHING_RULE_IDS.has(r.id) &&
       rulePlayable(r, weights) &&
       (!legacy || LEGACY_RULE_IDS.has(r.id)),
   );

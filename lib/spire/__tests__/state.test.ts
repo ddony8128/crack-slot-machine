@@ -24,7 +24,11 @@ import {
   SPIRE_BASE_RULE_IDS,
   SPIRE_RULE_POOL_MAX,
   SPIRE_FAIL_SUPPORT,
+  SPIRE_START_BASE_RULE_COUNT,
 } from '@/lib/spire/config';
+import { RULES_BY_ID, NOTHING_RULE_IDS } from '@/data/rules';
+import { scoreResult } from '@/lib/score';
+import type { SymbolType } from '@/types';
 
 const SEED = 'seed-1';
 
@@ -121,6 +125,47 @@ describe('helpers', () => {
   it('addRulesToPool rejects removing a non-existent or just-added rule', () => {
     expect(addRulesToPool(['a'], ['b'], ['nope']).ok).toBe(false);
     expect(addRulesToPool(['a'], ['b'], ['b']).ok).toBe(false); // removing the new one
+  });
+});
+
+describe('NOTHING cards (첨탑 시작 풀)', () => {
+  it('starting pool = 5 random base + 3 NOTHING + 2 set rules (=10), all unique', () => {
+    const r = applyInitialSetChoice(initialSpireState(SEED), 'fruit');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const pool = r.state.rulePool;
+    expect(pool).toHaveLength(SPIRE_RULE_POOL_MAX); // 10
+    expect(new Set(pool).size).toBe(pool.length); // every id unique (유일성 불변성)
+    expect(pool.filter((id) => NOTHING_RULE_IDS.has(id))).toHaveLength(3);
+    expect(pool.filter((id) => SPIRE_BASE_RULE_IDS.includes(id))).toHaveLength(
+      SPIRE_START_BASE_RULE_COUNT, // 5
+    );
+    // the remaining 2 are the chosen set's rules (neither base nor NOTHING)
+    const setLike = pool.filter(
+      (id) => !SPIRE_BASE_RULE_IDS.includes(id) && !NOTHING_RULE_IDS.has(id),
+    );
+    expect(setLike).toHaveLength(2);
+  });
+
+  it('the base-5 pick is deterministic for a given seed', () => {
+    const a = applyInitialSetChoice(initialSpireState(SEED), 'fruit');
+    const b = applyInitialSetChoice(initialSpireState(SEED), 'fruit');
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(a.state.rulePool).toEqual(b.state.rulePool);
+  });
+
+  it('a NOTHING card scores nothing — placing it is a true no-op', () => {
+    const board: SymbolType[] = ['cherry', 'lemon', 'grape', 'seven', 'four'];
+    const without = scoreResult(board, []);
+    const withNothing = scoreResult(board, [
+      RULES_BY_ID['nothing-1'],
+      RULES_BY_ID['nothing-2'],
+      RULES_BY_ID['nothing-3'],
+    ]);
+    expect(withNothing.baseRoundScore).toBe(without.baseRoundScore);
+    expect(withNothing.bonusScore).toBe(without.bonusScore);
+    expect(withNothing.handScore).toBe(without.handScore);
   });
 });
 
@@ -433,8 +478,10 @@ describe('replay determinism', () => {
       const a = applyInitialSetChoice(s, 'fruit');
       if (!a.ok) throw new Error('a');
       s = { ...a.state, money: 50 };
-      // pool is at 10 after the fruit choice; gem unlocks 2 → free 2 base slots
-      const b = buySymbolSet(s, 'gem', ['zero', 'zero', 'four'], ['center-lock', 'last-lock']);
+      // pool is at 10 after the fruit choice; gem unlocks 2 → free 2 slots by
+      // removing the first 2 pool rules (the starting base hand is now random 5,
+      // so remove whatever's actually there — still fully deterministic for SEED).
+      const b = buySymbolSet(s, 'gem', ['zero', 'zero', 'four'], s.rulePool.slice(0, 2));
       if (!b.ok) throw new Error(b.error);
       return b.state;
     };

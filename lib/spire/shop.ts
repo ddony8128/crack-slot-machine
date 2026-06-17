@@ -13,6 +13,7 @@ import { createSeededRng, type Rng } from '@/lib/rng';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
 import { ARTIFACTS, artifactOffered } from '@/lib/spire/artifacts';
 import { GENERAL_RULE_IDS } from '@/lib/rules/sets';
+import { NOTHING_RULE_IDS } from '@/data/rules';
 import {
   SPIRE_ARTIFACT_PRICES,
   SPIRE_SET_PRICE,
@@ -60,6 +61,9 @@ export function spireBuyableRuleIds(state: SpireRunState): string[] {
     if (set) for (const id of set.ruleIds) candidates.add(id);
   }
   for (const id of state.rulePool) candidates.delete(id);
+  // NOTHING cards are never purchasable — they only exist in the starting pool.
+  // (Already excluded by construction; this is an explicit belt-and-suspenders.)
+  for (const id of NOTHING_RULE_IDS) candidates.delete(id);
   return [...candidates];
 }
 

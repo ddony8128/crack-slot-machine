@@ -6,6 +6,25 @@ import SymbolPool from "@/components/SymbolPool";
 import { RULES_BY_ID } from "@/data/rules";
 import { ARTIFACTS_BY_ID } from "@/lib/spire/artifacts";
 
+type RuleRow = { id: string; name: string; description: string; count: number };
+
+/**
+ * Collapse the rule pool for display: rules with the SAME name (only the NOTHING
+ * placeholders share a name — every other rule's name is unique) merge into one
+ * row with a × count, so "NOTHING × 3" shows accurately instead of 3 rows.
+ */
+function aggregateRules(ruleIds: string[]): RuleRow[] {
+  const byName = new Map<string, RuleRow>();
+  for (const id of ruleIds) {
+    const rule = RULES_BY_ID[id];
+    const name = rule?.name ?? id;
+    const existing = byName.get(name);
+    if (existing) existing.count += 1;
+    else byName.set(name, { id, name, description: rule?.description ?? "", count: 1 });
+  }
+  return [...byName.values()];
+}
+
 /**
  * 보유 현황 — the 첨탑 player's current holdings in one place: the symbol pouch
  * (with roll weights, since the count IS the probability), the rule pool, and the
@@ -47,21 +66,21 @@ export default function HoldingsModal({
             규칙 풀 ({ruleIds.length})
           </h3>
           <ul className="space-y-1.5">
-            {ruleIds.map((id, i) => {
-              const rule = RULES_BY_ID[id];
-              return (
-                <li key={`${id}-${i}`} className="space-y-0.5">
-                  <span className="text-sm font-bold text-emerald-300">
-                    {rule?.name ?? id}
-                  </span>
-                  {rule?.description && (
-                    <p className="text-xs leading-snug text-zinc-400">
-                      {rule.description}
-                    </p>
+            {aggregateRules(ruleIds).map(({ id, name, description, count }) => (
+              <li key={id} className="space-y-0.5">
+                <span className="text-sm font-bold text-emerald-300">
+                  {name}
+                  {count > 1 && (
+                    <span className="ml-1 text-zinc-400">× {count}</span>
                   )}
-                </li>
-              );
-            })}
+                </span>
+                {description && (
+                  <p className="text-xs leading-snug text-zinc-400">
+                    {description}
+                  </p>
+                )}
+              </li>
+            ))}
           </ul>
         </section>
 

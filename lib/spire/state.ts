@@ -17,10 +17,12 @@ import { createSeededRng } from '@/lib/rng';
 import { SYMBOL_SETS_BY_ID, type SetBonus } from '@/lib/symbols/sets';
 import { setBonusKey, type SetBonusUpgrade, type SetBonusUpgradeMap } from '@/lib/score';
 import { ARTIFACTS_BY_ID, artifactOffered } from '@/lib/spire/artifacts';
+import { NOTHING_RULE_IDS } from '@/data/rules';
 import {
   SPIRE_ARTIFACT_PRICES,
   SPIRE_START_BAG,
   SPIRE_BASE_RULE_IDS,
+  SPIRE_START_BASE_RULE_COUNT,
   SPIRE_BAG_TOTAL,
   SPIRE_RULE_POOL_MAX,
   SPIRE_START_MONEY,
@@ -528,14 +530,28 @@ export function applyInitialSetChoice(
   if (next.symbolBag.zero <= 0) delete next.symbolBag.zero;
   for (const sym of set.symbols) bagAdd(next.symbolBag, sym.id, 1);
 
+  // Starting hand = SPIRE_START_BASE_RULE_COUNT random base rules + 3 NOTHING +
+  // up to 2 chosen-set rules = ≤10 (SPIRE_RULE_POOL_MAX). The base pick is SEEDED
+  // (salt `base-rules`) so the client and the server replayer build the IDENTICAL
+  // pool — anti-cheat depends on this determinism (guarded by replayFuzz).
+  const baseRng = createSeededRng(`${state.seed}:base-rules`);
+  const baseShuffled = [...SPIRE_BASE_RULE_IDS];
+  for (let i = baseShuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(baseRng() * (i + 1));
+    [baseShuffled[i], baseShuffled[j]] = [baseShuffled[j], baseShuffled[i]];
+  }
+  const baseRules = baseShuffled.slice(0, SPIRE_START_BASE_RULE_COUNT);
+  const nothings = [...NOTHING_RULE_IDS];
+  // pickSetRules excludes ids already chosen, so set rules never collide with the
+  // base pick (NOTHING ids are off-set, so they never collide either).
+  const poolSoFar = [...baseRules, ...nothings];
   const gainedRuleIds = pickSetRules(
     chosenSetId,
-    next.rulePool,
+    poolSoFar,
     state.seed,
     `set-rules:${chosenSetId}`,
   );
-  // base 8 + up to 2 = ≤10, never overflows.
-  next.rulePool = [...next.rulePool, ...gainedRuleIds];
+  next.rulePool = [...poolSoFar, ...gainedRuleIds];
   next.ownedSetIds = [...next.ownedSetIds, chosenSetId];
 
   assertBag20(next.symbolBag);

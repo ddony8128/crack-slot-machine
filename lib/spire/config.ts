@@ -8,7 +8,7 @@ export const SPIRE_SPINS_PER_STAGE = 7;
 export type SpireStage = { index: number; targetScore: number };
 
 export const SPIRE_STAGES: SpireStage[] = [
-  { index: 1, targetScore: 500 },
+  { index: 1, targetScore: 300 },
   { index: 2, targetScore: 1000 },
   { index: 3, targetScore: 2000 },
   { index: 4, targetScore: 4000 },
@@ -42,7 +42,12 @@ export const SPIRE_CLEAR_PAYOUT: Record<number, number> = {
 // Stages whose clear triggers an artifact choice.
 export const SPIRE_ARTIFACT_STAGES = [3, 6, 9];
 
-// The 8 base rules every spire run starts with (before the chosen-set's 2 rules).
+// At run start the pool = SPIRE_START_BASE_RULE_COUNT random base rules + 3 NOTHING
+// (NOTHING_RULE_IDS) + 2 chosen-set rules = SPIRE_RULE_POOL_MAX (10). See
+// lib/spire/state.ts applyInitialSetChoice (seeded → replay-deterministic).
+export const SPIRE_START_BASE_RULE_COUNT = 5;
+
+// The base rules a spire run draws its starting hand from (random 5 of these).
 export const SPIRE_BASE_RULE_IDS: string[] = [
   'center-lock',
   'last-lock',

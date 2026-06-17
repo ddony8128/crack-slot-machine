@@ -506,7 +506,28 @@ export const RULES: Rule[] = [
   // ---- pair (A–B conditional bonus) ----
   // The non-spec 페어 보너스 rules (과수원 보석상 / 고양이 택시) were removed.
   // PAIR_RULES is now empty, so no 'pair'-build rules are registered.
+
+  // ---- nothing (첨탑 시작 풀을 채우는 무효 카드) ----
+  // 효과가 전혀 없는 placeholder. 첨탑 시작 풀에만 주입되며 상점·타 모드·규칙 도움말에는
+  // 절대 노출되지 않는다(NOTHING_RULE_IDS로 가드). 엔진 효과는 100% rule.id 기준이라,
+  // 이 id들은 cascade default(no-op)·computeWeights·scoreResult 어디에도 매칭되지 않아
+  // 완전 무효다. 규칙 유일성을 지키기 위해 서로 다른 id 3개를 둔다(같은 id 3개는 금지).
+  { id: 'nothing-1', name: 'NOTHING', description: '아무 효과가 없습니다.', type: 'score', phase: 'scoring', build: 'nothing' },
+  { id: 'nothing-2', name: 'NOTHING', description: '아무 효과가 없습니다.', type: 'score', phase: 'scoring', build: 'nothing' },
+  { id: 'nothing-3', name: 'NOTHING', description: '아무 효과가 없습니다.', type: 'score', phase: 'scoring', build: 'nothing' },
 ];
+
+/**
+ * The 3 no-op "NOTHING" cards. They live in `RULES` (so RULES_BY_ID resolves them
+ * for the engine + holdings display) but must NEVER appear in the shop, in other
+ * modes, or in the 규칙 도움말 — callers gate on this set. They are injected ONLY
+ * into the spire starting pool (lib/spire/state.ts applyInitialSetChoice).
+ */
+export const NOTHING_RULE_IDS: ReadonlySet<string> = new Set<string>([
+  'nothing-1',
+  'nothing-2',
+  'nothing-3',
+]);
 
 export const RULES_BY_ID: Record<string, Rule> = Object.fromEntries(
   RULES.map((rule) => [rule.id, rule]),
