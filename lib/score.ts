@@ -1,5 +1,5 @@
 import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
-import { NUMBERS } from '@/data/symbols';
+import { NUMBERS, RED_SET, BLUE_SET } from '@/data/symbols';
 import { SYMBOL_SETS, SYMBOL_SETS_BY_ID, type SetBonus } from '@/lib/symbols/sets';
 import { symbolInSet } from '@/lib/symbols/tags';
 import { expandRules, countRule } from '@/lib/expandRules';
@@ -23,6 +23,8 @@ import {
   GEM_BEAUTY,
   SHAKEDOWN_PER,
   EXORCIST_PER,
+  BONUS_ALL_RED,
+  BONUS_ALL_BLUE,
 } from '@/data/scoreTable';
 
 /** 첨탑 per-hand upgrades, keyed by computeHand's hand name. */
@@ -146,6 +148,27 @@ const PER_EVENT_LABEL: Record<PerEventTag, string> = {
   rerolled: '재굴림',
   copied: '복사',
 };
+
+/**
+ * 레거시 전용 색 보너스 — 올 레드(루비🔴·체리🍒) / 올 블루(사파이어🔵·포도🍇).
+ *
+ * 원조 빠른 게임/이벤트 족보였으나, 시즌 config-driven scoring 리팩터에서 누락됐다(상수와
+ * RED_SET/BLUE_SET만 고아로 남음). 빠른 게임/이벤트는 "원조 동결"이므로 여기서 복원한다.
+ * 시즌 모드(일일/퍼즐/첨탑)는 단일 세트 기반 보너스만 쓰므로(색 묶음은 세트 모델에 안 맞음)
+ * 적용하지 않는다 — 호출부가 legacyColor 플래그로 켠다.
+ *
+ * 과일/보석 3종·올 과일·올 보석은 `setBonuses`가 이미 처리하므로 여기서 제외한다(중복 방지).
+ * RED_SET과 BLUE_SET은 서로소라 둘이 동시에 성립할 수 없다.
+ */
+export function legacyColorBonus(result: SymbolType[]): { sum: number; items: ScoreItem[] } {
+  const items: ScoreItem[] = [];
+  if (result.length === 5 && result.every((s) => BLUE_SET.has(s)))
+    items.push({ label: '올 블루', points: BONUS_ALL_BLUE });
+  if (result.length === 5 && result.every((s) => RED_SET.has(s)))
+    items.push({ label: '올 레드', points: BONUS_ALL_RED });
+  const sum = items.reduce((a, it) => a + it.points, 0);
+  return { sum, items };
+}
 
 export function countFours(result: SymbolType[]): number {
   return result.filter((s) => s === 'four').length;
@@ -452,6 +475,7 @@ export function scoreItems(
   handUpgrades?: HandUpgradeMap,
   artifacts: string[] = [],
   setBonusUpgrades?: SetBonusUpgradeMap,
+  legacyColor = false,
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -477,6 +501,9 @@ export function scoreItems(
   }
 
   items.push(...setBonuses(result, events, setBonusUpgrades).items);
+
+  // 레거시 전용 색 보너스 (올 레드/올 블루). 시즌 런에서는 legacyColor=false.
+  if (legacyColor) items.push(...legacyColorBonus(result).items);
 
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
@@ -560,6 +587,7 @@ export function scoreResult(
   handUpgrades?: HandUpgradeMap,
   artifacts: string[] = [],
   setBonusUpgrades?: SetBonusUpgradeMap,
+  legacyColor = false,
 ): {
   hand: string;
   handScore: number;
@@ -582,6 +610,8 @@ export function scoreResult(
   for (let k = 0; k < sevenDoubleCount; k++) sevenPts *= 2;
 
   let bonusScore = setBonuses(result, events, setBonusUpgrades).sum;
+  // 레거시 전용 색 보너스 (올 레드/올 블루). 시즌 런에서는 legacyColor=false.
+  if (legacyColor) bonusScore += legacyColorBonus(result).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
   // 미의 추구 (gem-beauty): +GEM_BEAUTY per rule occurrence, ONLY if the board has
   // ≥1 gem. No gem -> no points even if slotted.

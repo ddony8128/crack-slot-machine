@@ -12,7 +12,7 @@ import {
 import { scoreResult, scoreItems, type HandUpgradeMap, type SetBonusUpgradeMap } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
 import { rulePlayable } from '@/lib/rules/playable';
-import { RULES, RULES_BY_ID } from '@/data/rules';
+import { RULES, RULES_BY_ID, LEGACY_RULE_IDS } from '@/data/rules';
 import { BASE_WEIGHTS, CATS } from '@/data/symbols';
 import type { PuzzleGoal } from '@/lib/puzzle/config';
 import { checkPuzzleRun, type GoalContext } from '@/lib/puzzle/goals';
@@ -140,28 +140,18 @@ function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
 }
 
 /**
- * Builds that are NEVER offered in the 'offer' (legacy 빠른 게임/이벤트) path.
- * combo (red-dye/blue-dye/ruby-convert/diamond-convert/…) and pair
- * (pair-fruit-gem/…) rules are season-1 multi-set mechanics: even though their
- * fruit/gem requirements pass rulePlayable on the legacy bag, 기획 keeps quick on
- * the original number/fruit/gem rule set only. Season modes use 'pool'/'fixed'
- * with explicit rulePoolIds, so this exclusion does not touch them.
- */
-export const LEGACY_EXCLUDED_BUILDS = new Set<string>(['combo', 'pair']);
-
-/**
  * Offer `count` distinct rules (by id) that are NOT currently in a slot OR the
  * bag. Shuffles the allowed pool with the injected rng and takes the first
- * `count`. With 26 rules this never starves a 3- (or 4-) card offer.
+ * `count`. The legacy whitelist (30 rules) never starves a 3- (or 4-) card offer.
  *
  * `count` defaults to OFFER_COUNT; the swiss-knife (맥가이버 칼) artifact bumps it
  * to 4 (passed via offerCount() at each call site). Config-driven → replays
  * identically.
  *
- * When `excludeLegacyBuilds` is true (the 'offer' provisioning path), combo/pair
- * rules are dropped IN ADDITION to the rulePlayable filter — see
- * LEGACY_EXCLUDED_BUILDS. Season pools ('pool'/'fixed') pass false so their
- * curated rulePoolIds are unchanged.
+ * When `legacyOnly` is true (the 'offer' provisioning path = 빠른 게임/이벤트),
+ * the pool is restricted to the FROZEN original ruleset (`LEGACY_RULE_IDS`) so
+ * season-only set rules never leak in (see data/rules.ts). Season pools
+ * ('pool'/'fixed') pass false so their curated rulePoolIds are unchanged.
  */
 function offerRules(
   rng: Rng,
@@ -170,19 +160,19 @@ function offerRules(
   pool: Rule[] = RULES,
   count: number = OFFER_COUNT,
   weights: Record<SymbolType, number> = BASE_WEIGHTS,
-  excludeLegacyBuilds = false,
+  legacyOnly = false,
 ): Rule[] {
   const usedIds = new Set<string>();
   for (const r of slots) if (r != null) usedIds.add(r.id);
   for (const r of bag) usedIds.add(r.id);
-  // Only offer rules whose symbols can actually roll in this run's bag — keeps
-  // cat/vehicle/monster rules out of 빠른 게임/이벤트 offers (their bag rolls
-  // none), while season pools (already curated to the run's sets) are unchanged.
+  // Only offer rules whose symbols can actually roll in this run's bag, and — on
+  // the legacy path — only rules in the frozen original whitelist. Season pools
+  // (already curated to the run's sets) are unchanged.
   const allowed = pool.filter(
     (r) =>
       !usedIds.has(r.id) &&
       rulePlayable(r, weights) &&
-      !(excludeLegacyBuilds && LEGACY_EXCLUDED_BUILDS.has(r.build ?? '')),
+      !(legacyOnly && !LEGACY_RULE_IDS.has(r.id)),
   );
   return shuffle(allowed, rng).slice(0, count);
 }
@@ -274,8 +264,8 @@ function buildInitializer(initialRng: Rng): Initializer {
       : RULES;
 
   // True for the legacy 'offer' path (빠른 게임/이벤트: undefined or explicit
-  // 'offer'). Drives the combo/pair exclusion in offerRules so quick offers stay
-  // on the original number/fruit/gem rule set. Season modes ('pool'/'fixed')
+  // 'offer'). Drives the LEGACY_RULE_IDS whitelist in offerRules so quick/event
+  // offers stay on the frozen original ruleset. Season modes ('pool'/'fixed')
   // return false → their curated rulePoolIds are untouched.
   const isOfferProvisioning = (): boolean =>
     runConfig?.provisioning == null || runConfig.provisioning === 'offer';
@@ -344,8 +334,11 @@ function buildInitializer(initialRng: Rng): Initializer {
       const ups = runConfig?.handUpgrades;
       const arts = runConfig?.artifacts ?? [];
       const setUps = runConfig?.setBonusUpgrades;
-      const score = scoreResult(finalResult, slots, events, boards, haunted, ups, arts, setUps);
-      const items = scoreItems(finalResult, slots, events, boards, haunted, ups, arts, setUps);
+      // 올 레드/올 블루 색 보너스는 레거시(빠른 게임/이벤트) 전용 — 규칙 화이트리스트와
+      // 동일한 경계(isOfferProvisioning)로 켠다. 시즌 풀('pool'/'fixed')은 false.
+      const legacyColor = isOfferProvisioning();
+      const score = scoreResult(finalResult, slots, events, boards, haunted, ups, arts, setUps, legacyColor);
+      const items = scoreItems(finalResult, slots, events, boards, haunted, ups, arts, setUps, legacyColor);
       const specials = detectSpecials(finalResult, runConfig?.numberSpecials);
       const multiplier = state.nextMultiplier;
       let roundScore = score.baseRoundScore * multiplier;

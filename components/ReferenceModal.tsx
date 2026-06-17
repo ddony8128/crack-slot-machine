@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { RULES, RULE_PHASE_LABELS } from "@/data/rules";
+import { RULES, RULE_PHASE_LABELS, LEGACY_RULE_IDS } from "@/data/rules";
 import type { Rule, SymbolType } from "@/types";
 import { BASE_WEIGHTS } from "@/data/symbols";
 import { rulePlayable } from "@/lib/rules/playable";
-import { LEGACY_EXCLUDED_BUILDS } from "@/store/gameStore";
 import {
   SEVEN_SCORE,
   HAND_PAIR,
@@ -17,6 +16,8 @@ import {
   FOUR_PENALTY_PER,
   FOURS_4_MULT,
   FOURS_5_MULT,
+  BONUS_ALL_RED,
+  BONUS_ALL_BLUE,
 } from "@/data/scoreTable";
 import {
   SYMBOL_SETS,
@@ -209,7 +210,8 @@ export default function ReferenceModal({
    * DailySetupPreview, SpireClient) compile and render unchanged. The reference
    * is filtered to match what the run actually offers/scores: only rules whose
    * symbols can roll (rulePlayable), only set bonuses for rollable sets, and —
-   * on the legacy bag — combo/pair rules are hidden (mirrors the offer filter).
+   * on the legacy bag — only the frozen original whitelist (LEGACY_RULE_IDS),
+   * mirroring the offer filter so 규칙 보기 ≡ what's actually offered.
    */
   weights?: Record<SymbolType, number>;
 }) {
@@ -234,14 +236,15 @@ export default function ReferenceModal({
 
   if (!open) return null;
 
-  // Legacy = the default BASE_WEIGHTS bag (빠른 게임/이벤트). On that bag we hide
-  // combo/pair rules so the reference matches the offer filter (gameStore's
-  // LEGACY_EXCLUDED_BUILDS); season runs pass their own baseWeights → shown.
+  // Legacy = the default BASE_WEIGHTS bag (빠른 게임/이벤트). On that bag we show
+  // only the frozen original whitelist so the reference matches the offer filter
+  // (gameStore's LEGACY_RULE_IDS); season runs pass their own baseWeights → the
+  // whitelist is not applied and rollable set rules are shown.
   const legacy = weights === BASE_WEIGHTS;
   const visibleRules = RULES.filter(
     (r) =>
       rulePlayable(r, weights) &&
-      !(legacy && LEGACY_EXCLUDED_BUILDS.has(r.build ?? "")),
+      (!legacy || LEGACY_RULE_IDS.has(r.id)),
   );
   const groups = groupByBuild(visibleRules);
 
@@ -385,6 +388,15 @@ export default function ReferenceModal({
                 })}
               </ScoreCard>
             ))}
+
+            {/* 색 보너스(올 레드/올 블루)는 원조 빠른 게임/이벤트 전용 족보 — 레거시 백에서만
+                노출한다. 시즌 모드는 세트 기반 보너스만 사용하므로 표시하지 않는다. */}
+            {legacy && (
+              <ScoreCard title="색 보너스" note="다섯 칸이 모두 같은 색일 때.">
+                <ScoreRow label="올 블루 (사파이어🔵·포도🍇)" value={`+${BONUS_ALL_BLUE}`} />
+                <ScoreRow label="올 레드 (루비🔴·체리🍒)" value={`+${BONUS_ALL_RED}`} />
+              </ScoreCard>
+            )}
           </section>
           )}
         </div>

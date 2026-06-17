@@ -511,3 +511,38 @@ export const RULES: Rule[] = [
 export const RULES_BY_ID: Record<string, Rule> = Object.fromEntries(
   RULES.map((rule) => [rule.id, rule]),
 );
+
+/**
+ * 빠른 게임 / 이벤트(레거시)에서 제안될 수 있는 규칙의 **동결된 화이트리스트**.
+ *
+ * 레거시는 "원조 룰셋"으로 고정한다(사용자 결정). `RULES`는 시즌 세트 규칙까지 담는 공용
+ * 테이블이라, 과거에는 "심볼이 굴러가면 노출"(rulePlayable) + combo/pair 빌드 제외 방식으로
+ * 레거시 풀을 추렸다. 그 방식은 시즌 중 추가된 과일/보석 빌드 규칙(비타민 보충·미의 추구)이
+ * 레거시로 새어 들어오고, 원래 레거시에 있던 붉은/푸른 물들이기(현재 combo 빌드)가 빠지는
+ * **드리프트**를 만들었다.
+ *
+ * 그래서 이제는 **id 화이트리스트**가 단일 기준이다. 이 30개는 시즌-1 작업 직전 커밋
+ * (2026-06-15 `d6842dd`)의 data/rules.ts에서 레거시 백(BASE_WEIGHTS)으로 노출되던 규칙
+ * 전부와 정확히 일치한다. 시즌 세트 전용 규칙(비타민 보충·미의 추구·고양이/교통/괴물/그 외
+ * combo)은 빠른 게임/이벤트에 등장하지 않으며, 시즌 모드(일일/퍼즐/첨탑)에서만 쓰인다.
+ *
+ * 참고: 과일/보석 확률 ×4 · 0 상승(왼쪽 2개) · 보석 셔플(2개) 세 규칙은 **동작만** 시즌 spec에
+ * 맞춰 조정됐고 멤버십은 그대로다 — 모두 이 화이트리스트에 포함된다.
+ */
+export const LEGACY_RULE_IDS: ReadonlySet<string> = new Set<string>([
+  // 7 / 숫자
+  'seven-fever', 'seven-double', 'zero-to-seven', 'number-spin',
+  // 과일
+  'fruit-surge', 'diamond-cut', 'fruit-fish',
+  // 보석
+  'gem-surge', 'gem-fish',
+  // 순서 / 메타 / select
+  'fruit-freeze', 'center-lock', 'last-lock', 'left-pair', 'center-echo',
+  'third-mirror', 'copy-above', 'select-copy', 'select-swap', 'select-reroll',
+  // 컬러 / 물들이기
+  'first-cherry', 'red-dye', 'blue-dye',
+  // 안전
+  'no-zero', 'four-shield', 'four-parry', 'safe-convert', 'gem-shuffle',
+  // 점수
+  'bonus-77', 'clean-bonus', 'four-fortune',
+]);
