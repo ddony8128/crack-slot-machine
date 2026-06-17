@@ -1,10 +1,33 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentPlayer, clearPlayerCookie } from "@/lib/server/playerAuth";
+import { getDb } from "@/lib/db";
+import AnnouncementBell from "@/components/AnnouncementBell";
+import { type AnnouncementItem } from "@/components/AnnouncementModal";
+
+/** Published announcements for the logged-in player's 공지 bell. Degrades to none
+ *  on any read failure (e.g. migration not yet applied) so the nav never breaks. */
+async function loadAnnouncements(): Promise<AnnouncementItem[]> {
+  try {
+    const db = getDb();
+    const season = await db.getActiveSeason();
+    const rows = await db.listPublishedAnnouncements(season?.id ?? null);
+    return rows.map((a) => ({
+      id: a.id,
+      title: a.title,
+      body: a.body,
+      pinned: a.pinned,
+      createdAt: a.createdAt,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 /** Header shown on every Season 1 page: brand, nav links, and login state. */
 export default async function SeasonNav() {
   const player = await currentPlayer();
+  const announcements = player ? await loadAnnouncements() : [];
 
   // Logout via a server action: clears the session cookie, then redirects so
   // the freshly-rendered tree reflects the logged-out state.
@@ -54,6 +77,7 @@ export default async function SeasonNav() {
               계정 설정
             </Link>
           )}
+          {player && <AnnouncementBell announcements={announcements} />}
         </nav>
 
         <div className="flex items-center gap-2 text-sm">

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import SeasonNav from "@/components/SeasonNav";
-import AnnouncementModal from "@/components/AnnouncementModal";
 import { currentPlayer } from "@/lib/server/playerAuth";
 import { getDb } from "@/lib/db";
 import { SEASON_TITLE, SEASON_NOTICE, MODE_LABELS } from "@/lib/season/config";
@@ -147,27 +146,8 @@ export default async function SeasonHubPage() {
         ])
       : [null, null];
 
-  // Published announcements for the after-login modal (logged-in players only).
-  // Degrade to none on any read failure (e.g. the migration not yet applied) so
-  // a notices outage never breaks the hub.
-  const announcements = player
-    ? await getDb()
-        .listPublishedAnnouncements(season?.id ?? null)
-        .then((rows) =>
-          rows.map((a) => ({
-            id: a.id,
-            title: a.title,
-            body: a.body,
-            pinned: a.pinned,
-            createdAt: a.createdAt,
-          })),
-        )
-        .catch(() => [])
-    : [];
-
   return (
     <div className="flex min-h-full flex-col">
-      {player && <AnnouncementModal announcements={announcements} />}
       <SeasonNav />
 
       <main className="fade-rise mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-4 py-10">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Generic accessible modal dialog mirroring ReferenceModal's overlay markup:
@@ -40,9 +41,11 @@ export default function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  // Portal to <body> so the fixed overlay escapes any ancestor stacking context
+  // (e.g. SeasonNav's backdrop-blur header) and reliably covers the page.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
       role="dialog"
@@ -64,6 +67,7 @@ export default function Modal({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
