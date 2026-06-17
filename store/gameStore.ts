@@ -706,8 +706,14 @@ function buildInitializer(initialRng: Rng): Initializer {
       const pending = activeFrame.pending;
       const expectedCount = pending.count;
 
-      // Validate: right count, all distinct, all selectable.
-      if (indices.length !== expectedCount) return;
+      // Validate count: park (유료 주차) is "최대 N칸" — any 1..N selection is valid
+      // (player confirms with a button); every other kind needs exactly `count`.
+      // Then: all distinct, all selectable.
+      if (pending.kind === 'park') {
+        if (indices.length < 1 || indices.length > expectedCount) return;
+      } else if (indices.length !== expectedCount) {
+        return;
+      }
       const seen = new Set<number>();
       for (const i of indices) {
         if (i < 0 || i >= pending.selectable.length) return;
