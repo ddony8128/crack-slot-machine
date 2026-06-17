@@ -356,10 +356,17 @@ export default function ReferenceModal({
               <ScoreRow label="7이 5개 (잭팟)" value={`+${SEVEN_SCORE[5]}`} />
               <SectionLabel>4 페널티</SectionLabel>
               <ScoreRow label="4 1개당" value={`-${FOUR_PENALTY_PER}`} negative />
-              <SectionLabel>특수 족보 (다음 스핀)</SectionLabel>
-              <ScoreRow label="0이 3개 이상" value="규칙 1장 추가" />
-              <ScoreRow label="4가 4개" value={`다음 스핀 ×${FOURS_4_MULT}`} />
-              <ScoreRow label="4가 5개" value={`다음 스핀 ×${FOURS_5_MULT}`} />
+              {/* 특수 족보 (4×4/4×5 배수, 0≥3 규칙 추가) are 빠른 게임 전용. Season modes
+                  (일일·시즌) turn them off; 첨탑 grants them only via artifacts — so they
+                  appear in the 점수표 ONLY on the legacy bag. */}
+              {legacy && (
+                <>
+                  <SectionLabel>특수 족보 (다음 스핀)</SectionLabel>
+                  <ScoreRow label="0이 3개 이상" value="규칙 1장 추가" />
+                  <ScoreRow label="4가 4개" value={`다음 스핀 ×${FOURS_4_MULT}`} />
+                  <ScoreRow label="4가 5개" value={`다음 스핀 ×${FOURS_5_MULT}`} />
+                </>
+              )}
             </ScoreCard>
 
             {visibleSets.map((set) => (

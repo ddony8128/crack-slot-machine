@@ -622,10 +622,10 @@ function leftmostCatNextToVehicle(working: SymbolType[]): number {
  * copy.)
  */
 function selectableFor(kind: SelectKind, locked: boolean[], working: SymbolType[]): boolean[] {
-  // park restricts to non-locked VEHICLE cells; every other kind allows all
-  // non-locked cells (held cells are modifiable, so they stay selectable).
+  // park restricts to VEHICLE cells; held (locked) cells stay selectable so a
+  // vehicle parked last spin can be parked AGAIN this spin (re-held for the next).
   if (kind === 'park') {
-    return working.map((sym, i) => !locked[i] && VEHICLE_SET.has(sym));
+    return working.map((sym) => VEHICLE_SET.has(sym));
   }
   const out = locked.map(() => true);
   // select-copy excludes index 0 (no left neighbour to copy from).

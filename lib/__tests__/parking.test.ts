@@ -92,6 +92,25 @@ describe('vehicle-parking — PLAYER picks 원하는 2칸 vehicle cells; resolve
     expect(frame.working).toEqual(base);
     expect(frame.steps.some((s) => s.label.includes('건너뜀'))).toBe(true);
   });
+
+  it('a vehicle HELD from last spin (preHeld → locked) is still selectable — it can be re-parked', () => {
+    // prev[0]='car' was parked last spin; this spin preHeld=[0] holds it (locked).
+    const prev: SymbolType[] = ['car', 'lemon', 'ship', 'grape', 'diamond'];
+    const base: SymbolType[] = ['cherry', 'lemon', 'plane', 'grape', 'diamond'];
+    const frame = beginCascade(
+      base,
+      [RULES_BY_ID['vehicle-parking']],
+      ctxFor(prev),
+      { preHeld: [0] },
+    );
+    // cell 0 is held (locked) AND a vehicle (car) → still offered for parking.
+    expect(frame.locked[0]).toBe(true);
+    expect(frame.pending?.kind).toBe('park');
+    expect(frame.pending?.selectable[0]).toBe(true);
+    // vehicles: held car@0 + plane@2 → 2 selectable; count = min(2, 2) = 2.
+    expect(frame.pending?.selectable).toEqual([true, false, true, false, false]);
+    expect(frame.pending?.count).toBe(2);
+  });
 });
 
 describe('beginCascade preHeld — cross-spin hold pass', () => {
