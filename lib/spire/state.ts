@@ -14,7 +14,8 @@
  */
 
 import { createSeededRng } from '@/lib/rng';
-import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { SYMBOL_SETS_BY_ID, type SetBonus } from '@/lib/symbols/sets';
+import { setBonusKey, type SetBonusUpgrade, type SetBonusUpgradeMap } from '@/lib/score';
 import { ARTIFACTS_BY_ID, artifactOffered } from '@/lib/spire/artifacts';
 import {
   SPIRE_ARTIFACT_PRICES,
@@ -54,6 +55,8 @@ export type SpireRunState = {
   rulePool: string[]; // ≤10
   artifacts: string[];
   handUpgrades: Record<string, HandUpgrade>;
+  // 족보 강화 for owned-set bonuses (keyed by setBonusKey). Empty until bought.
+  setBonusUpgrades: SetBonusUpgradeMap;
 };
 
 /** The hands the v0 shop allows the player to upgrade (flat bonus / ×2). */
@@ -90,6 +93,18 @@ function cloneHandUpgrades(
   return out;
 }
 
+function cloneSetBonusUpgrades(su: SetBonusUpgradeMap): SetBonusUpgradeMap {
+  const out: SetBonusUpgradeMap = {};
+  for (const [k, v] of Object.entries(su)) {
+    out[k] = {
+      flatBonusCount: v.flatBonusCount,
+      doubleCount: v.doubleCount,
+      mitigateCount: v.mitigateCount,
+    };
+  }
+  return out;
+}
+
 /** Shallow-clone the whole state with deep copies of every mutable container. */
 function cloneState(state: SpireRunState): SpireRunState {
   return {
@@ -99,6 +114,7 @@ function cloneState(state: SpireRunState): SpireRunState {
     rulePool: [...state.rulePool],
     artifacts: [...state.artifacts],
     handUpgrades: cloneHandUpgrades(state.handUpgrades),
+    setBonusUpgrades: cloneSetBonusUpgrades(state.setBonusUpgrades),
   };
 }
 
@@ -436,9 +452,39 @@ export function initialSpireState(seed: string): SpireRunState {
     rulePool: [...SPIRE_BASE_RULE_IDS],
     artifacts: [],
     handUpgrades: {},
+    setBonusUpgrades: {},
   };
   assertBag20(state.symbolBag);
   return state;
+}
+
+/**
+ * Every upgradeable set-bonus for the run's OWNED (non-number) sets, in set order.
+ * Used by the shop UI and to VALIDATE buySetBonus (anti-tamper). `isPenalty` flags
+ * negative bonuses (이웃 고양이) — those allow only the 완화(mitigate) kind.
+ */
+export function listUpgradeableSetBonuses(ownedSetIds: string[]): Array<{
+  key: string;
+  setId: string;
+  setName: string;
+  bonus: SetBonus;
+  isPenalty: boolean;
+}> {
+  const out: Array<{ key: string; setId: string; setName: string; bonus: SetBonus; isPenalty: boolean }> = [];
+  for (const setId of ownedSetIds) {
+    const set = nonNumberSet(setId);
+    if (!set) continue;
+    for (const bonus of set.bonuses) {
+      out.push({
+        key: setBonusKey(setId, bonus),
+        setId,
+        setName: set.name,
+        bonus,
+        isPenalty: bonus.points < 0,
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -680,6 +726,47 @@ export function buyHandDouble(state: SpireRunState, handType: string): Result {
   next.handUpgrades[handType] = {
     flatBonusCount: cur.flatBonusCount,
     doubleCount: cur.doubleCount + 1,
+  };
+  next.money -= cost;
+  return { ok: true, state: next };
+}
+
+export type SetBonusUpgradeKind = 'flat' | 'double' | 'mitigate';
+
+/**
+ * Buy a 족보 강화 for an OWNED set's bonus (shop). `kind`:
+ *  - 'flat' (+50) / 'double' (×2): positive bonuses only, each once.
+ *  - 'mitigate' (+50 완화): penalty bonuses (이웃 고양이) only, once.
+ * The key must belong to an owned set's bonus (validated via listUpgradeableSetBonuses).
+ */
+export function buySetBonus(
+  state: SpireRunState,
+  key: string,
+  kind: SetBonusUpgradeKind,
+): Result {
+  const entry = listUpgradeableSetBonuses(state.ownedSetIds).find((e) => e.key === key);
+  if (!entry) return { ok: false, error: `set bonus not upgradeable: ${key}` };
+  if (entry.isPenalty && kind !== 'mitigate') {
+    return { ok: false, error: `penalty bonus allows only 완화: ${key}` };
+  }
+  if (!entry.isPenalty && kind === 'mitigate') {
+    return { ok: false, error: `positive bonus has no 완화: ${key}` };
+  }
+
+  const cur: SetBonusUpgrade =
+    state.setBonusUpgrades[key] ?? { flatBonusCount: 0, doubleCount: 0, mitigateCount: 0 };
+  if (kind === 'flat' && cur.flatBonusCount >= 1) return { ok: false, error: `flat already bought: ${key}` };
+  if (kind === 'double' && cur.doubleCount >= 1) return { ok: false, error: `double already bought: ${key}` };
+  if (kind === 'mitigate' && cur.mitigateCount >= 1) return { ok: false, error: `mitigate already bought: ${key}` };
+
+  const cost = kind === 'double' ? SPIRE_HAND_DOUBLE_PRICE : SPIRE_HAND_FLAT_PRICE;
+  if (state.money < cost) return { ok: false, error: `not enough money (need ${cost})` };
+
+  const next = cloneState(state);
+  next.setBonusUpgrades[key] = {
+    flatBonusCount: cur.flatBonusCount + (kind === 'flat' ? 1 : 0),
+    doubleCount: cur.doubleCount + (kind === 'double' ? 1 : 0),
+    mitigateCount: cur.mitigateCount + (kind === 'mitigate' ? 1 : 0),
   };
   next.money -= cost;
   return { ok: true, state: next };

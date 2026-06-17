@@ -24,6 +24,8 @@ import {
   buyArtifact,
   buyHandFlat,
   buyHandDouble,
+  buySetBonus,
+  type SetBonusUpgradeKind,
   rerollShop,
   settleClear,
   settleFail,
@@ -179,6 +181,7 @@ export default function SpireClient() {
       st.rulePool,
       st.handUpgrades,
       st.artifacts,
+      st.setBonusUpgrades,
     );
     beginRun(stageAttemptSeed(seedRef.current, stage, attempt), runIdRef.current, "spire");
     configureRun(cfg);
@@ -803,6 +806,13 @@ export default function SpireClient() {
           }
           onBuyHandDouble={(hand) =>
             applyReducer(buyHandDouble(runState, hand), { type: "buy_hand_double", handType: hand })
+          }
+          onBuySetBonus={(key, kind) =>
+            applyReducer(buySetBonus(runState, key, kind), {
+              type: "buy_setbonus",
+              bonusKey: key,
+              kind,
+            })
           }
           onReroll={() => {
             // chime (차임벨): first 2 rerolls of this shop visit are free. rerollCount

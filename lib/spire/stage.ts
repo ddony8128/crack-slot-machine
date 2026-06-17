@@ -9,7 +9,7 @@
 
 import type { SymbolType } from '@/types';
 import type { RunConfig } from '@/store/gameStore';
-import type { HandUpgradeMap } from '@/lib/score';
+import type { HandUpgradeMap, SetBonusUpgradeMap } from '@/lib/score';
 import { BASE_WEIGHTS } from '@/data/symbols';
 import { initialBoardFor } from '@/lib/board/initialBoard';
 import { SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
@@ -78,6 +78,7 @@ export function spireStageRunConfig(
   rulePool: string[],
   handUpgrades?: HandUpgradeMap,
   artifacts: string[] = [],
+  setBonusUpgrades?: SetBonusUpgradeMap,
 ): RunConfig {
   const weights = bagToWeights(bag);
   const seed = stageAttemptSeed(runSeed, stage, attempt);
@@ -91,6 +92,7 @@ export function spireStageRunConfig(
     // clearing spin shows its result before the stage settles (client + replay).
     stageTarget: spireStageTarget(stage),
     handUpgrades,
+    setBonusUpgrades,
     artifacts: [...artifacts],
     // Number specials are OFF in 첨탑 unless the matching 석상 artifact is owned.
     numberSpecials: {

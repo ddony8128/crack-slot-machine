@@ -9,7 +9,7 @@ import {
   type ApplyCtx,
   type CascadeFrame,
 } from '@/lib/cascade';
-import { scoreResult, scoreItems, type HandUpgradeMap } from '@/lib/score';
+import { scoreResult, scoreItems, type HandUpgradeMap, type SetBonusUpgradeMap } from '@/lib/score';
 import { detectSpecials } from '@/lib/specials';
 import { rulePlayable } from '@/lib/rules/playable';
 import { RULES, RULES_BY_ID } from '@/data/rules';
@@ -49,6 +49,8 @@ export type RunConfig = {
   // 첨탑 per-hand upgrades, applied to every spin's hand score (other modes
   // leave this unset → scoring is unchanged).
   handUpgrades?: HandUpgradeMap;
+  // 첨탑 owned-set 족보 강화 (shop) — per-set-bonus upgrades applied in setBonuses.
+  setBonusUpgrades?: SetBonusUpgradeMap;
   // 첨탑 owned artifacts — flow into scoring (lib/score) for artifact effects.
   artifacts?: string[];
   // Number special hands (4×4/4×5 multiplier, 0≥3 extra rule). Unset → ON
@@ -341,8 +343,9 @@ function buildInitializer(initialRng: Rng): Initializer {
       const haunted = frame.haunted ?? [];
       const ups = runConfig?.handUpgrades;
       const arts = runConfig?.artifacts ?? [];
-      const score = scoreResult(finalResult, slots, events, boards, haunted, ups, arts);
-      const items = scoreItems(finalResult, slots, events, boards, haunted, ups, arts);
+      const setUps = runConfig?.setBonusUpgrades;
+      const score = scoreResult(finalResult, slots, events, boards, haunted, ups, arts, setUps);
+      const items = scoreItems(finalResult, slots, events, boards, haunted, ups, arts, setUps);
       const specials = detectSpecials(finalResult, runConfig?.numberSpecials);
       const multiplier = state.nextMultiplier;
       let roundScore = score.baseRoundScore * multiplier;

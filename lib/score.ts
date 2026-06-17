@@ -1,6 +1,6 @@
 import type { EngineEvent, Rule, ScoreItem, SymbolType } from '@/types';
 import { NUMBERS } from '@/data/symbols';
-import { SYMBOL_SETS, SYMBOL_SETS_BY_ID } from '@/lib/symbols/sets';
+import { SYMBOL_SETS, SYMBOL_SETS_BY_ID, type SetBonus } from '@/lib/symbols/sets';
 import { symbolInSet } from '@/lib/symbols/tags';
 import { expandRules, countRule } from '@/lib/expandRules';
 import {
@@ -34,6 +34,36 @@ export function upgradedHandScore(hand: string, base: number, ups?: HandUpgradeM
   const u = ups[hand];
   if (!u) return base;
   return (base + HAND_FLAT_UPGRADE * (u.flatBonusCount ?? 0)) * 2 ** (u.doubleCount ?? 0);
+}
+
+/**
+ * 첨탑 per-set-bonus upgrades (shop "족보 강화" — owned sets' bonuses). Keyed by
+ * `setBonusKey`. POSITIVE bonuses upgrade like a hand (+50 flat / ×2 double, each
+ * once). PENALTY bonuses (negative points, e.g. 이웃 고양이) only MITIGATE: +50
+ * toward 0 (once, capped at 0) — no double.
+ */
+export type SetBonusUpgrade = {
+  flatBonusCount: number;
+  doubleCount: number;
+  mitigateCount: number;
+};
+export type SetBonusUpgradeMap = Record<string, SetBonusUpgrade>;
+
+/** Stable upgrade key for a set's bonus (per-event split by its event). */
+export function setBonusKey(setId: string, bonus: SetBonus): string {
+  return bonus.type === 'per-event'
+    ? `${setId}:per-event:${bonus.event}`
+    : `${setId}:${bonus.type}`;
+}
+
+/** Per-unit bonus points after the owned-set 족보 강화 (positive: +50/×2; penalty: +50 완화). */
+export function upgradedBonusPoints(base: number, up?: SetBonusUpgrade): number {
+  if (!up) return base;
+  if (base < 0) {
+    // 페널티 완화: move toward 0 by HAND_FLAT_UPGRADE per mitigate, capped at 0.
+    return Math.min(0, base + HAND_FLAT_UPGRADE * (up.mitigateCount ?? 0));
+  }
+  return (base + HAND_FLAT_UPGRADE * (up.flatBonusCount ?? 0)) * 2 ** (up.doubleCount ?? 0);
 }
 
 /** +VITAMIN_PER per fruit rerolled by 비타민 보충 (counted from the event log, so
@@ -190,6 +220,7 @@ export function sevenScore(
 export function setBonuses(
   result: SymbolType[],
   events?: EngineEvent[],
+  upgrades?: SetBonusUpgradeMap,
 ): { sum: number; items: ScoreItem[] } {
   const items: ScoreItem[] = [];
 
@@ -206,20 +237,22 @@ export function setBonuses(
     const onBoard = result.filter(isMember).length;
 
     for (const bonus of set.bonuses) {
+      // Per-unit points after the owned-set 족보 강화 (no-op when not upgraded).
+      const pts = upgradedBonusPoints(bonus.points, upgrades?.[setBonusKey(set.id, bonus)]);
       switch (bonus.type) {
         case 'all-types': {
           const present = set.symbols.every((s) => result.includes(s.id as SymbolType));
-          if (present) items.push({ label: `${set.name} 3종`, points: bonus.points });
+          if (present) items.push({ label: `${set.name} 3종`, points: pts });
           break;
         }
         case 'all-symbols': {
           if (result.length === 5 && result.every(isMember))
-            items.push({ label: `올 ${set.name}`, points: bonus.points });
+            items.push({ label: `올 ${set.name}`, points: pts });
           break;
         }
         case 'per-symbol': {
           if (onBoard > 0)
-            items.push({ label: `${set.name} ${onBoard}개`, points: bonus.points * onBoard });
+            items.push({ label: `${set.name} ${onBoard}개`, points: pts * onBoard });
           break;
         }
         case 'adjacent-penalty': {
@@ -234,8 +267,8 @@ export function setBonuses(
             const right = i + 1 < result.length && isMember(result[i + 1]);
             if (left || right) adj += 1;
           }
-          if (adj > 0)
-            items.push({ label: `이웃 ${set.name}`, points: bonus.points * adj });
+          if (adj > 0 && pts !== 0)
+            items.push({ label: `이웃 ${set.name}`, points: pts * adj });
           break;
         }
         case 'per-event': {
@@ -248,7 +281,7 @@ export function setBonuses(
           if (count > 0)
             items.push({
               label: `${set.name} ${PER_EVENT_LABEL[bonus.event]}`,
-              points: bonus.points * count,
+              points: pts * count,
             });
           break;
         }
@@ -418,6 +451,7 @@ export function scoreItems(
   haunted?: boolean[],
   handUpgrades?: HandUpgradeMap,
   artifacts: string[] = [],
+  setBonusUpgrades?: SetBonusUpgradeMap,
 ): ScoreItem[] {
   const expanded = expandRules(activeSlotRules);
   const items: ScoreItem[] = [];
@@ -442,7 +476,7 @@ export function scoreItems(
     });
   }
 
-  items.push(...setBonuses(result, events).items);
+  items.push(...setBonuses(result, events, setBonusUpgrades).items);
 
   const b77 = countRule(expanded, 'bonus-77');
   if (b77 > 0) items.push({ label: b77 > 1 ? `LUCKY SEVEN-SEVEN ×${b77}` : 'LUCKY SEVEN-SEVEN', points: BONUS_77 * b77 });
@@ -525,6 +559,7 @@ export function scoreResult(
   haunted?: boolean[],
   handUpgrades?: HandUpgradeMap,
   artifacts: string[] = [],
+  setBonusUpgrades?: SetBonusUpgradeMap,
 ): {
   hand: string;
   handScore: number;
@@ -546,7 +581,7 @@ export function scoreResult(
   const sevenDoubleCount = countRule(expanded, 'seven-double');
   for (let k = 0; k < sevenDoubleCount; k++) sevenPts *= 2;
 
-  let bonusScore = setBonuses(result, events).sum;
+  let bonusScore = setBonuses(result, events, setBonusUpgrades).sum;
   bonusScore += BONUS_77 * countRule(expanded, 'bonus-77');
   // 미의 추구 (gem-beauty): +GEM_BEAUTY per rule occurrence, ONLY if the board has
   // ≥1 gem. No gem -> no points even if slotted.

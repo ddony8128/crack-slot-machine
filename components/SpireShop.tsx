@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { SpireRunState } from "@/lib/spire/state";
-import { SPIRE_UPGRADEABLE_HANDS } from "@/lib/spire/state";
+import type { SpireRunState, SetBonusUpgradeKind } from "@/lib/spire/state";
+import { SPIRE_UPGRADEABLE_HANDS, listUpgradeableSetBonuses } from "@/lib/spire/state";
 import type { SpireShopOffers } from "@/lib/spire/shop";
-import { SYMBOL_SETS_BY_ID } from "@/lib/symbols/sets";
+import { SYMBOL_SETS_BY_ID, type SetBonus } from "@/lib/symbols/sets";
 import { SYMBOL_EMOJI } from "@/data/symbols";
 import { RULES_BY_ID } from "@/data/rules";
 import { ARTIFACTS_BY_ID } from "@/lib/spire/artifacts";
@@ -24,6 +24,29 @@ function ruleName(id: string): string {
   return RULES_BY_ID[id]?.name ?? id;
 }
 
+const PER_EVENT_KO: Record<"moved" | "rerolled" | "copied", string> = {
+  moved: "이동",
+  rerolled: "재굴림",
+  copied: "복사",
+};
+
+/** Short shop label for a set bonus (e.g. "과일 3종 (+50)", "이웃 고양이 (−60)"). */
+function setBonusLabel(setName: string, bonus: SetBonus): string {
+  const pts = bonus.points >= 0 ? `+${bonus.points}` : `${bonus.points}`;
+  switch (bonus.type) {
+    case "all-types":
+      return `${setName} 3종 (${pts})`;
+    case "all-symbols":
+      return `올 ${setName} (${pts})`;
+    case "per-symbol":
+      return `${setName} 1개당 (${pts})`;
+    case "adjacent-penalty":
+      return `이웃 ${setName} (${pts})`;
+    case "per-event":
+      return `${setName} ${PER_EVENT_KO[bonus.event]} (${pts})`;
+  }
+}
+
 /** Bag symbols with count ≥ 1, as [id, count] rows. */
 function bagRows(bag: Record<string, number>): Array<[string, number]> {
   return Object.entries(bag).filter(([, c]) => c > 0);
@@ -38,6 +61,7 @@ export type SpireShopProps = {
   onBuyArtifact: (artifactId: string, price: number) => void;
   onBuyHandFlat: (handType: string) => void;
   onBuyHandDouble: (handType: string) => void;
+  onBuySetBonus: (key: string, kind: SetBonusUpgradeKind) => void;
   onReroll: () => void;
   onLeave: () => void;
   /** True when the next reroll is free (차임벨: first 2 rerolls per shop visit). */
@@ -59,6 +83,7 @@ export default function SpireShop({
   onBuyArtifact,
   onBuyHandFlat,
   onBuyHandDouble,
+  onBuySetBonus,
   onReroll,
   onLeave,
   rerollFree = false,
@@ -267,6 +292,67 @@ export default function SpireShop({
                     </>
                   )}
                 </button>
+              </div>
+            );
+          })}
+
+          {/* Owned-set bonuses — same 족보 강화 section. Positive: +50점 / ×2 (each
+              once). Penalty (이웃 고양이): 완화만 (once). */}
+          {listUpgradeableSetBonuses(runState.ownedSetIds).map((e) => {
+            const up = runState.setBonusUpgrades[e.key];
+            const flatDone = (up?.flatBonusCount ?? 0) >= 1;
+            const doubleDone = (up?.doubleCount ?? 0) >= 1;
+            const mitigateDone = (up?.mitigateCount ?? 0) >= 1;
+            return (
+              <div key={e.key} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex-1 truncate">{setBonusLabel(e.setName, e.bonus)}</span>
+                {e.isPenalty ? (
+                  <button
+                    type="button"
+                    disabled={mitigateDone || offers.handFlatPrice > money}
+                    onClick={() => onBuySetBonus(e.key, "mitigate")}
+                    className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1 transition enabled:hover:border-emerald-400 disabled:opacity-40"
+                  >
+                    {mitigateDone ? (
+                      "완화 완료"
+                    ) : (
+                      <>
+                        완화 <span className="text-amber-200">({offers.handFlatPrice}원)</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={flatDone || offers.handFlatPrice > money}
+                      onClick={() => onBuySetBonus(e.key, "flat")}
+                      className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1 transition enabled:hover:border-emerald-400 disabled:opacity-40"
+                    >
+                      {flatDone ? (
+                        "+50점 완료"
+                      ) : (
+                        <>
+                          +50점 <span className="text-amber-200">({offers.handFlatPrice}원)</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={doubleDone || offers.handDoublePrice > money}
+                      onClick={() => onBuySetBonus(e.key, "double")}
+                      className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-2 py-1 transition enabled:hover:border-emerald-400 disabled:opacity-40"
+                    >
+                      {doubleDone ? (
+                        "×2 완료"
+                      ) : (
+                        <>
+                          ×2 <span className="text-amber-200">({offers.handDoublePrice}원)</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
               </div>
             );
           })}
