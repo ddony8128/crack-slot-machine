@@ -90,9 +90,6 @@ export default function StartScreen({
         {startError && (
           <p className="text-center text-sm text-rose-400">{startError}</p>
         )}
-        <p className="text-center text-xs leading-relaxed text-amber-400/90">
-          ※ 일부 깜짝 연출과 큰 효과음이 포함되어 있습니다.
-        </p>
       </form>
 
       <section className="w-full max-w-sm space-y-2">

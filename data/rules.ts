@@ -7,7 +7,7 @@ export const RULES: Rule[] = [
     name: '원숭이 손',
     type: 'weight',
     build: '7',
-    description: '7이 나올 확률이 네 배가 된다. 단, 매 스핀마다 5% 확률로 무서운 것이 나타난다.',
+    description: '7이 나올 확률이 네 배가 된다.',
   },
   {
     id: 'seven-double',

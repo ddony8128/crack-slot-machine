@@ -15,7 +15,7 @@ function startErrorMessage(code: string): string {
   if (code === "event_inactive") return "비활성화된 이벤트입니다.";
   if (code === "not_found") return "존재하지 않는 이벤트입니다.";
   if (code === "nickname_not_whitelisted")
-    return "등록되지 않은 닉네임입니다. 스태프에게 문의해주세요.";
+    return "등록되지 않은 닉네임입니다. 딜러에게 문의해주세요.";
   return "게임을 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.";
 }
 

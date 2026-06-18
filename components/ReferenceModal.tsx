@@ -54,17 +54,26 @@ function groupByBuild() {
 function ScoreRow({
   label,
   value,
+  desc,
   negative = false,
 }: {
   label: string;
   value: string;
+  desc?: string;
   negative?: boolean;
 }) {
   return (
-    <li className="flex justify-between gap-3">
-      <span className="text-zinc-300">{label}</span>
+    <li className="flex items-start justify-between gap-3">
+      <span className="min-w-0">
+        <span className="text-zinc-300">{label}</span>
+        {desc && (
+          <span className="mt-0.5 block text-xs leading-snug text-zinc-500">
+            {desc}
+          </span>
+        )}
+      </span>
       <span
-        className={`font-mono font-bold ${
+        className={`shrink-0 font-mono font-bold ${
           negative ? "text-rose-400" : "text-emerald-300"
         }`}
       >
@@ -224,11 +233,30 @@ export default function ReferenceModal({
               <ScoreRow label="파이브카드" value={`+${HAND_FIVE_KIND}`} />
             </ScoreCard>
 
-            <ScoreCard title="종류 보너스">
-              <ScoreRow label="신체 3종" value={`+${BONUS_ALL_FRUIT_TYPES}`} />
-              <ScoreRow label="괴물 3종" value={`+${BONUS_ALL_GEM_TYPES}`} />
-              <ScoreRow label="올 신체" value={`+${BONUS_ONLY_FRUITS}`} />
-              <ScoreRow label="올 괴물" value={`+${BONUS_ONLY_GEMS}`} />
+            <ScoreCard
+              title="종류 보너스"
+              note="신체는 손·발·눈, 괴물은 좀비·흡혈귀·유령을 말합니다. 보너스는 중복으로 받을 수 있습니다."
+            >
+              <ScoreRow
+                label="신체 3종"
+                desc="손·발·눈 세 종류가 모두 한 번 이상 나오면 받습니다."
+                value={`+${BONUS_ALL_FRUIT_TYPES}`}
+              />
+              <ScoreRow
+                label="괴물 3종"
+                desc="좀비·흡혈귀·유령 세 종류가 모두 한 번 이상 나오면 받습니다."
+                value={`+${BONUS_ALL_GEM_TYPES}`}
+              />
+              <ScoreRow
+                label="올 신체"
+                desc="다섯 칸이 모두 신체(손·발·눈)로 채워지면 받습니다."
+                value={`+${BONUS_ONLY_FRUITS}`}
+              />
+              <ScoreRow
+                label="올 괴물"
+                desc="다섯 칸이 모두 괴물(좀비·흡혈귀·유령)로 채워지면 받습니다."
+                value={`+${BONUS_ONLY_GEMS}`}
+              />
             </ScoreCard>
 
             <ScoreCard title="4 페널티">
