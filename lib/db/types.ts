@@ -1,6 +1,5 @@
 import type { RecordedAction } from '@/store/gameStore';
 import type { ReplaySpin } from '@/lib/replay';
-import type { AchievementKey } from '@/types';
 
 /** A row in `players` (global whitelist), camelCased for app use. */
 export type PlayerRow = {
@@ -36,7 +35,6 @@ export type RunRow = {
   eventId: string;
   playerId: string | null;
   nickname: string | null;
-  achievements: AchievementKey[];
   seed: string;
   actions: RecordedAction[] | null;
   clientResults: ClientResults | null;
@@ -79,7 +77,6 @@ export type CreateRunInput = {
 /** Final values written when a run is verified (or rejected). */
 export type FinalizeRunInput = {
   nickname: string;
-  achievements: AchievementKey[];
   actions: RecordedAction[];
   clientResults: ClientResults;
   score: number | null;
@@ -125,32 +122,23 @@ export interface Db {
   /** Restore a soft-deleted player (clear deleted_at). Null if missing. */
   restorePlayer(id: string): Promise<PlayerRow | null>;
 
-  // ── rewards / achievements (BLACKHAVEN) ────────────────────────────────────
+  // ── rewards (개인 최고 점수) ────────────────────────────────────────────────
   /**
    * Highest score among this player's submitted+verified runs in the event.
    * null when the player has no qualifying prior run (=> their first play).
    * Call this BEFORE finalizing the current run so it reflects PRIOR plays only.
    */
   getPlayerBestScore(playerId: string, eventId: string): Promise<number | null>;
-  /** Union of achievement keys across the player's submitted+verified runs. */
-  getPlayerAchievements(
-    playerId: string,
-    eventId: string,
-  ): Promise<AchievementKey[]>;
 
   /**
-   * Nickname-keyed variants of the reward lookups. Used when identity comes from
-   * the shared 8번출구 whitelist (no local player row, so player_id is null).
+   * Nickname-keyed variant of the best-score lookup. Used when identity comes
+   * from the shared 8번출구 whitelist (no local player row, so player_id is null).
    * Matching is case-insensitive on the run's stored nickname.
    */
   getPlayerBestScoreByNickname(
     nickname: string,
     eventId: string,
   ): Promise<number | null>;
-  getPlayerAchievementsByNickname(
-    nickname: string,
-    eventId: string,
-  ): Promise<AchievementKey[]>;
 
   // ── 반복 플레이 패널티 (슬롯 자체 DB) ───────────────────────────────────────
   /**

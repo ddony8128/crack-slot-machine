@@ -16,9 +16,7 @@ export type SoundKey =
   | "rule"
   | "score"
   | "jackpot"
-  | "ghost" // 귀신 공격 (jump-scare attack)
-  | "achievement" // 업적 (achievement unlocked)
-  | "bgm"; // 복고풍 카지노 + 공포 배경음 (retro-casino + horror ambience)
+  | "bgm"; // 낡은 주크박스 배경음
 
 const STORAGE_KEY = "rule-slot-muted";
 const EXT = "mp3";

@@ -9,7 +9,6 @@ import type {
   LeaderboardPage,
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
-import type { AchievementKey } from '@/types';
 
 /** Seed events mirroring supabase/migrations/0001_init.sql. */
 function seedEvents(): EventRow[] {
@@ -100,7 +99,6 @@ export class MemoryDb implements Db {
       eventId: input.eventId,
       playerId: input.playerId,
       nickname: null,
-      achievements: [],
       seed: input.seed,
       actions: null,
       clientResults: null,
@@ -129,7 +127,6 @@ export class MemoryDb implements Db {
     const row = this.runs.find((r) => r.id === runId);
     if (!row) return null;
     row.nickname = input.nickname;
-    row.achievements = input.achievements;
     row.actions = input.actions;
     row.clientResults = input.clientResults;
     row.score = input.score;
@@ -251,7 +248,7 @@ export class MemoryDb implements Db {
     return row;
   }
 
-  // ── rewards / achievements (BLACKHAVEN) ────────────────────────────────────
+  // ── rewards (개인 최고 점수) ────────────────────────────────────────────────
   async getPlayerBestScore(
     playerId: string,
     eventId: string,
@@ -267,24 +264,6 @@ export class MemoryDb implements Db {
       .map((r) => r.score ?? 0);
     if (scores.length === 0) return null;
     return Math.max(...scores);
-  }
-
-  async getPlayerAchievements(
-    playerId: string,
-    eventId: string,
-  ): Promise<AchievementKey[]> {
-    const set = new Set<AchievementKey>();
-    for (const r of this.runs) {
-      if (
-        r.playerId === playerId &&
-        r.eventId === eventId &&
-        r.status === 'submitted' &&
-        r.verified
-      ) {
-        for (const a of r.achievements) set.add(a);
-      }
-    }
-    return [...set];
   }
 
   async getPlayerBestScoreByNickname(
@@ -303,25 +282,6 @@ export class MemoryDb implements Db {
       .map((r) => r.score ?? 0);
     if (scores.length === 0) return null;
     return Math.max(...scores);
-  }
-
-  async getPlayerAchievementsByNickname(
-    nickname: string,
-    eventId: string,
-  ): Promise<AchievementKey[]> {
-    const lower = nickname.toLowerCase();
-    const set = new Set<AchievementKey>();
-    for (const r of this.runs) {
-      if (
-        (r.nickname ?? '').toLowerCase() === lower &&
-        r.eventId === eventId &&
-        r.status === 'submitted' &&
-        r.verified
-      ) {
-        for (const a of r.achievements) set.add(a);
-      }
-    }
-    return [...set];
   }
 
   // ── 반복 플레이 패널티 ───────────────────────────────────────────────────────

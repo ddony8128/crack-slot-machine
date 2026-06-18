@@ -15,7 +15,6 @@ import type {
 } from '@/lib/db/types';
 import { TOTAL_SLUG } from '@/lib/db/types';
 import type { RecordedAction } from '@/store/gameStore';
-import type { AchievementKey } from '@/types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -46,7 +45,6 @@ function toRun(row: any): RunRow {
     eventId: row.event_id,
     playerId: row.player_id ?? null,
     nickname: row.nickname ?? null,
-    achievements: (row.achievements ?? []) as AchievementKey[],
     seed: row.seed,
     actions: (row.actions ?? null) as RecordedAction[] | null,
     clientResults: (row.client_results ?? null) as ClientResults | null,
@@ -158,7 +156,6 @@ export class SupabaseDb implements Db {
         ruleset_version: input.rulesetVersion,
         status: 'pending',
         verified: false,
-        achievements: [],
       })
       .select('*')
       .single();
@@ -184,7 +181,6 @@ export class SupabaseDb implements Db {
       .from('game_runs')
       .update({
         nickname: input.nickname,
-        achievements: input.achievements,
         actions: input.actions,
         client_results: input.clientResults,
         score: input.score,
@@ -329,7 +325,7 @@ export class SupabaseDb implements Db {
     return data ? toPlayer(data) : null;
   }
 
-  // ── rewards / achievements (BLACKHAVEN) ────────────────────────────────────
+  // ── rewards (개인 최고 점수) ────────────────────────────────────────────────
   async getPlayerBestScore(
     playerId: string,
     eventId: string,
@@ -348,25 +344,6 @@ export class SupabaseDb implements Db {
     return data?.score ?? null;
   }
 
-  async getPlayerAchievements(
-    playerId: string,
-    eventId: string,
-  ): Promise<AchievementKey[]> {
-    const { data, error } = await this.sb
-      .from('game_runs')
-      .select('achievements')
-      .eq('player_id', playerId)
-      .eq('event_id', eventId)
-      .eq('status', 'submitted')
-      .eq('verified', true);
-    if (error) throw error;
-    const set = new Set<AchievementKey>();
-    for (const row of data ?? []) {
-      for (const a of (row.achievements ?? []) as AchievementKey[]) set.add(a);
-    }
-    return [...set];
-  }
-
   async getPlayerBestScoreByNickname(
     nickname: string,
     eventId: string,
@@ -383,25 +360,6 @@ export class SupabaseDb implements Db {
       .maybeSingle();
     if (error) throw error;
     return data?.score ?? null;
-  }
-
-  async getPlayerAchievementsByNickname(
-    nickname: string,
-    eventId: string,
-  ): Promise<AchievementKey[]> {
-    const { data, error } = await this.sb
-      .from('game_runs')
-      .select('achievements')
-      .ilike('nickname', nickname.trim().replace(/[%_\\]/g, '\\$&'))
-      .eq('event_id', eventId)
-      .eq('status', 'submitted')
-      .eq('verified', true);
-    if (error) throw error;
-    const set = new Set<AchievementKey>();
-    for (const row of data ?? []) {
-      for (const a of (row.achievements ?? []) as AchievementKey[]) set.add(a);
-    }
-    return [...set];
   }
 
   // ── 반복 플레이 패널티 ───────────────────────────────────────────────────────

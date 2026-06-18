@@ -79,24 +79,6 @@ export type RevealStream = {
   done: boolean;
 };
 
-// ── event: achievements ─────────────────────────────────────────────────────
-
-/**
- * Achievement keys. Each is detected per-spin from a final board:
- *  - frankenstein  : 신체 3종 (cherry/lemon/grape 모두 등장) in one spin
- *  - hyakki        : 괴물 3종 (diamond/ruby/sapphire 모두 등장) in one spin
- *  - midas         : 77777 (five sevens) in one spin
- *  - familiar_death: 44444 (five fours) in one spin
- */
-export type AchievementKey = 'frankenstein' | 'hyakki' | 'midas' | 'familiar_death';
-
-export const ACHIEVEMENT_KEYS: AchievementKey[] = [
-  'frankenstein',
-  'hyakki',
-  'midas',
-  'familiar_death',
-];
-
 export type GameState = {
   nickname: string;
   // Server-issued run identity for score submission (null until a run starts).

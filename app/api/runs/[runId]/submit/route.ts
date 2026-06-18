@@ -1,11 +1,9 @@
 import { getDb } from '@/lib/db';
 import { sanitizeNickname } from '@/lib/server/validation';
 import { verifySubmission } from '@/lib/server/verifySubmission';
-import { detectRunAchievements, hasAllAchievements } from '@/lib/achievements';
 import { triggersPenalty, PENALTY_STREAK } from '@/lib/server/penalty';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
-import type { AchievementKey } from '@/types';
 import type { RecordedAction } from '@/store/gameStore';
 
 type SubmitBody = {
@@ -64,7 +62,6 @@ export async function POST(
   if (!versionOk) {
     await db.finalizeRun(runId, {
       nickname,
-      achievements: [],
       actions,
       clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
       score: null,
@@ -82,7 +79,6 @@ export async function POST(
   if (outcome.status === 'rejected') {
     await db.finalizeRun(runId, {
       nickname,
-      achievements: [],
       actions,
       clientResults: clientResults ?? { spins: [], finalScore: 0, bestSpinScore: 0 },
       score: null,
@@ -95,27 +91,16 @@ export async function POST(
     return Response.json({ status: 'rejected', reason: outcome.reason });
   }
 
-  // Success path. The submitted boards are already verified to equal the
-  // authoritative replay, so they are trustworthy for achievement detection.
-  const boards = clientResults!.spins.map((s) => s.finalBoard);
-  const runAchievements = detectRunAchievements(boards);
-
-  // Achievement state must reflect PRIOR plays only — read before finalizing.
+  // Success path. priorBest reflects PRIOR plays only — read before finalizing.
   // Identity is the local player row when present, else the run's nickname
   // (8번출구 공유 화이트리스트 모드에서는 player_id 가 없으므로 닉네임으로 집계).
   const playerId = run.playerId;
-  const priorAch: AchievementKey[] = playerId
-    ? await db.getPlayerAchievements(playerId, run.eventId)
-    : await db.getPlayerAchievementsByNickname(nickname, run.eventId);
   const priorBest = playerId
     ? await db.getPlayerBestScore(playerId, run.eventId)
     : await db.getPlayerBestScoreByNickname(nickname, run.eventId);
 
-  const hasAllNow = hasAllAchievements([...priorAch, ...runAchievements]);
-
   await db.finalizeRun(runId, {
     nickname,
-    achievements: runAchievements,
     actions,
     clientResults: clientResults!,
     score: outcome.score,
@@ -125,8 +110,6 @@ export async function POST(
     rejectReason: null,
     submittedAt: now,
   });
-
-  const newAchievements = runAchievements.filter((k) => !priorAch.includes(k));
 
   // 반복 플레이 패널티: 방금 끝낸 런을 포함한 최근 종료 시각으로 판정하고,
   // 조건 충족 + 아직 미발생인 닉네임에게만 최초 1회 패널티를 기록/표시한다.
@@ -148,8 +131,6 @@ export async function POST(
     score: outcome.score,
     bestSpinScore: outcome.bestSpinScore,
     eventSlug: event.slug,
-    newAchievements,
-    allAchievementsComplete: hasAllNow,
     previousBest: priorBest,
     penalty,
   });

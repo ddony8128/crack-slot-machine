@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MemoryDb } from '@/lib/db/memory';
 import type { ClientResults, FinalizeRunInput } from '@/lib/db/types';
-import type { AchievementKey } from '@/types';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 const VER = { clientVersion: CLIENT_VERSION, rulesetVersion: RULESET_VERSION };
@@ -14,11 +13,9 @@ function submitInput(
   nickname: string,
   score: number,
   bestSpinScore: number,
-  achievements: AchievementKey[] = [],
 ): FinalizeRunInput {
   return {
     nickname,
-    achievements,
     actions: [],
     clientResults: clientResults(score, bestSpinScore),
     score,
@@ -226,21 +223,5 @@ describe('MemoryDb rewards', () => {
     await db.finalizeRun(r2.id, submitInput('Eve', 250, 40));
 
     expect(await db.getPlayerBestScore(player.id, event!.id)).toBe(250);
-  });
-
-  it('getPlayerAchievements unions across the player runs (deduped)', async () => {
-    const db = new MemoryDb();
-    const event = await db.getEventBySlug('blackhaven');
-    const player = await db.createPlayer('Frank');
-
-    expect(await db.getPlayerAchievements(player.id, event!.id)).toEqual([]);
-
-    const r1 = await db.createRun({ eventId: event!.id, playerId: player.id, seed: 's', ...VER });
-    await db.finalizeRun(r1.id, submitInput('Frank', 100, 10, ['midas', 'frankenstein']));
-    const r2 = await db.createRun({ eventId: event!.id, playerId: player.id, seed: 's', ...VER });
-    await db.finalizeRun(r2.id, submitInput('Frank', 200, 20, ['midas', 'hyakki']));
-
-    const got = await db.getPlayerAchievements(player.id, event!.id);
-    expect([...got].sort()).toEqual(['frankenstein', 'hyakki', 'midas']);
   });
 });

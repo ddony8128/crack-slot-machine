@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useGameStore } from "@/store/gameStore";
 import ReferenceModal from "@/components/ReferenceModal";
-import AchievementsModal from "@/components/AchievementsModal";
 import { fetchLeaderboard } from "@/lib/client/api";
 import type { LeaderboardItem } from "@/lib/db/types";
 import { FRUITS, GEMS } from "@/data/symbols";
@@ -28,7 +27,6 @@ export default function StartScreen({
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
   const [refView, setRefView] = useState<"rules" | "scores" | null>(null);
-  const [showAchievements, setShowAchievements] = useState(false);
 
   // Top 5 preview for this event, from the DB. null = loading.
   const [top, setTop] = useState<LeaderboardItem[] | null>(null);
@@ -140,7 +138,7 @@ export default function StartScreen({
             <SymbolView key={s} symbol={s as never} size="sm" />
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => setRefView("rules")}
@@ -155,13 +153,6 @@ export default function StartScreen({
           >
             점수표 보기
           </button>
-          <button
-            type="button"
-            onClick={() => setShowAchievements(true)}
-            className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/40 px-2 py-3 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/60 sm:text-base"
-          >
-            업적 보기
-          </button>
         </div>
       </section>
 
@@ -169,11 +160,6 @@ export default function StartScreen({
         open={refView !== null}
         view={refView ?? "rules"}
         onClose={() => setRefView(null)}
-      />
-
-      <AchievementsModal
-        open={showAchievements}
-        onClose={() => setShowAchievements(false)}
       />
     </main>
   );
