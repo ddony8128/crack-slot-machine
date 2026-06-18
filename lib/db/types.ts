@@ -139,8 +139,42 @@ export interface Db {
   ): Promise<AchievementKey[]>;
 
   /**
+   * Nickname-keyed variants of the reward lookups. Used when identity comes from
+   * the shared 8번출구 whitelist (no local player row, so player_id is null).
+   * Matching is case-insensitive on the run's stored nickname.
+   */
+  getPlayerBestScoreByNickname(
+    nickname: string,
+    eventId: string,
+  ): Promise<number | null>;
+  getPlayerAchievementsByNickname(
+    nickname: string,
+    eventId: string,
+  ): Promise<AchievementKey[]>;
+
+  // ── 반복 플레이 패널티 (슬롯 자체 DB) ───────────────────────────────────────
+  /**
+   * This nickname's most recent submitted+verified plays as {start, end} spans
+   * (created_at / submitted_at), newest first. Used to measure the idle gap
+   * BETWEEN consecutive plays for the rapid-replay penalty.
+   */
+  getRecentSubmittedSpans(
+    nickname: string,
+    eventId: string,
+    limit: number,
+  ): Promise<{ start: string; end: string }[]>;
+  /** Whether a one-time penalty was already recorded for (event, nickname). */
+  hasPenalty(nickname: string, eventId: string): Promise<boolean>;
+  /** Record the one-time penalty. Idempotent (unique on event+nickname). */
+  recordPenalty(nickname: string, eventId: string): Promise<void>;
+
+  /**
    * Leaderboard for `slug`, or the combined all-events board when slug==='total'.
    * Only status='submitted', verified=true, and matching versions are included.
+   *
+   * When `allowedNicknames` is provided (lowercased), only runs whose nickname is
+   * in that set are shown — the shared 8번출구 whitelist filter. Passing it makes
+   * the board empty out automatically when the 8번출구 session is reset.
    */
   listLeaderboard(input: {
     slug: string;
@@ -148,6 +182,7 @@ export interface Db {
     pageSize: number;
     clientVersion: string;
     rulesetVersion: number;
+    allowedNicknames?: string[] | null;
   }): Promise<LeaderboardPage>;
 }
 

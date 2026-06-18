@@ -1,8 +1,8 @@
 import { getDb } from '@/lib/db';
 import { sanitizeNickname } from '@/lib/server/validation';
 import { verifySubmission } from '@/lib/server/verifySubmission';
-import { computeCredits } from '@/lib/server/rewards';
 import { detectRunAchievements, hasAllAchievements } from '@/lib/achievements';
+import { triggersPenalty, PENALTY_STREAK } from '@/lib/server/penalty';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 import type { ClientResults } from '@/lib/db/types';
 import type { AchievementKey } from '@/types';
@@ -100,26 +100,18 @@ export async function POST(
   const boards = clientResults!.spins.map((s) => s.finalBoard);
   const runAchievements = detectRunAchievements(boards);
 
-  // Reward state must reflect PRIOR plays only — read before finalizing.
+  // Achievement state must reflect PRIOR plays only — read before finalizing.
+  // Identity is the local player row when present, else the run's nickname
+  // (8번출구 공유 화이트리스트 모드에서는 player_id 가 없으므로 닉네임으로 집계).
   const playerId = run.playerId;
-  const priorBest = playerId
-    ? await db.getPlayerBestScore(playerId, run.eventId)
-    : null;
   const priorAch: AchievementKey[] = playerId
     ? await db.getPlayerAchievements(playerId, run.eventId)
-    : [];
+    : await db.getPlayerAchievementsByNickname(nickname, run.eventId);
+  const priorBest = playerId
+    ? await db.getPlayerBestScore(playerId, run.eventId)
+    : await db.getPlayerBestScoreByNickname(nickname, run.eventId);
 
-  const isFirstPlay = priorBest === null;
-  const hadAllBefore = hasAllAchievements(priorAch);
   const hasAllNow = hasAllAchievements([...priorAch, ...runAchievements]);
-
-  const credits = computeCredits({
-    isFirstPlay,
-    previousBest: priorBest,
-    totalScore: outcome.score,
-    hadAllAchievementsBefore: hadAllBefore,
-    hasAllAchievementsNow: hasAllNow,
-  });
 
   await db.finalizeRun(runId, {
     nickname,
@@ -136,14 +128,29 @@ export async function POST(
 
   const newAchievements = runAchievements.filter((k) => !priorAch.includes(k));
 
+  // 반복 플레이 패널티: 방금 끝낸 런을 포함한 최근 종료 시각으로 판정하고,
+  // 조건 충족 + 아직 미발생인 닉네임에게만 최초 1회 패널티를 기록/표시한다.
+  let penalty = false;
+  if (nickname) {
+    const spans = await db.getRecentSubmittedSpans(
+      nickname,
+      run.eventId,
+      PENALTY_STREAK,
+    );
+    if (triggersPenalty(spans) && !(await db.hasPenalty(nickname, run.eventId))) {
+      await db.recordPenalty(nickname, run.eventId);
+      penalty = true;
+    }
+  }
+
   return Response.json({
     status: 'submitted',
     score: outcome.score,
     bestSpinScore: outcome.bestSpinScore,
     eventSlug: event.slug,
-    credits,
     newAchievements,
     allAchievementsComplete: hasAllNow,
     previousBest: priorBest,
+    penalty,
   });
 }

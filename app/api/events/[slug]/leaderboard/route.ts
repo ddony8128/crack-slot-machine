@@ -1,6 +1,10 @@
 import { getDb } from '@/lib/db';
 import { isValidSlug } from '@/lib/server/validation';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
+import {
+  getOwlNicknameSet,
+  owlWhitelistEnabled,
+} from '@/lib/server/owlWhitelist';
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
@@ -37,12 +41,19 @@ export async function GET(
     MAX_PAGE_SIZE,
   );
 
+  // 운영(OWL env 설정 시): 현재 8번출구 화이트리스트에 남아 있는 닉네임만 노출.
+  // → 8번출구 세션 종료(참가자 hard-delete)와 동시에 랭킹이 자동으로 비워진다.
+  const allowedNicknames = owlWhitelistEnabled()
+    ? [...(await getOwlNicknameSet())]
+    : null;
+
   const result = await db.listLeaderboard({
     slug,
     page,
     pageSize,
     clientVersion: CLIENT_VERSION,
     rulesetVersion: RULESET_VERSION,
+    allowedNicknames,
   });
 
   return Response.json({

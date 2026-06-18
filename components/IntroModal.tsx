@@ -21,10 +21,10 @@ export default function IntroModal({
   onClose: () => void;
 }) {
   return (
-    <Modal open={open} onClose={onClose} ariaLabel="RULE SLOT 하는 법">
+    <Modal open={open} onClose={onClose} ariaLabel="룰 슬롯츠 하는 법">
       <header className="border-b border-zinc-800 px-5 py-4">
         <h2 className="text-lg font-black tracking-tight">
-          <span className="text-emerald-400">RULE SLOT</span> 하는 법
+          <span className="text-emerald-400">룰 슬롯츠</span> 하는 법
         </h2>
       </header>
 

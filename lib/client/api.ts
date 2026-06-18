@@ -1,6 +1,6 @@
 import type { RecordedAction } from '@/store/gameStore';
 import type { ClientResults, LeaderboardPage } from '@/lib/db/types';
-import type { AchievementKey, CreditSummary } from '@/types';
+import type { AchievementKey } from '@/types';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
 
 export type StartResponse = {
@@ -16,14 +16,14 @@ export type SubmitResponse =
       score: number;
       bestSpinScore: number;
       eventSlug: string;
-      // Credit breakdown to display (rewards are reconciled offline by staff).
-      credits: CreditSummary;
       // Achievements newly unlocked in THIS run.
       newAchievements: AchievementKey[];
       // True once the player has unlocked all achievements (cumulative).
       allAchievementsComplete: boolean;
       // The player's prior best before this run (null = first play).
       previousBest: number | null;
+      // 반복 플레이 패널티가 이번에 처음 발생했는가(최초 1회).
+      penalty: boolean;
     }
   | { status: 'rejected'; reason: string };
 

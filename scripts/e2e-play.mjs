@@ -87,14 +87,12 @@ log('loop ended; spins=', spins, 'finishedKind=', finishedKind);
 await page.waitForTimeout(1500);
 const grab = async (re) => (await page.getByText(re).first().innerText().catch(() => null));
 const submittedMsg = await grab(/랭킹에 등록되었습니다|기록 등록에 실패|기록 등록 중/);
-const creditMsg = await grab(/받을 크레딧|새로 받을 크레딧은 없습니다/);
 const bestMsg = await grab(/개인 최고 점수/);
 const scoreText = await page.locator('p.font-mono.text-5xl').first().innerText().catch(() => null);
 
 log('RESULT heading kind:', finishedKind);
 log('score on screen:', scoreText);
 log('submit status   :', submittedMsg);
-log('credit line     :', creditMsg);
 log('best line       :', bestMsg);
 
 await page.screenshot({ path: 'screenshots/e2e-result.png', fullPage: true });

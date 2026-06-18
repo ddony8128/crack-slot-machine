@@ -16,6 +16,7 @@ function seedEvents(): EventRow[] {
   const now = new Date().toISOString();
   return [
     { id: 'evt-total', slug: 'total', title: 'Total Ranking', description: null, isActive: true, createdAt: now, disabledAt: null },
+    { id: 'evt-napolitan', slug: 'napolitan', title: '나폴리탄 카지노 룰 슬롯츠', description: null, isActive: true, createdAt: now, disabledAt: null },
     { id: 'evt-blackhaven', slug: 'blackhaven', title: 'Blackhaven Ranking', description: null, isActive: true, createdAt: now, disabledAt: null },
     { id: 'evt-test', slug: 'test', title: 'Test Ranking', description: null, isActive: false, createdAt: now, disabledAt: now },
   ];
@@ -29,6 +30,7 @@ export class MemoryDb implements Db {
   private events: EventRow[];
   private runs: RunRow[] = [];
   private players: PlayerRow[] = [];
+  private penalties: { eventId: string; nickname: string }[] = [];
   private counter = 0;
 
   constructor(events?: EventRow[]) {
@@ -145,16 +147,21 @@ export class MemoryDb implements Db {
     pageSize: number;
     clientVersion: string;
     rulesetVersion: number;
+    allowedNicknames?: string[] | null;
   }): Promise<LeaderboardPage> {
     const { slug, page, pageSize, clientVersion, rulesetVersion } = input;
     const eventBySlug = new Map(this.events.map((e) => [e.id, e]));
+    const allowed = input.allowedNicknames
+      ? new Set(input.allowedNicknames.map((n) => n.toLowerCase()))
+      : null;
 
     let rows = this.runs.filter(
       (r) =>
         r.status === 'submitted' &&
         r.verified &&
         r.clientVersion === clientVersion &&
-        r.rulesetVersion === rulesetVersion,
+        r.rulesetVersion === rulesetVersion &&
+        (!allowed || allowed.has((r.nickname ?? '').toLowerCase())),
     );
 
     if (slug !== TOTAL_SLUG) {
@@ -278,5 +285,79 @@ export class MemoryDb implements Db {
       }
     }
     return [...set];
+  }
+
+  async getPlayerBestScoreByNickname(
+    nickname: string,
+    eventId: string,
+  ): Promise<number | null> {
+    const lower = nickname.toLowerCase();
+    const scores = this.runs
+      .filter(
+        (r) =>
+          (r.nickname ?? '').toLowerCase() === lower &&
+          r.eventId === eventId &&
+          r.status === 'submitted' &&
+          r.verified,
+      )
+      .map((r) => r.score ?? 0);
+    if (scores.length === 0) return null;
+    return Math.max(...scores);
+  }
+
+  async getPlayerAchievementsByNickname(
+    nickname: string,
+    eventId: string,
+  ): Promise<AchievementKey[]> {
+    const lower = nickname.toLowerCase();
+    const set = new Set<AchievementKey>();
+    for (const r of this.runs) {
+      if (
+        (r.nickname ?? '').toLowerCase() === lower &&
+        r.eventId === eventId &&
+        r.status === 'submitted' &&
+        r.verified
+      ) {
+        for (const a of r.achievements) set.add(a);
+      }
+    }
+    return [...set];
+  }
+
+  // ── 반복 플레이 패널티 ───────────────────────────────────────────────────────
+  async getRecentSubmittedSpans(
+    nickname: string,
+    eventId: string,
+    limit: number,
+  ): Promise<{ start: string; end: string }[]> {
+    const lower = nickname.toLowerCase();
+    return this.runs
+      .filter(
+        (r) =>
+          (r.nickname ?? '').toLowerCase() === lower &&
+          r.eventId === eventId &&
+          r.status === 'submitted' &&
+          r.verified &&
+          r.submittedAt,
+      )
+      .sort((a, b) => {
+        const as = a.submittedAt ?? '';
+        const bs = b.submittedAt ?? '';
+        return as < bs ? 1 : as > bs ? -1 : 0;
+      })
+      .slice(0, limit)
+      .map((r) => ({ start: r.createdAt, end: r.submittedAt as string }));
+  }
+
+  async hasPenalty(nickname: string, eventId: string): Promise<boolean> {
+    const lower = nickname.toLowerCase();
+    return this.penalties.some(
+      (p) => p.eventId === eventId && p.nickname.toLowerCase() === lower,
+    );
+  }
+
+  async recordPenalty(nickname: string, eventId: string): Promise<void> {
+    if (await this.hasPenalty(nickname, eventId)) return;
+    this.penalties.push({ eventId, nickname });
   }
 }

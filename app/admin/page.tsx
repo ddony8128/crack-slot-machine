@@ -6,7 +6,7 @@ import AdminDashboard from "@/app/admin/_components/AdminDashboard";
 // Reads the session cookie, so it must render per-request.
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "RULE SLOT | 관리자" };
+export const metadata: Metadata = { title: "나폴리탄 룰 슬롯츠 | 관리자" };
 
 export default async function AdminPage() {
   if (!(await isAdmin())) {

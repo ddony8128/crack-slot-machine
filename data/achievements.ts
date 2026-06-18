@@ -1,4 +1,4 @@
-import type { AchievementKey, CreditReason } from "@/types";
+import type { AchievementKey } from "@/types";
 
 /**
  * Static display metadata for each achievement (BLACKHAVEN event).
@@ -29,13 +29,4 @@ export const ACHIEVEMENT_META: Record<
     condition: "44444를 달성하세요.",
     image: "/achievements/graveyard.webp",
   },
-};
-
-/** Human-readable Korean labels for each credit award reason. */
-export const CREDIT_LABELS: Record<CreditReason, string> = {
-  first_play: "첫 플레이 완료",
-  score_2000: "2000점 최초 돌파",
-  score_5000: "5000점 최초 돌파",
-  score_10000: "10000점 최초 돌파",
-  all_achievements: "모든 업적 달성",
 };

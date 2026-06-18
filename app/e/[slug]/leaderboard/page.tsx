@@ -8,9 +8,9 @@ type Params = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  if (!isValidSlug(slug)) return { title: "RULE SLOT" };
+  if (!isValidSlug(slug)) return { title: "나폴리탄 룰 슬롯츠" };
   const event = await getDb().getEventBySlug(slug);
-  return { title: event ? `RULE SLOT | ${event.title} 랭킹` : "RULE SLOT" };
+  return { title: event ? `나폴리탄 룰 슬롯츠 | ${event.title} 랭킹` : "나폴리탄 룰 슬롯츠" };
 }
 
 export default async function LeaderboardPage({ params }: Params) {

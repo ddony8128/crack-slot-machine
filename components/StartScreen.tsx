@@ -47,9 +47,12 @@ export default function StartScreen({
   return (
     <main className="fade-rise mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
       <header className="text-center">
-        <h1 className="text-5xl font-black tracking-tight sm:text-6xl">
-          <span className="text-emerald-400">RULE</span>{" "}
-          <span className="text-amber-300">SLOT</span>
+        <p className="text-sm font-semibold tracking-[0.3em] text-zinc-400 sm:text-base">
+          나폴리탄 카지노
+        </p>
+        <h1 className="mt-1 text-5xl font-black tracking-tight sm:text-6xl">
+          <span className="text-emerald-400">룰</span>{" "}
+          <span className="text-amber-300">슬롯츠</span>
         </h1>
         <p className="mt-3 text-sm text-zinc-400 sm:text-base">
           규칙을 조작하고 레버를 당겨라.
@@ -91,21 +94,6 @@ export default function StartScreen({
           ※ 일부 깜짝 연출과 큰 효과음이 포함되어 있습니다.
         </p>
       </form>
-
-      <section className="w-full max-w-sm space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-4">
-        <h2 className="text-center text-sm font-bold tracking-wide text-amber-300">
-          크레딧 획득 안내
-        </h2>
-        <ul className="space-y-1 text-xs leading-relaxed text-zinc-300">
-          <li>· 첫 플레이 완료 +1</li>
-          <li>· 2000·5000·10000점 최초 돌파마다 +1</li>
-          <li>· 모든 업적 달성 +1</li>
-          <li>· 입장 후 약 1시간 뒤 랭킹 1·2등 +1</li>
-        </ul>
-        <p className="text-center text-[0.7rem] text-zinc-500">
-          이미 받은 보상은 다시 받을 수 없습니다.
-        </p>
-      </section>
 
       <section className="w-full max-w-sm space-y-2">
         <h2 className="text-center text-sm font-semibold tracking-wide text-zinc-400">

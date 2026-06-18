@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { getDb } from '@/lib/db';
 import { isValidSlug, sanitizeNickname } from '@/lib/server/validation';
 import { CLIENT_VERSION, RULESET_VERSION } from '@/lib/version';
+import {
+  isOwlNicknameWhitelisted,
+  owlWhitelistEnabled,
+} from '@/lib/server/owlWhitelist';
 
 type StartBody = { nickname?: unknown };
 
@@ -34,19 +38,27 @@ export async function POST(
   }
 
   // Whitelist gate: only registered, active nicknames may open a run.
-  const player = await db.getActivePlayerByNickname(nickname);
-  if (!player) {
-    return Response.json(
-      { error: 'nickname_not_whitelisted' },
-      { status: 403 },
-    );
+  // 운영(OWL env 설정 시)에서는 8번출구 대시보드 players 를 권위로 본다(닉네임 식별).
+  // env 가 없으면(로컬/테스트) 슬롯 자체 players 화이트리스트로 폴백한다.
+  let playerId: string | null = null;
+  if (owlWhitelistEnabled()) {
+    const allowed = await isOwlNicknameWhitelisted(nickname);
+    if (!allowed) {
+      return Response.json({ error: 'nickname_not_whitelisted' }, { status: 403 });
+    }
+  } else {
+    const player = await db.getActivePlayerByNickname(nickname);
+    if (!player) {
+      return Response.json({ error: 'nickname_not_whitelisted' }, { status: 403 });
+    }
+    playerId = player.id;
   }
 
   // Server-generated seed: unguessable so a client cannot pre-compute outcomes.
   const seed = `${randomUUID()}.${randomUUID()}`;
   const run = await db.createRun({
     eventId: event.id,
-    playerId: player.id,
+    playerId,
     seed,
     clientVersion: CLIENT_VERSION,
     rulesetVersion: RULESET_VERSION,

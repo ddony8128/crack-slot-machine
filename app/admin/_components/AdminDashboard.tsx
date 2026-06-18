@@ -508,6 +508,12 @@ export default function AdminDashboard() {
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-zinc-100">닉네임 화이트리스트</h2>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-amber-300/80">
+          운영(8번출구 연동) 시에는 <b>8번출구 대시보드</b>에서 참가자를 등록·관리합니다.
+          아래 목록은 8번출구 미연동(로컬/테스트) 폴백용입니다.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
             <input
               type="checkbox"

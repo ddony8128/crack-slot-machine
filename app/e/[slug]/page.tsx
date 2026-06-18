@@ -12,10 +12,10 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  if (!isValidSlug(slug)) return { title: "RULE SLOT" };
+  if (!isValidSlug(slug)) return { title: "나폴리탄 룰 슬롯츠" };
   const event = await getDb().getEventBySlug(slug);
-  if (!event) return { title: "RULE SLOT" };
-  return { title: `RULE SLOT | ${event.title}` };
+  if (!event) return { title: "나폴리탄 룰 슬롯츠" };
+  return { title: `나폴리탄 룰 슬롯츠 | ${event.title}` };
 }
 
 export default async function EventPage({ params }: Params) {

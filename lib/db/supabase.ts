@@ -207,8 +207,12 @@ export class SupabaseDb implements Db {
     pageSize: number;
     clientVersion: string;
     rulesetVersion: number;
+    allowedNicknames?: string[] | null;
   }): Promise<LeaderboardPage> {
     const { slug, page, pageSize, clientVersion, rulesetVersion } = input;
+    const allowed = input.allowedNicknames
+      ? new Set(input.allowedNicknames.map((n) => n.toLowerCase()))
+      : null;
 
     // Fetch ALL qualifying rows (event-scale: hundreds of players), then dedupe
     // to the best run per nickname, sort, and paginate in JS.
@@ -231,8 +235,10 @@ export class SupabaseDb implements Db {
     if (error) throw error;
 
     // Rows arrive in ranking order, so the first row per nickname is its best.
+    // The allowed-set filter keeps only nicknames still on the shared whitelist.
     const seen = new Set<string>();
     const deduped = (data ?? []).filter((row: any) => {
+      if (allowed && !allowed.has((row.nickname ?? '').toLowerCase())) return false;
       const key = row.nickname ?? 'Anonymous';
       if (seen.has(key)) return false;
       seen.add(key);
@@ -359,5 +365,85 @@ export class SupabaseDb implements Db {
       for (const a of (row.achievements ?? []) as AchievementKey[]) set.add(a);
     }
     return [...set];
+  }
+
+  async getPlayerBestScoreByNickname(
+    nickname: string,
+    eventId: string,
+  ): Promise<number | null> {
+    const { data, error } = await this.sb
+      .from('game_runs')
+      .select('score')
+      .ilike('nickname', nickname.trim().replace(/[%_\\]/g, '\\$&'))
+      .eq('event_id', eventId)
+      .eq('status', 'submitted')
+      .eq('verified', true)
+      .order('score', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.score ?? null;
+  }
+
+  async getPlayerAchievementsByNickname(
+    nickname: string,
+    eventId: string,
+  ): Promise<AchievementKey[]> {
+    const { data, error } = await this.sb
+      .from('game_runs')
+      .select('achievements')
+      .ilike('nickname', nickname.trim().replace(/[%_\\]/g, '\\$&'))
+      .eq('event_id', eventId)
+      .eq('status', 'submitted')
+      .eq('verified', true);
+    if (error) throw error;
+    const set = new Set<AchievementKey>();
+    for (const row of data ?? []) {
+      for (const a of (row.achievements ?? []) as AchievementKey[]) set.add(a);
+    }
+    return [...set];
+  }
+
+  // ── 반복 플레이 패널티 ───────────────────────────────────────────────────────
+  async getRecentSubmittedSpans(
+    nickname: string,
+    eventId: string,
+    limit: number,
+  ): Promise<{ start: string; end: string }[]> {
+    const { data, error } = await this.sb
+      .from('game_runs')
+      .select('created_at, submitted_at')
+      .ilike('nickname', nickname.trim().replace(/[%_\\]/g, '\\$&'))
+      .eq('event_id', eventId)
+      .eq('status', 'submitted')
+      .eq('verified', true)
+      .not('submitted_at', 'is', null)
+      .order('submitted_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []).map((r: any) => ({
+      start: r.created_at as string,
+      end: r.submitted_at as string,
+    }));
+  }
+
+  async hasPenalty(nickname: string, eventId: string): Promise<boolean> {
+    const { data, error } = await this.sb
+      .from('slot_penalties')
+      .select('id')
+      .eq('event_id', eventId)
+      .ilike('nickname', nickname.trim().replace(/[%_\\]/g, '\\$&'))
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return !!data;
+  }
+
+  async recordPenalty(nickname: string, eventId: string): Promise<void> {
+    const { error } = await this.sb
+      .from('slot_penalties')
+      .insert({ event_id: eventId, nickname: nickname.trim() });
+    // Unique (event_id, lower(nickname)) → ignore duplicate races (23505).
+    if (error && (error as { code?: string }).code !== '23505') throw error;
   }
 }

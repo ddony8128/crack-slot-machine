@@ -50,10 +50,6 @@ export default function AchievementsModal({
             );
           })}
         </ul>
-
-        <p className="mt-4 text-center text-sm font-medium text-emerald-300">
-          모든 업적을 달성하면 크레딧 1개를 추가로 받습니다.
-        </p>
       </div>
     </Modal>
   );

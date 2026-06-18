@@ -6,7 +6,7 @@ import { useGameStore } from "@/store/gameStore";
 import { submitRun, type SubmitResponse } from "@/lib/client/api";
 import { buildClientResults } from "@/lib/clientResults";
 import { useCountUp } from "@/hooks/useCountUp";
-import { ACHIEVEMENT_META, CREDIT_LABELS } from "@/data/achievements";
+import { ACHIEVEMENT_META } from "@/data/achievements";
 
 type Props = { slug: string };
 
@@ -32,6 +32,7 @@ export default function ResultScreen({ slug }: Props) {
   const reset = useGameStore((s) => s.reset);
 
   const [state, setState] = useState<SubmitState>({ phase: "submitting" });
+  const [penaltyDismissed, setPenaltyDismissed] = useState(false);
   const submittedRef = useRef(false);
 
   useEffect(() => {
@@ -100,6 +101,41 @@ export default function ResultScreen({ slug }: Props) {
     );
   }
 
+  // 반복 플레이 패널티: 결과를 보기 전에 한 번 안내 화면을 띄운다(확인 시 결과로).
+  const showPenalty =
+    state.phase === "done" &&
+    state.result.status === "submitted" &&
+    state.result.penalty &&
+    !penaltyDismissed;
+
+  if (showPenalty) {
+    return (
+      <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
+        <h1 className="text-2xl font-black tracking-tight text-rose-300 sm:text-3xl">
+          페널티
+        </h1>
+        <div className="panel-pop w-full space-y-3 rounded-2xl border border-zinc-700 bg-zinc-900/70 p-6">
+          <p className="leading-relaxed text-zinc-200">
+            이런! 5회 연속 플레이를 하셨군요...
+          </p>
+          <p className="text-lg font-bold text-rose-300">
+            규칙을 어겨서 페널티를 받으셨습니다.
+          </p>
+          <p className="text-sm font-semibold text-amber-200">
+            딜러 분에게 알리세요.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPenaltyDismissed(true)}
+          className="w-full rounded-xl border border-zinc-600 bg-zinc-800 px-6 py-3 text-lg font-bold text-zinc-100 transition hover:bg-zinc-700"
+        >
+          확인
+        </button>
+      </main>
+    );
+  }
+
   return (
     <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
       <h1 className="celebrate-pop text-3xl font-black tracking-tight text-amber-300 sm:text-4xl">
@@ -159,8 +195,8 @@ export default function ResultScreen({ slug }: Props) {
 }
 
 /**
- * Credit breakdown + personal-best + newly-unlocked achievements for a
- * successfully submitted run. Pure presentation of the server's SubmitResponse.
+ * Personal-best + newly-unlocked achievements for a successfully submitted run.
+ * Pure presentation of the server's SubmitResponse.
  */
 function RewardSummary({
   result,
@@ -169,8 +205,7 @@ function RewardSummary({
   result: Extract<SubmitResponse, { status: "submitted" }>;
   score: number;
 }) {
-  const { credits, newAchievements, allAchievementsComplete, previousBest } =
-    result;
+  const { newAchievements, allAchievementsComplete, previousBest } = result;
   const newBest = previousBest === null || score > previousBest;
 
   return (
@@ -179,39 +214,6 @@ function RewardSummary({
       <p className="text-center text-sm font-semibold text-emerald-300">
         {newBest ? "개인 최고 점수 갱신!" : `개인 최고 점수: ${previousBest}`}
       </p>
-
-      {/* Credits */}
-      <div className="space-y-2">
-        {credits.total > 0 ? (
-          <>
-            <p className="text-center text-lg font-bold text-amber-300">
-              이번 플레이로 받을 크레딧: {credits.total}개
-            </p>
-            <ul className="space-y-1">
-              {credits.awards.map((award) => (
-                <li
-                  key={award.reason}
-                  className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-sm"
-                >
-                  <span className="text-zinc-300">
-                    {CREDIT_LABELS[award.reason]}
-                  </span>
-                  <span className="font-mono font-bold text-emerald-300">
-                    +{award.amount}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="text-center text-sm font-semibold text-amber-200">
-              스태프에게 이 화면을 보여주세요.
-            </p>
-          </>
-        ) : (
-          <p className="text-center text-sm text-zinc-400">
-            이번에 새로 받을 크레딧은 없습니다. 다시 도전해보세요.
-          </p>
-        )}
-      </div>
 
       {/* Newly unlocked achievements */}
       {newAchievements.length > 0 && (
