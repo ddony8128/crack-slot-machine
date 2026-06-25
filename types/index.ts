@@ -170,6 +170,11 @@ export type GameState = {
   // a later rule that spin (held = first-roll only). REPLACED each spin: a spin
   // with no parking rule yields frame.nextHold [] → this clears.
   nextHoldCells: number[];
+  // PERSISTENT CELL STATUS: per-cell 유령들림(haunted) carried to the NEXT spin.
+  // A cell stays haunted across spins until an un-haunt rule clears it (흡혈귀
+  // 퇴마사 / 유령 고양이). REPLACED each spin by frame.haunted (the ending state),
+  // so removal sticks. Derived from the action sequence → replay reproduces it.
+  nextHaunted: boolean[];
   // Puzzle runs ONLY: true once every puzzle goal is met across the resolved
   // spins. The cleared spin still ends in 'spin-result' (so its reveal plays and
   // the board settles); the puzzle UI then shows 클리어 + a 결과 보기 action that

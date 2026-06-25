@@ -239,6 +239,7 @@ function freshState(nickname: string): GameState {
     pendingSelection: null,
     revealStream: null,
     nextHoldCells: [],
+    nextHaunted: [],
     puzzleCleared: false,
     stageCleared: false,
   };
@@ -440,6 +441,10 @@ function buildInitializer(initialRng: Rng): Initializer {
         // REPLACES the value just consumed by spin(): a spin whose cascade left
         // frame.nextHold [] (no 유료 주차) clears it, so a hold never lingers.
         nextHoldCells: [...frame.nextHold],
+        // Carry this spin's ENDING 유령들림 to the next spin's preHaunted pass, so a
+        // haunted cell persists until an un-haunt rule clears it (frame.haunted has
+        // already applied this spin's add/remove rules).
+        nextHaunted: [...frame.haunted],
       });
     };
 
@@ -668,7 +673,10 @@ function buildInitializer(initialRng: Rng): Initializer {
       // Cross-spin HOLD: cells flagged by the previous spin's next-spin rule
       // (유료 주차) are held to previousResult at this spin's first roll. Pure
       // engine state (deterministic), so replay reproduces it exactly.
-      const frame = beginCascade(base, slots, ctx, { preHeld: state.nextHoldCells });
+      const frame = beginCascade(base, slots, ctx, {
+        preHeld: state.nextHoldCells,
+        preHaunted: state.nextHaunted,
+      });
 
       activeFrame = frame;
       activeCtx = ctx;

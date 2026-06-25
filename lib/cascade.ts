@@ -681,7 +681,7 @@ export function beginCascade(
   base: SymbolType[],
   rules: (Rule | null)[],
   ctx: ApplyCtx,
-  opts: { autoSkipSelect?: boolean; preHeld?: number[] } = {},
+  opts: { autoSkipSelect?: boolean; preHeld?: number[]; preHaunted?: boolean[] } = {},
 ): CascadeFrame {
   const working: SymbolType[] = [...base];
   const locked: boolean[] = [false, false, false, false, false];
@@ -765,7 +765,15 @@ export function beginCascade(
     interactive: false,
     events,
     scoreBoards: [],
-    haunted: [false, false, false, false, false],
+    // CROSS-SPIN HAUNT: 유령들림 is a persistent cell status — a cell stays haunted
+    // across spins until an un-haunt rule (흡혈귀 퇴마사 / 유령 고양이) clears it. Seed
+    // this spin's haunted[] from the previous spin's ending state. Position-based
+    // (the symbol may reroll, but the cell stays haunted). Deterministic → replay
+    // reproduces it. Empty/absent → fresh (all false), e.g. the first spin.
+    haunted:
+      opts.preHaunted && opts.preHaunted.length === working.length
+        ? [...opts.preHaunted]
+        : [false, false, false, false, false],
     nextHold: [],
   };
 

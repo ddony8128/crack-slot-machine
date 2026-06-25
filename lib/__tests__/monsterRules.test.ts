@@ -24,6 +24,35 @@ const ctxFor = (rng: Rng = queuedRng([])) => ({
   rng,
 });
 
+describe('유령들림 영속 — preHaunted carries the status across spins', () => {
+  it('a previously-haunted cell stays haunted even with NO haunting rule this spin', () => {
+    const base: SymbolType[] = ['seven', 'seven', 'seven', 'seven', 'seven'];
+    const frame = beginCascade(base, [null, null, null, null, null], ctxFor(), {
+      preHaunted: [true, false, false, true, false],
+    });
+    expect(frame.haunted).toEqual([true, false, false, true, false]);
+  });
+
+  it('흡혈귀 퇴마사 clears a carried-over haunt on a dracula cell (so it stops persisting)', () => {
+    // cell 0 was haunted last spin and now holds a dracula → exorcist un-haunts it.
+    const base: SymbolType[] = ['dracula', 'seven', 'seven', 'seven', 'seven'];
+    const frame = beginCascade(base, [RULES_BY_ID['vampire-exorcist']], ctxFor(), {
+      preHaunted: [true, false, false, false, false],
+    });
+    expect(frame.haunted[0]).toBe(false);
+  });
+
+  it('a new haunt (지박령) ADDS to the carried-over set, not replaces it', () => {
+    // cell 4 carried haunted; 지박령 haunts the leftmost ghost (cell 1).
+    const base: SymbolType[] = ['seven', 'ghost', 'seven', 'seven', 'seven'];
+    const frame = beginCascade(base, [RULES_BY_ID['jibakryeong']], ctxFor(queuedRng([0])), {
+      preHaunted: [false, false, false, false, true],
+    });
+    expect(frame.haunted[4]).toBe(true); // carried over
+    expect(frame.haunted[1]).toBe(true); // newly haunted by 지박령
+  });
+});
+
 describe('monster-haunt — leftmost monster cell becomes haunted (no board change)', () => {
   it('marks the leftmost monster cell haunted; others stay false', () => {
     // monsters at idx2 (zombie) and idx4 (ghost); leftmost is idx2.
