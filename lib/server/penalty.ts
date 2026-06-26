@@ -3,11 +3,11 @@
  *
  * 기준은 "게임과 게임 **사이 쉬는 간격**"이다 — 한 게임을 길게 한다고 벗어나면 안 된다.
  * 즉, 직전 플레이 **종료** 후 다음 플레이 **시작**까지의 간격이 3분 미만인 상태로
- * 5회 연속 이어지면 패널티 대상이다. 게임 자체의 길이는 판정에 들어가지 않는다.
+ * 3회 연속 이어지면 패널티 대상이다. 게임 자체의 길이는 판정에 들어가지 않는다.
  */
 
 export const PENALTY_WINDOW_MS = 3 * 60 * 1000; // 3분
-export const PENALTY_STREAK = 5;
+export const PENALTY_STREAK = 3;
 
 /** 한 번의 플레이: 시작(created_at)·종료(submitted_at) 시각. */
 export type PlaySpan = { start: string; end: string };

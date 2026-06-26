@@ -29,9 +29,9 @@ export default function ResultScreen({ slug }: Props) {
   const runId = useGameStore((s) => s.runId);
   const getActions = useGameStore((s) => s.getActions);
   const reset = useGameStore((s) => s.reset);
+  const setPendingPenalty = useGameStore((s) => s.setPendingPenalty);
 
   const [state, setState] = useState<SubmitState>({ phase: "submitting" });
-  const [penaltyDismissed, setPenaltyDismissed] = useState(false);
   const submittedRef = useRef(false);
 
   useEffect(() => {
@@ -46,7 +46,14 @@ export default function ResultScreen({ slug }: Props) {
 
     const clientResults = buildClientResults(spinLogs, totalScore);
     submitRun(runId, { nickname, actions: getActions(), clientResults })
-      .then((result) => setState({ phase: "done", result }))
+      .then((result) => {
+        setState({ phase: "done", result });
+        // Defer the repeat-play penalty notice to the NEXT GAME START instead of
+        // showing it on the result screen.
+        if (result.status === "submitted" && result.penalty) {
+          setPendingPenalty(true);
+        }
+      })
       .catch(() => setState({ phase: "error" }));
     // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,41 +102,6 @@ export default function ResultScreen({ slug }: Props) {
           className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-lg font-bold text-zinc-950 transition hover:bg-emerald-400"
         >
           다시 플레이하기
-        </button>
-      </main>
-    );
-  }
-
-  // 반복 플레이 패널티: 결과를 보기 전에 한 번 안내 화면을 띄운다(확인 시 결과로).
-  const showPenalty =
-    state.phase === "done" &&
-    state.result.status === "submitted" &&
-    state.result.penalty &&
-    !penaltyDismissed;
-
-  if (showPenalty) {
-    return (
-      <main className="fade-rise mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-12 text-center">
-        <h1 className="text-2xl font-black tracking-tight text-rose-300 sm:text-3xl">
-          페널티
-        </h1>
-        <div className="panel-pop w-full space-y-3 rounded-2xl border border-zinc-700 bg-zinc-900/70 p-6">
-          <p className="leading-relaxed text-zinc-200">
-            이런! 5회 연속 플레이를 하셨군요...
-          </p>
-          <p className="text-lg font-bold text-rose-300">
-            규칙을 어겨서 페널티를 받으셨습니다.
-          </p>
-          <p className="text-sm font-semibold text-amber-200">
-            딜러 분에게 알리세요.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setPenaltyDismissed(true)}
-          className="w-full rounded-xl border border-zinc-600 bg-zinc-800 px-6 py-3 text-lg font-bold text-zinc-100 transition hover:bg-zinc-700"
-        >
-          확인
         </button>
       </main>
     );

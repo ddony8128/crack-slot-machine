@@ -31,7 +31,7 @@ describe('triggersPenalty (break between games)', () => {
     expect(triggersPenalty([])).toBe(false);
   });
 
-  it('triggers when the idle gap between 5 plays is each under 3 minutes', () => {
+  it('triggers when the idle gap between streak-length plays is each under 3 minutes', () => {
     expect(triggersPenalty(spans(PENALTY_STREAK, 60_000))).toBe(true);
   });
 

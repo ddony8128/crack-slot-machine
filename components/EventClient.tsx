@@ -6,6 +6,7 @@ import { startRun } from "@/lib/client/api";
 import StartScreen from "@/components/StartScreen";
 import GameScreen from "@/components/GameScreen";
 import ResultScreen from "@/components/ResultScreen";
+import PenaltyGate from "@/components/PenaltyGate";
 import IntroModal from "@/components/IntroModal";
 import { playBgm, stopBgm } from "@/lib/sound";
 
@@ -25,9 +26,14 @@ export default function EventClient({ slug, isActive }: Props) {
   const beginRun = useGameStore((s) => s.beginRun);
   const startGame = useGameStore((s) => s.startGame);
   const reset = useGameStore((s) => s.reset);
+  const pendingPenalty = useGameStore((s) => s.pendingPenalty);
+  const setPendingPenalty = useGameStore((s) => s.setPendingPenalty);
 
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  // True while the repeat-play penalty gate is shown (GAME START pressed with a
+  // penalty pending). Cleared once the player confirms they told the dealer.
+  const [penaltyGateOpen, setPenaltyGateOpen] = useState(false);
   // Shown every time a new game begins (no "don't show again"). Set true the
   // moment we leave the 'start' screen for a fresh run; the player dismisses it
   // with "시작하기".
@@ -51,8 +57,24 @@ export default function EventClient({ slug, isActive }: Props) {
     if (status === "finished" || status === "start") stopBgm();
   }, [status]);
 
-  async function handleStart() {
+  // GAME START. If a repeat-play penalty is pending, intercept and show the gate
+  // first; the actual run only opens after the dealer-confirmation step.
+  function handleStart() {
     if (starting) return;
+    if (pendingPenalty) {
+      setPenaltyGateOpen(true);
+      return;
+    }
+    void doStart();
+  }
+
+  function handlePenaltyProceed() {
+    setPendingPenalty(false);
+    setPenaltyGateOpen(false);
+    void doStart();
+  }
+
+  async function doStart() {
     setStarting(true);
     setStartError(null);
     try {
@@ -71,7 +93,8 @@ export default function EventClient({ slug, isActive }: Props) {
   }
 
   if (status === "finished") return <ResultScreen slug={slug} />;
-  if (status === "start")
+  if (status === "start") {
+    if (penaltyGateOpen) return <PenaltyGate onProceed={handlePenaltyProceed} />;
     return (
       <StartScreen
         slug={slug}
@@ -81,6 +104,7 @@ export default function EventClient({ slug, isActive }: Props) {
         onStart={handleStart}
       />
     );
+  }
   return (
     <>
       <GameScreen />

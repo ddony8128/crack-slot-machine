@@ -58,6 +58,14 @@ export type GameActions = {
   reset: () => void;
   /** The ordered action log for this run (for replay / score submission). */
   getActions: () => RecordedAction[];
+  /**
+   * Repeat-play penalty awaiting display. Set from the submit response on the
+   * result screen; shown (and cleared) at the next GAME START. Deliberately
+   * kept OUTSIDE GameState/freshState so reset() (다시 하기) preserves it across
+   * the result → start transition.
+   */
+  pendingPenalty: boolean;
+  setPendingPenalty: (v: boolean) => void;
 };
 
 export type GameStore = GameState & GameActions;
@@ -218,6 +226,11 @@ function buildInitializer(initialRng: Rng): Initializer {
 
     return {
     ...freshState(''),
+
+    // NOT part of freshState → survives reset() so a penalty earned on the result
+    // screen is still pending when the player returns to the start screen.
+    pendingPenalty: false,
+    setPendingPenalty: (v: boolean) => set({ pendingPenalty: v }),
 
     setNickname: (name: string) => set({ nickname: name }),
 
